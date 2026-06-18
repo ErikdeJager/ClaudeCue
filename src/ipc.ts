@@ -50,6 +50,10 @@ export const openInEditor = (cwd: string) =>
 export const currentBranch = (cwd: string) =>
   invoke<string>("current_branch", { cwd });
 
+/** Branch for many repos in one round-trip (used by the sidebar). */
+export const currentBranches = (paths: string[]) =>
+  invoke<Record<string, string>>("current_branches", { paths });
+
 export const workingDiff = (cwd: string) =>
   invoke<WorkingDiff>("working_diff", { cwd });
 

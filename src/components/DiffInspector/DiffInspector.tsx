@@ -13,6 +13,10 @@ interface DiffInspectorProps {
 
 type DiffMode = "unified" | "split";
 
+// Cap rows rendered per file so a huge diff can't jank the panel (no
+// virtualization in v1 — see the pass-2 punch list).
+const MAX_DIFF_ROWS = 600;
+
 function UnifiedRow({ line }: { line: HunkLine }) {
   if (line.type === "hunk") {
     return <div className={styles.hunkHeader}>{line.text}</div>;
@@ -70,20 +74,20 @@ function DiffFile({ file, mode }: { file: FileDiff; mode: DiffMode }) {
   if (file.binary) {
     return <div className={styles.binary}>Binary file — no preview.</div>;
   }
-  if (mode === "split") {
-    return (
-      <div className={styles.code}>
-        {file.hunks.map((line, i) => (
-          <SplitRow key={i} line={line} />
-        ))}
-      </div>
-    );
-  }
+  const Row = mode === "split" ? SplitRow : UnifiedRow;
+  const truncated = file.hunks.length > MAX_DIFF_ROWS;
+  const rows = truncated ? file.hunks.slice(0, MAX_DIFF_ROWS) : file.hunks;
   return (
     <div className={styles.code}>
-      {file.hunks.map((line, i) => (
-        <UnifiedRow key={i} line={line} />
+      {rows.map((line, i) => (
+        <Row key={i} line={line} />
       ))}
+      {truncated && (
+        <div className={styles.truncated}>
+          Showing the first {MAX_DIFF_ROWS} of {file.hunks.length} lines — open
+          the file for the full diff.
+        </div>
+      )}
     </div>
   );
 }

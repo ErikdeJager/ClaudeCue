@@ -257,6 +257,12 @@ impl SessionManager {
         cwd: &Path,
         name: Option<String>,
     ) -> Result<SessionInfo, SessionError> {
+        if !cwd.is_dir() {
+            return Err(SessionError::Spawn(format!(
+                "working directory does not exist: {}",
+                cwd.display()
+            )));
+        }
         if find_on_path(program).is_none() {
             return Err(SessionError::BinaryNotFound(program.to_string()));
         }

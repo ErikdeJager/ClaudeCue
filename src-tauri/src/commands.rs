@@ -127,6 +127,11 @@ pub fn current_branch(cwd: String) -> String {
 }
 
 #[tauri::command]
+pub fn current_branches(paths: Vec<String>) -> std::collections::HashMap<String, String> {
+    git::current_branches(&paths)
+}
+
+#[tauri::command]
 pub fn working_diff(cwd: String) -> WorkingDiff {
     git::working_diff(cwd)
 }

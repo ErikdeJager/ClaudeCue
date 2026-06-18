@@ -204,7 +204,7 @@ export const useStore = create<AppState>()((set, get) => ({
         ipc.listRecents(),
       ]);
       set({ sessions: records.map(toSessionView), recents });
-      void get().refreshBranches();
+      // Branch labels are refreshed by the sidebar when the repo set changes.
     } catch {
       // Backend unreachable (e.g. running outside Tauri).
     }
@@ -212,14 +212,10 @@ export const useStore = create<AppState>()((set, get) => ({
 
   refreshBranches: async () => {
     const repos = repoOrder(get().recents, get().sessions);
+    if (repos.length === 0) return;
     try {
-      const entries = await Promise.all(
-        repos.map(
-          async (repo) =>
-            [repo, await ipc.currentBranch(repo).catch(() => "")] as const,
-        ),
-      );
-      set({ branches: Object.fromEntries(entries) });
+      // One IPC round-trip for all repos instead of one per repo.
+      set({ branches: await ipc.currentBranches(repos) });
     } catch {
       // Backend unreachable; leave branches as-is.
     }

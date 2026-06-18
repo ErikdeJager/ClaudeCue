@@ -879,9 +879,9 @@ menu, no background polling, no silent updates — startup check only.
 
 ---
 
-### 16. [ ] App-wide smoothness, performance & UX polish pass (pass 1)
+### 16. [x] App-wide smoothness, performance & UX polish pass (pass 1)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-18
 
@@ -917,51 +917,51 @@ Don't add features — this is a polish / perf / quality pass on what already ex
 
 **Subtasks**
 
-1. [ ] **Understand & profile.** Map the command surface, React tree, store and IPC;
+1. [x] **Understand & profile.** Map the command surface, React tree, store and IPC;
    record the slowest / jankiest / most confusing spots and a prioritized plan before
    editing anything.
-2. [ ] **Smoothness (top priority).** Immediate feedback on every interaction; never
+2. [x] **Smoothness (top priority).** Immediate feedback on every interaction; never
    block the main thread (push heavy work to async commands / `spawn_blocking`);
    stream / paginate large data; optimistic updates where safe; animate only with
    `transform` / `opacity` at a steady 60fps; debounce / throttle expensive handlers;
    add loading / empty / error states (prefer skeletons over spinners).
-3. [ ] **Performance & cleanup.** React: kill needless re-renders (stable keys, correct
+3. [x] **Performance & cleanup.** React: kill needless re-renders (stable keys, correct
    dependency arrays, memoize only where it helps), lazy-load heavy views, remove dead
    code / unused deps. Tauri/IPC: fewer & smaller round-trips (batch related calls,
    cache stable results). Startup: shrink time-to-interactive, defer non-critical work
    past first paint. Tackle structural issues (duplication, tangled state), not just
    renames.
-4. [ ] **Rust best practices.** Favor borrows / slices / iterators over needless
+4. [x] **Rust best practices.** Favor borrows / slices / iterators over needless
    `clone()` / allocation; `Result` + `thiserror` / `anyhow`, no `unwrap()` /
    `expect()` / `panic!` on fallible paths; commands return `Result<T, E>` with a
    serializable error; never block the async runtime (`spawn_blocking` / async I/O);
    correct `Arc` / `Mutex` / `RwLock` use with no deadlocks; avoid unjustified `unsafe`.
-5. [ ] **Security.** Treat all IPC input as untrusted — validate / sanitize everything
+5. [x] **Security.** Treat all IPC input as untrusted — validate / sanitize everything
    crossing the boundary; keep the Tauri capability / allowlist scoped to only what's
    needed; no secrets in the frontend, no injection-prone string building, no
    over-broad filesystem / shell / network access.
-6. [ ] **UI polish.** Consistent spacing / alignment / type scale / color and all
+6. [x] **UI polish.** Consistent spacing / alignment / type scale / color and all
    component states (hover / focus / active / disabled); clear visual hierarchy;
    correct across window sizes; native macOS feel (stay on the design tokens, never an
    off-system color).
-7. [ ] **UX & accessibility.** Make the common path short and obvious (fewer steps /
+7. [x] **UX & accessibility.** Make the common path short and obvious (fewer steps /
    clicks / decisions); sensible defaults, keyboard shortcuts, focus management, human
    error messages, undo where it helps; keyboard nav, visible focus, contrast, proper
    labels / roles.
-8. [ ] **Traceability check.** Follow each key action end-to-end: UI event → React
+8. [x] **Traceability check.** Follow each key action end-to-end: UI event → React
    handler → `invoke` → Rust command → response → UI update; confirm names, argument
    types and return shapes match across the boundary and that no error path is ignored.
-9. [ ] **Self-review.** Re-read the diff as if reviewing an unfamiliar PR; name ≥3
+9. [x] **Self-review.** Re-read the diff as if reviewing an unfamiliar PR; name ≥3
    concrete weaknesses (perf / correctness / readability / UX) and fix them before
    finishing.
 
 **Acceptance criteria**
 
-- [ ] Hard gate passes: `cargo fmt --check`, `cargo clippy` (no warnings),
+- [x] Hard gate passes: `cargo fmt --check`, `cargo clippy` (no warnings),
   `cargo test --manifest-path src-tauri/Cargo.toml`, plus the frontend `npm run build`
   (tsc + vite), `npm run lint`, `npm run format:check`, and `npm test`.
-- [ ] No v1 feature regressed; the app still builds and runs.
-- [ ] Measurable feel / perf improvements on the prioritized hotspots, with a short
+- [x] No v1 feature regressed; the app still builds and runs.
+- [x] Measurable feel / perf improvements on the prioritized hotspots, with a short
   before/after report (what was found, what changed, the concrete impact) and a
   prioritized punch list of anything still worth doing.
 
@@ -972,6 +972,48 @@ Don't add features — this is a polish / perf / quality pass on what already ex
   features for polish; when forced to choose, **favor smoothness and ease of use**.
 - This is **pass 1 of two**. Pass 2 is **#17**, which runs after this and re-profiles
   to catch what this pass missed or any regressions it introduced.
+
+**Pass-1 report (2026-06-18)**
+
+_Found (profiling):_ (a) the sidebar fetched branch labels with **N separate
+`current_branch` IPC round-trips** and re-fetched **on every session mutation** (the
+effect depended on the whole `sessions`/`recents` arrays, so a session exiting or
+emitting output re-fetched all branches); (b) the **`opener` plugin was dead** —
+registered in Rust + shipped as a JS dep, but never called (`open_in_editor` shells
+out to `zed` directly); (c) `DiffInspector` rendered every hunk row with no cap, so a
+huge diff could jank the 360px panel; (d) `spawn_session` didn't validate the working
+dir, so a stale/deleted folder gave a cryptic PTY error.
+
+_Changed (small, safe):_ (1) batched branches — new `current_branches(paths)` command +
+`ipc.currentBranches` → `refreshBranches` does **1 round-trip, not N**; dropped the
+redundant call from `refresh`. (2) the sidebar refreshes branches **only when the repo
+set changes** (effect keyed on the repo list), not on every session-array allocation.
+(3) removed the unused `opener` plugin — Rust dep + registration + JS dep + the
+`opener:default` capability (smaller bundle, tighter capability surface). (4)
+`DiffInspector` caps at 600 rows/file with a clear "showing first N of M" notice. (5)
+`spawn` validates the cwd and returns a clear typed error.
+
+_Impact:_ sidebar branch refresh went **N→1 IPC** and stopped firing on every terminal
+exit/output; one Rust crate + one npm dep + one capability removed; big diffs and
+missing folders no longer jank/confuse. **Hard gate green:** 23 Rust + 15 frontend
+tests, `clippy`/`fmt` clean, frontend `build`/`lint`/`format:check` clean, and a full
+**signed `tauri build`** produced the `.dmg` + signed updater artifacts (no regression;
+GUI not launched headlessly). +1 Rust test (`current_branches`).
+
+_Self-review weaknesses named:_ W1 — `reposKey` joins repo paths with a space, so a
+path containing a space could (vanishingly rarely) collide → a missed branch-label
+refresh; negligible, punch-listed. W2 — `current_branches` runs git sequentially
+server-side (fine for a few repos; parallelize only if profiling justifies the thread
+overhead). W3 — `DiffInspector` refetches the full diff on each open even when
+unchanged (a content/etag cache could skip it).
+
+_Punch list (prioritized, for #17):_ (1) xterm scrollback↔live overlap on mount —
+needs a backend sequence/offset to dedupe. (2) `DiffInspector` row virtualization
+(replace the 600-row cap). (3) keep terminals mounted across Overview↔Focus (avoid
+remount + scrollback replay) — larger change. (4) parallelize `current_branches` +
+cache branch/diff results. (5) parallelize boot resume per session (#5). (6) WebGL
+context-cap behavior under many terminals (#8/#11). (7) `reposKey` separator
+robustness (W1).
 
 ---
 

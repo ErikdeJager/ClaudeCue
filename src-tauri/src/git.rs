@@ -8,6 +8,7 @@
 //! when `git` is unavailable). Renames are left as add+del (we do not pass `-M`),
 //! so file status stays M/A/D; binary files are flagged with empty hunks.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
@@ -88,6 +89,15 @@ pub fn current_branch(cwd: impl AsRef<Path>) -> String {
         };
     }
     branch
+}
+
+/// Current branch for each path, resolved in a single call so the sidebar needs
+/// one IPC round-trip instead of one per repo.
+pub fn current_branches(paths: &[String]) -> HashMap<String, String> {
+    paths
+        .iter()
+        .map(|path| (path.clone(), current_branch(path)))
+        .collect()
 }
 
 /// Working tree (staged + unstaged) vs `HEAD`. Non-git folders and repos with no
@@ -515,6 +525,23 @@ index 0..1
         let diff = working_diff(&dir);
         assert!(diff.files.is_empty());
         assert_eq!(current_branch(&dir), "");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn current_branches_resolves_many_in_one_call() {
+        let Some(dir) = init_repo("branches") else {
+            return;
+        };
+        fs::write(dir.join("a.txt"), "x\n").unwrap();
+        assert!(commit_all(&dir, "init"));
+
+        let repo = dir.to_string_lossy().into_owned();
+        let nongit = "/definitely/not/a/git/repo".to_string();
+        let map = current_branches(&[repo.clone(), nongit.clone()]);
+        assert!(!map.get(&repo).unwrap().is_empty());
+        assert_eq!(map.get(&nongit).map(String::as_str), Some(""));
 
         let _ = fs::remove_dir_all(&dir);
     }

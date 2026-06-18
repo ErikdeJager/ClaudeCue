@@ -21,7 +21,6 @@ use store::Store;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -78,6 +77,7 @@ pub fn run() {
             commands::list_recents,
             commands::open_in_editor,
             commands::current_branch,
+            commands::current_branches,
             commands::working_diff,
         ])
         .run(tauri::generate_context!())
