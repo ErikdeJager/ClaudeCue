@@ -9,11 +9,28 @@
 /* Equal width, grow to fill; never shrink below the min so excess columns
    overflow horizontally instead of squeezing. */
 .card {
+  position: relative;
   display: flex;
   flex: 1 0 360px;
   flex-direction: column;
   border-right: 1px solid var(--border-hairline);
   overflow: hidden;
+}
+
+/* Selected agent: an on-brand accent frame drawn over the card (no layout shift,
+   not clipped, click-through) plus a subtle header tint — echoes the sidebar's
+   selected row treatment. */
+.cardSelected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--accent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.cardSelected .header {
+  background: var(--accent-dim);
 }
 
 .header {

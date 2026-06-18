@@ -1498,9 +1498,9 @@ is the foundation for the Overview selection border (#23) and keyboard nav (#24)
 
 ---
 
-### 23. [ ] Show a border/highlight around the selected agent in Overview
+### 23. [x] Show a border/highlight around the selected agent in Overview
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #22
 **Created:** 2026-06-18
 
@@ -1513,22 +1513,40 @@ Overview.
 
 **Subtasks**
 
-1. [ ] Pass `selected` into `SessionCard` (`selectedId === session.id`) in
+1. [x] Pass `selected` into `SessionCard` (`selectedId === session.id`) in
    `src/components/Overview/Overview.tsx`.
-2. [ ] Add a selected style in `Overview.module.css` — an accent border (`--accent`)
+2. [x] Add a selected style in `Overview.module.css` — an accent border (`--accent`)
    consistent with the sidebar's selected treatment; on-system tokens only.
-3. [ ] Clicking a card body selects it (highlight follows clicks) without forcing
+3. [x] Clicking a card body selects it (highlight follows clicks) without forcing
    Focus (the Expand button still goes to Focus).
 
 **Acceptance criteria**
 
-- [ ] The selected agent card has a clear, on-brand border in Overview.
-- [ ] The highlight stays in sync with sidebar selection and keyboard nav (#24).
+- [x] The selected agent card has a clear, on-brand border in Overview.
+- [x] The highlight stays in sync with sidebar selection and keyboard nav (#24).
 
 **Notes**
 
 - Files: `src/components/Overview/Overview.tsx`, `.../Overview.module.css`. Use the
   existing accent tokens; match the sidebar selected look for consistency.
+- **Done 2026-06-19.** `SessionCard` gained `selected` (`session.id === selectedId`)
+  + `onSelect` props; the card root toggles a `cardSelected` class and the **card
+  body** has `onClick={onSelect}` → clicking the terminal area highlights the agent
+  in place (uses #22's decoupled `select`, so it never forces Focus; the Expand
+  button still does `select + setView("focus")`). The terminal keeps its own
+  click-to-focus (the click bubbles to the body). **Selected style** (`Overview.module.css`):
+  made `.card` `position: relative` and added a `.cardSelected::after` **2px
+  `--accent` frame** drawn over the card — `position:absolute; inset:0;
+  pointer-events:none; z-index:2` so it's visible above the opaque terminal, never
+  clipped, click-through, and causes **no layout shift** (a plain border would push
+  siblings) — plus a subtle `.cardSelected .header { background: var(--accent-dim) }`
+  tint echoing the sidebar's selected row. On-system tokens only. The highlight is
+  derived from `selectedId` (the same source as the sidebar's `rowSelected`), so
+  sidebar ↔ Overview selection stay in sync automatically, and #24's keyboard nav
+  will drive the same highlight for free. **Hard gate green:** frontend `build`/
+  `lint`/`format:check`/`test` (26; no a11y rule flags the body `onClick`). Pure
+  frontend change — no Rust touched. The accent frame is a CSS/visual treatment not
+  launched headlessly; the `selected` wiring is type-checked.
 
 ---
 

@@ -10,6 +10,8 @@ import styles from "./Overview.module.css";
 interface SessionCardProps {
   session: SessionView;
   branch: string;
+  selected: boolean;
+  onSelect: () => void;
   onExpand: () => void;
   onOpenInZed: () => void;
   onRemove: () => void;
@@ -18,12 +20,14 @@ interface SessionCardProps {
 function SessionCard({
   session,
   branch,
+  selected,
+  onSelect,
   onExpand,
   onOpenInZed,
   onRemove,
 }: SessionCardProps) {
   return (
-    <div className={styles.card}>
+    <div className={`${styles.card} ${selected ? styles.cardSelected : ""}`}>
       <header className={styles.header}>
         <div className={styles.titleBlock}>
           <span className={styles.name}>
@@ -64,7 +68,9 @@ function SessionCard({
           </button>
         </div>
       </header>
-      <div className={styles.body}>
+      {/* Clicking the card body selects it (highlight in place); Expand still
+          goes to Focus. The terminal inside keeps its own click-to-focus. */}
+      <div className={styles.body} onClick={onSelect}>
         <Terminal sessionId={session.id} />
       </div>
     </div>
@@ -79,6 +85,7 @@ function SessionCard({
 function Overview() {
   const sessions = useStore((s) => s.sessions);
   const branches = useStore((s) => s.branches);
+  const selectedId = useStore((s) => s.selectedId);
   const select = useStore((s) => s.select);
   const setView = useStore((s) => s.setView);
   const openInZed = useStore((s) => s.openInZed);
@@ -103,6 +110,8 @@ function Overview() {
           key={session.id}
           session={session}
           branch={branches[session.repoPath] ?? ""}
+          selected={session.id === selectedId}
+          onSelect={() => select(session.id)}
           onExpand={() => expand(session.id)}
           onOpenInZed={() => void openInZed(session.repoPath)}
           onRemove={() => void removeSession(session.id)}
