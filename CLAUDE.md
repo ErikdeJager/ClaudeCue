@@ -21,7 +21,7 @@ clear error if it is missing).
   icons, **JetBrains Mono** (bundled, offline)
 - **Backend (Rust, `src-tauri/`):** **`portable-pty`** for terminals, JSON
   persistence in the app-data dir, read-only git (shells out to `git`), and the
-  Tauri **dialog** (folder picker) + **opener** plugins
+  Tauri **dialog** (folder picker), **opener**, **updater**, and **process** plugins
 - Dark theme only
 
 ## Architecture (data flow)
@@ -57,10 +57,11 @@ clear error if it is missing).
 │   ├── ipc.ts              # Typed Tauri command/event wrappers
 │   ├── outputBus.ts        # Per-session output pub/sub (bytes kept out of store)
 │   ├── paths.ts            # Shared path helpers (repoName)
+│   ├── updater.ts          # In-app auto-update (Tauri updater/process plugins)
 │   ├── components/         # React components (CSS Module alongside each):
 │   │                       #   Titlebar, Sidebar, Overview, Focus, Terminal,
 │   │                       #   DiffInspector, NewSessionModal, Toaster, ViewSwitch,
-│   │                       #   ClaudeMissing, EmptyState
+│   │                       #   ClaudeMissing, EmptyState, UpdatePopup
 │   ├── styles/             # tokens.css (design tokens) + global.css (reset/base)
 │   └── types/              # Shared TS types (backend-mirrored models)
 ├── src-tauri/              # Rust backend (Tauri)
@@ -73,6 +74,7 @@ clear error if it is missing).
 │   ├── tauri.conf.json     # Window, bundle, build config
 │   ├── capabilities/       # Tauri permission capabilities
 │   └── Cargo.toml          # Crate `claudecue` / lib `claudecue_lib`
+├── .github/workflows/      # release.yml (CI: version-bump guard → draft release)
 ├── eslint.config.js        # ESLint flat config (TS + React)
 └── .prettierrc.json        # Prettier config
 ```
@@ -125,6 +127,15 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   (`trafficLightPosition`) to sit inside the custom 38px `Titlebar` component.
   The bar is a `data-tauri-drag-region`; interactive controls placed in it must
   opt out so they remain clickable rather than dragging the window.
+- **Releases & auto-update:** CI (`.github/workflows/release.yml`) drafts a
+  **universal** macOS release when the version in `tauri.conf.json` is bumped past
+  the latest `v*` tag; publish the draft for clients to see it. The app
+  self-updates from published releases via the Tauri updater plugin (`updater.ts`
+  + the `UpdatePopup` component, checked once on boot). Bump the version in
+  `tauri.conf.json` + `package.json` + `Cargo.toml` together. The minisign
+  **private** key lives only in GitHub secrets (`TAURI_SIGNING_PRIVATE_KEY` /
+  `…_PASSWORD`) — never commit it; the public key is in `tauri.conf.json`. Apple
+  code-signing/notarization remains out of scope. See `README.md` for the flow.
 - **Styling:** CSS Modules (`*.module.css` next to each component) that consume
   the design tokens in `src/styles/tokens.css`. The reset, base styles,
   scrollbars, keyframes, and the `prefers-reduced-motion` killswitch live in

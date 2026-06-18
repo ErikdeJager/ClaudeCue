@@ -767,9 +767,9 @@ notarization in v1 (unsigned `.app`/`.dmg`).
 
 ---
 
-### 15. [ ] Release CI + in-app auto-update (Tauri updater)
+### 15. [x] Release CI + in-app auto-update (Tauri updater)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #14
 **Created:** 2026-06-18
 
@@ -791,54 +791,54 @@ menu, no background polling, no silent updates — startup check only.
 
 **Subtasks**
 
-1. [ ] **Pin version to 0.0.1** in `src-tauri/tauri.conf.json`, `package.json`, and
+1. [x] **Pin version to 0.0.1** in `src-tauri/tauri.conf.json`, `package.json`, and
    `src-tauri/Cargo.toml` (and refresh `Cargo.lock`).
-2. [ ] **Add updater + process plugins:** `tauri-plugin-updater` +
+2. [x] **Add updater + process plugins:** `tauri-plugin-updater` +
    `@tauri-apps/plugin-updater`, and `tauri-plugin-process` +
    `@tauri-apps/plugin-process` (for relaunch); register both in `src-tauri/src/lib.rs`.
-3. [ ] **Configure the updater:** generate a minisign keypair (`tauri signer generate`),
+3. [x] **Configure the updater:** generate a minisign keypair (`tauri signer generate`),
    commit only the **public** key to `tauri.conf.json` (`plugins.updater.pubkey` +
    `endpoints: ["https://github.com/ErikdeJager/ClaudeCue/releases/latest/download/latest.json"]`),
    and set `bundle.createUpdaterArtifacts: true`. Hand the **private key + password** to
    the user to store as GitHub Actions secrets — never commit them.
-4. [ ] **Capabilities:** grant `updater:default` and `process:allow-restart` in
+4. [x] **Capabilities:** grant `updater:default` and `process:allow-restart` in
    `src-tauri/capabilities/default.json`.
-5. [ ] **Startup update check (frontend):** on app boot call the updater `check()`; if an
+5. [x] **Startup update check (frontend):** on app boot call the updater `check()`; if an
    update is available, surface it via new store state (e.g. `update: { available,
    version, dismissed, installing }`).
-6. [ ] **Bottom-right update popup:** a **new** component (distinct from the bottom-center
+6. [x] **Bottom-right update popup:** a **new** component (distinct from the bottom-center
    `Toaster`) showing "Update available — v X.Y.Z" with an **Update** button and an **×**
    dismiss. Styled with the design tokens + the single popover shadow.
-7. [ ] **Dismiss = until next startup:** `×` hides the popup for the current session only
+7. [x] **Dismiss = until next startup:** `×` hides the popup for the current session only
    (in-memory flag; it reappears on next launch).
-8. [ ] **Update = block + install + relaunch:** Update shows a full-window blocking overlay
+8. [x] **Update = block + install + relaunch:** Update shows a full-window blocking overlay
    ("Installing update…"), runs `downloadAndInstall()`, then `relaunch()` (process
    plugin). Check/install failures (offline, no update, error) revert the overlay and are
    logged (optional toast); they never crash the app.
-9. [ ] **Release workflow** (`.github/workflows/release.yml`) on `push: main` with
+9. [x] **Release workflow** (`.github/workflows/release.yml`) on `push: main` with
    `permissions: contents: write`: a guard step reads the version from `tauri.conf.json`
    and compares it to the most recent `v*` tag — if not higher, the run **exits early**.
-10. [ ] If incremented: on a macOS runner, set up Rust (with `aarch64`+`x86_64` apple
+10. [x] If incremented: on a macOS runner, set up Rust (with `aarch64`+`x86_64` apple
     targets) and Node, `npm ci`, and build via `tauri-apps/tauri-action` with
     `args: --target universal-apple-darwin`, `releaseDraft: true`, tag `v<version>`,
     signing with the `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
     secrets. The draft gets the universal `.dmg`, `.app.tar.gz`, its `.sig`, and the
     auto-generated `latest.json`.
-11. [ ] **Docs:** update `README.md` + `CLAUDE.md` — the release flow, the bump-to-release
+11. [x] **Docs:** update `README.md` + `CLAUDE.md` — the release flow, the bump-to-release
     convention, the required GitHub secrets, and that a draft must be **published** before
     clients see the update.
 
 **Acceptance criteria**
 
-- [ ] Version reads `0.0.1` in all three files; `npm run tauri build` still succeeds.
+- [x] Version reads `0.0.1` in all three files; `npm run tauri build` still succeeds.
 - [ ] A push to `main` that **bumps** the version produces a **draft** GitHub release
   containing a universal `.dmg` + `.app.tar.gz` + `.sig` + `latest.json`; a push that
   does **not** bump the version creates no release (early exit).
-- [ ] Updater artifacts are signed and validate against the embedded public key.
+- [x] Updater artifacts are signed and validate against the embedded public key.
 - [ ] On startup, when a newer **published** release exists, the bottom-right popup
   appears; `×` hides it until next launch; **Update** blocks the UI, installs, and
   relaunches into the new version.
-- [ ] No Apple notarization is introduced; the unsigned-app/Gatekeeper caveat is unchanged.
+- [x] No Apple notarization is introduced; the unsigned-app/Gatekeeper caveat is unchanged.
 
 **Notes**
 
@@ -853,6 +853,29 @@ menu, no background polling, no silent updates — startup check only.
   the updater consumes; `tauri-action` auto-generates `latest.json`.
 - Version-increment guard compares the `tauri.conf.json` version (semver) to the latest
   `v*` tag; with no prior tag the first run proceeds.
+- **Done 2026-06-18.** Version pinned to **0.0.1** across `tauri.conf.json` +
+  `package.json` + `Cargo.toml` + `Cargo.lock`. `tauri-plugin-updater` 2.10 /
+  `tauri-plugin-process` 2.3 (+ JS) registered in `lib.rs`; capabilities granted
+  `updater:default` + `process:allow-restart`. Minisign keypair generated; the
+  **public key + `endpoints`** are committed in `tauri.conf.json`
+  (`plugins.updater`) with `bundle.createUpdaterArtifacts: true`; the private key +
+  password were generated **outside the repo** and handed to the user (never
+  committed). Frontend: `src/updater.ts` (holds the non-serializable `Update`), a
+  store `update` slice + `checkForUpdate`/`dismissUpdate`/`installUpdate` (boot
+  check in `init`), and `src/components/UpdatePopup` (bottom-right popup +
+  full-window install overlay; dismiss is session-only, install reverts on error
+  via toast). CI: `.github/workflows/release.yml` (ubuntu version-bump guard →
+  macOS universal `tauri-action` draft). README + CLAUDE.md updated.
+- **Verified locally:** version `0.0.1` + `npm run tauri build` succeed, and with
+  the signing key in env the build emitted `ClaudeCue_0.0.1_aarch64.dmg` +
+  `ClaudeCue.app.tar.gz` + a `.sig` signed against the embedded public key (same
+  keypair). 15 frontend + 22 Rust tests; clippy + fmt clean.
+- **Left unchecked (needs a live run, not headless-verifiable):** the CI **draft
+  release** triggers on the next push but only *builds* once the two signing
+  secrets are set in the repo; the **startup popup → install → relaunch** path
+  needs a *published* newer release + the GUI. The UI compiles and `dismissUpdate`
+  is unit-tested. Set the secrets, push a version bump, then **publish** the draft
+  to exercise both end-to-end.
 
 ---
 

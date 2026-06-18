@@ -7,6 +7,7 @@ import Overview from "./components/Overview/Overview";
 import Sidebar from "./components/Sidebar/Sidebar";
 import Titlebar from "./components/Titlebar/Titlebar";
 import Toaster from "./components/Toaster/Toaster";
+import UpdatePopup from "./components/UpdatePopup/UpdatePopup";
 import { useStore } from "./store";
 
 /**
@@ -38,6 +39,7 @@ function App() {
       </div>
       <Toaster />
       <NewSessionModal />
+      <UpdatePopup />
     </div>
   );
 }

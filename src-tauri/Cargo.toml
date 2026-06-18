@@ -1,6 +1,6 @@
 [package]
 name = "claudecue"
-version = "0.1.0"
+version = "0.0.1"
 description = "ClaudeCue — run and manage many live claude CLI sessions"
 authors = ["Erik de Jager"]
 edition = "2021"
@@ -26,6 +26,8 @@ portable-pty = "0.9.0"
 thiserror = "2.0.18"
 uuid = { version = "1.23.3", features = ["v4"] }
 tauri-plugin-dialog = "2.7.1"
+tauri-plugin-updater = "2.10.1"
+tauri-plugin-process = "2.3.1"
 
 [lints.clippy]
 all = "warn"

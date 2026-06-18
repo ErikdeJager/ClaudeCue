@@ -6,6 +6,7 @@ import { create } from "zustand";
 
 import * as ipc from "./ipc";
 import { emitSessionOutput } from "./outputBus";
+import * as updater from "./updater";
 import type {
   SessionRecord,
   SessionView,
@@ -68,6 +69,13 @@ export interface AppState {
   /** New session modal (rendered by #10); `newSessionRepo` optionally prefills it. */
   newSessionOpen: boolean;
   newSessionRepo: string | null;
+  /** In-app updater state (Tauri updater plugin); `dismissed` is session-only. */
+  update: {
+    available: boolean;
+    version: string | null;
+    dismissed: boolean;
+    installing: boolean;
+  };
 
   // --- Sync reducers ---
   setView: (view: View) => void;
@@ -85,11 +93,14 @@ export interface AppState {
   dismissToast: (id: string) => void;
   openNewSession: (repo?: string) => void;
   closeNewSession: () => void;
+  dismissUpdate: () => void;
 
   // --- Async / cross-cutting actions ---
   init: () => Promise<void>;
   refresh: () => Promise<void>;
   refreshBranches: () => Promise<void>;
+  checkForUpdate: () => Promise<void>;
+  installUpdate: () => Promise<void>;
   spawnSession: (cwd: string, name?: string) => Promise<void>;
   restartSession: (id: string) => Promise<void>;
   removeSession: (id: string) => Promise<void>;
@@ -108,6 +119,12 @@ export const useStore = create<AppState>()((set, get) => ({
   toasts: [],
   newSessionOpen: false,
   newSessionRepo: null,
+  update: {
+    available: false,
+    version: null,
+    dismissed: false,
+    installing: false,
+  },
 
   setView: (view) => set({ view }),
   select: (id) => set((s) => ({ selectedId: id, view: id ? "focus" : s.view })),
@@ -158,6 +175,9 @@ export const useStore = create<AppState>()((set, get) => ({
     set({ newSessionOpen: true, newSessionRepo: repo ?? null }),
   closeNewSession: () => set({ newSessionOpen: false, newSessionRepo: null }),
 
+  dismissUpdate: () =>
+    set((s) => ({ update: { ...s.update, dismissed: true } })),
+
   init: async () => {
     try {
       await ipc.subscribeSessionEvents({
@@ -174,6 +194,7 @@ export const useStore = create<AppState>()((set, get) => ({
       // Event subscription only works inside the Tauri webview.
     }
     await get().refresh();
+    void get().checkForUpdate();
   },
 
   refresh: async () => {
@@ -201,6 +222,35 @@ export const useStore = create<AppState>()((set, get) => ({
       set({ branches: Object.fromEntries(entries) });
     } catch {
       // Backend unreachable; leave branches as-is.
+    }
+  },
+
+  checkForUpdate: async () => {
+    try {
+      const info = await updater.checkForUpdate();
+      if (info) {
+        set({
+          update: {
+            available: true,
+            version: info.version,
+            dismissed: false,
+            installing: false,
+          },
+        });
+      }
+    } catch {
+      // Offline, no update, or running outside Tauri — ignore.
+    }
+  },
+
+  installUpdate: async () => {
+    set((s) => ({ update: { ...s.update, installing: true } }));
+    try {
+      await updater.downloadAndRelaunch();
+      // On success the app relaunches into the new version.
+    } catch {
+      set((s) => ({ update: { ...s.update, installing: false } }));
+      get().pushToast("Update failed", "error");
     }
   },
 
