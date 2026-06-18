@@ -317,9 +317,9 @@ app-data directory and, on launch, restore the list and resume each underlying
 
 ---
 
-### 6. [ ] Rust git reading (branch + working-tree diff)
+### 6. [x] Rust git reading (branch + working-tree diff)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #1
 **Created:** 2026-06-18
 
@@ -331,27 +331,40 @@ working-tree diff against `HEAD` for a given directory.
 
 **Subtasks**
 
-1. [ ] `current_branch(cwd)` → branch name (or a sensible fallback for detached
+1. [x] `current_branch(cwd)` → branch name (or a sensible fallback for detached
    HEAD / non-git directories).
-2. [ ] `working_diff(cwd)` → working tree vs `HEAD` (staged + unstaged), parsed into
+2. [x] `working_diff(cwd)` → working tree vs `HEAD` (staged + unstaged), parsed into
    the structured shape below.
-3. [ ] Parse into: summary `{ branch, files_changed, adds, dels }`; `files: [{ path,
+3. [x] Parse into: summary `{ branch, files_changed, adds, dels }`; `files: [{ path,
    status: "M"|"A"|"D", add, del }]`; and per-file `hunks: [{ type:
    "hunk"|"context"|"add"|"del", old_no?, new_no?, text }]`.
-4. [ ] Handle non-git folders, clean trees (no changes), binary files, and renames
+4. [x] Handle non-git folders, clean trees (no changes), binary files, and renames
    gracefully.
-5. [ ] Choose the implementation (shell out to `git` vs a crate like `git2`) and
+5. [x] Choose the implementation (shell out to `git` vs a crate like `git2`) and
    document the choice; unit-test the parser against fixtures.
 
 **Acceptance criteria**
 
-- [ ] Branch + diff return correctly for a dirty repo fixture.
-- [ ] Clean tree returns an empty/no-changes result; non-git folder doesn't error.
-- [ ] Diff parser unit tests pass for add/delete/modify/context lines and counts.
+- [x] Branch + diff return correctly for a dirty repo fixture.
+- [x] Clean tree returns an empty/no-changes result; non-git folder doesn't error.
+- [x] Diff parser unit tests pass for add/delete/modify/context lines and counts.
 
 **Notes**
 
 - Output shape mirrors the prototype's diff model so the inspector (#13) maps 1:1.
+- **Done 2026-06-18.** `src-tauri/src/git.rs`. **Implementation: shell out to
+  `git`** (not `git2`) — keeps the real logic in a pure `parse_unified_diff(&str)
+  -> Vec<FileDiff>` that is fixture-tested with no repo on disk; the thin
+  invocation layer (`git -C <cwd> rev-parse` / `git diff HEAD`) is covered by
+  temp-repo integration tests that skip if `git` is missing. `current_branch`
+  falls back to `@<short-sha>` when detached and `""` for non-git dirs;
+  `working_diff` returns an empty, non-erroring result for non-git / no-HEAD.
+  Renames are emitted as delete+add (no `-M`), so status stays M/A/D; binary
+  files set `binary: true` with empty hunks. Shape: `WorkingDiff { summary{
+  branch, files_changed, adds, dels }, files:[{ path, status, add, del, binary,
+  hunks:[{ type, old_no?, new_no?, text }] }] }`. Commands `current_branch` /
+  `working_diff` exposed. **9 git tests** (6 parser + 3 integration) — 21 backend
+  tests total; clippy + fmt clean.
 
 ---
 

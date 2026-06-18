@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use tauri::State;
 
+use crate::git::{self, WorkingDiff};
 use crate::pty::{self, SessionError, SessionManager};
 use crate::store::{PersistedSession, Store};
 
@@ -101,6 +102,16 @@ pub fn list_recents(store: State<'_, Store>) -> Vec<String> {
 #[tauri::command]
 pub fn open_in_editor(cwd: String) -> Result<(), SessionError> {
     pty::open_in_editor(&cwd)
+}
+
+#[tauri::command]
+pub fn current_branch(cwd: String) -> String {
+    git::current_branch(cwd)
+}
+
+#[tauri::command]
+pub fn working_diff(cwd: String) -> WorkingDiff {
+    git::working_diff(cwd)
 }
 
 fn now_secs() -> u64 {

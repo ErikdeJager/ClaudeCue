@@ -5,6 +5,7 @@
 //! `store`; read-only git support is added by a later task.
 
 mod commands;
+mod git;
 mod pty;
 mod store;
 
@@ -72,6 +73,8 @@ pub fn run() {
             commands::list_sessions,
             commands::list_recents,
             commands::open_in_editor,
+            commands::current_branch,
+            commands::working_diff,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
