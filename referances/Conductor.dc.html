@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base:#0B0B0C; --bg-sidebar:#111113; --bg-panel:#141416; --bg-elevated:#1A1A1D;
+    --bg-hover:#1E1E22; --terminal-bg:#0E0E10;
+    --border-hairline:rgba(255,255,255,0.07); --border-strong:rgba(255,255,255,0.12);
+    --text-primary:#EDEDEF; --text-secondary:#9A9AA0; --text-muted:#5E5E66;
+    --accent:#D97757; --accent-hover:#E08A6D; --accent-dim:rgba(217,119,87,0.14);
+    --status-running:#5B8DEF; --status-awaiting:#E0A33E; --status-done:#4BB58A;
+    --status-error:#E5534B; --status-idle:#6B6B73;
+    --diff-add-fg:#4BB58A; --diff-add-bg:rgba(75,181,138,0.12);
+    --diff-del-fg:#E5534B; --diff-del-bg:rgba(229,83,75,0.12); --diff-gutter:#5E5E66;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono",monospace;
+    --ui:-apple-system,"SF Pro Text",ui-sans-serif,system-ui,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body { background:#000; font-family:var(--ui); color:var(--text-primary);
+    display:flex; -webkit-font-smoothing:antialiased; overflow:hidden; }
+  ::-webkit-scrollbar { width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.09); border-radius:999px; border:2px solid transparent; background-clip:padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,0.16); background-clip:padding-box; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  @keyframes pulseDot { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  @keyframes awaitGlow { 0%,100%{box-shadow:0 0 0 0 rgba(224,163,62,0.0);} 50%{box-shadow:0 0 16px 0 rgba(224,163,62,0.22);} }
+  @keyframes caret { 0%,49%{opacity:1;} 50%,100%{opacity:0;} }
+  @keyframes toastIn { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+  @keyframes sheetIn { from{opacity:0; transform:translateY(10px) scale(0.99);} to{opacity:1; transform:translateY(0) scale(1);} }
+  @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; } }
+</style>
+</helmet>
+
+<div style="width:100vw; height:100vh; background:var(--bg-base); overflow:hidden; display:flex; flex-direction:column; --accent:{{ accent }};">
+
+  <!-- TITLE BAR -->
+  <div style="height:38px; flex:none; display:flex; align-items:center; padding:0 14px; border-bottom:1px solid var(--border-hairline); position:relative; background:linear-gradient(var(--bg-sidebar),var(--bg-base));">
+    <div style="display:flex; gap:8px; align-items:center;">
+      <span style="width:12px; height:12px; border-radius:999px; background:#ED6A5E; border:0.5px solid rgba(0,0,0,0.25);"></span>
+      <span style="width:12px; height:12px; border-radius:999px; background:#F4BD4F; border:0.5px solid rgba(0,0,0,0.25);"></span>
+      <span style="width:12px; height:12px; border-radius:999px; background:#61C554; border:0.5px solid rgba(0,0,0,0.25);"></span>
+    </div>
+    <div style="position:absolute; left:0; right:0; text-align:center; font-size:13px; font-weight:500; color:var(--text-secondary); pointer-events:none;">Conductor · acme</div>
+  </div>
+
+  <!-- BODY -->
+  <div style="flex:1; display:flex; min-height:0;">
+
+    <!-- SIDEBAR -->
+    <div style="width:248px; flex:none; background:var(--bg-sidebar); border-right:1px solid var(--border-hairline); display:flex; flex-direction:column; min-height:0;">
+      <!-- new session -->
+      <div style="padding:12px 12px 8px;">
+        <button onClick="{{ onNewSession }}" style="width:100%; display:flex; align-items:center; justify-content:center; gap:7px; height:34px; background:var(--accent); color:#1A0F0A; border:none; border-radius:7px; font-family:var(--ui); font-size:13px; font-weight:600; cursor:pointer; transition:background 140ms ease;" style-hover="background:var(--accent-hover);" style-focus="outline:2px solid var(--accent); outline-offset:2px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          New session
+        </button>
+      </div>
+
+      <!-- session groups -->
+      <div style="flex:1; overflow-y:auto; padding:4px 8px 8px;">
+        <sc-for list="{{ groups }}" as="group" hint-placeholder-count="2">
+          <div style="margin-top:8px;">
+            <div onClick="{{ group.onToggle }}" style="width:100%; display:flex; align-items:center; gap:7px; padding:6px 6px 5px; cursor:pointer; border-radius:6px;" style-hover="background:var(--bg-hover);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.8" style="flex:none; transform:{{ group.chevron }}; transition:transform 140ms ease;"><path d="M9 6l6 6-6 6"/></svg>
+              <span style="font-size:11px; font-weight:600; letter-spacing:0.04em; color:{{ group.labelColor }}; font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ group.label }}</span>
+              <span style="flex:1;"></span>
+              <sc-if value="{{ group.canArchive }}" hint-placeholder-val="{{ false }}">
+                <button title="Archive this repo's sessions" onClick="{{ group.onArchive }}" style="display:flex; width:18px; height:18px; align-items:center; justify-content:center; background:none; border:none; border-radius:4px; color:var(--text-muted); cursor:pointer; flex:none;" style-hover="background:var(--bg-elevated); color:var(--text-primary);">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg>
+                </button>
+              </sc-if>
+              <sc-if value="{{ group.canAdd }}" hint-placeholder-val="{{ true }}">
+                <button title="New session in this repo" onClick="{{ group.onNew }}" style="display:flex; width:18px; height:18px; align-items:center; justify-content:center; background:none; border:none; border-radius:4px; color:{{ group.addColor }}; cursor:pointer; flex:none;" style-hover="background:var(--bg-elevated); color:var(--accent);">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+              </sc-if>
+              <span style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums; min-width:10px; text-align:right;">{{ group.count }}</span>
+            </div>
+            <sc-if value="{{ group.open }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:1px;">
+                <sc-for list="{{ group.sessions }}" as="s" hint-placeholder-count="3">
+                  <div onClick="{{ s.onSelect }}" onMouseEnter="{{ s.onEnter }}" onMouseLeave="{{ s.onLeave }}" style="position:relative; display:flex; align-items:flex-start; gap:9px; padding:7px 8px 7px 11px; border-radius:7px; cursor:pointer; background:{{ s.rowBg }}; transition:background 120ms ease;" style-hover="background:var(--bg-hover);">
+                    <span style="position:absolute; left:0; top:6px; bottom:6px; width:2px; border-radius:999px; background:{{ s.barColor }};"></span>
+                    <span style="margin-top:4px; width:8px; height:8px; flex:none; border-radius:999px; background:{{ s.dotColor }}; animation:{{ s.dotAnim }};"></span>
+                    <div style="min-width:0; flex:1;">
+                      <div style="font-size:13px; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.name }}</div>
+                      <div style="font-size:11px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px;">{{ s.meta }}</div>
+                    </div>
+                    <div style="display:flex; gap:1px; opacity:{{ s.actionsOpacity }}; transition:opacity 120ms ease;">
+                      <button title="Archive" onClick="{{ s.onArchive }}" style="display:flex; width:22px; height:22px; align-items:center; justify-content:center; background:none; border:none; border-radius:5px; color:var(--text-muted); cursor:pointer;" style-hover="background:var(--bg-elevated); color:var(--text-primary);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg>
+                      </button>
+                      <button title="Remove" onClick="{{ s.onRemove }}" style="display:flex; width:22px; height:22px; align-items:center; justify-content:center; background:none; border:none; border-radius:5px; color:var(--text-muted); cursor:pointer;" style-hover="background:var(--bg-elevated); color:var(--status-error);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ group.empty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:4px 11px 6px; font-size:11px; color:var(--text-muted);">{{ group.emptyText }}</div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+    </div>
+
+    <!-- MAIN -->
+    <div style="flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg-base);">
+
+      <!-- toolbar -->
+      <div style="height:46px; flex:none; display:flex; align-items:center; gap:12px; padding:0 14px; border-bottom:1px solid var(--border-hairline);">
+        <div style="display:flex; padding:2px; background:var(--bg-panel); border:1px solid var(--border-hairline); border-radius:8px;">
+          <button onClick="{{ onOverview }}" style="display:flex; align-items:center; gap:6px; height:26px; padding:0 12px; border:none; border-radius:6px; cursor:pointer; font-family:var(--ui); font-size:12.5px; font-weight:500; color:{{ ovFg }}; background:{{ ovBg }}; transition:all 140ms ease;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="18" rx="1.5"/></svg>
+            Overview
+          </button>
+          <button onClick="{{ onFocusView }}" style="display:flex; align-items:center; gap:6px; height:26px; padding:0 12px; border:none; border-radius:6px; cursor:pointer; font-family:var(--ui); font-size:12.5px; font-weight:500; color:{{ fcFg }}; background:{{ fcBg }}; transition:all 140ms ease;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+            Focus
+          </button>
+        </div>
+
+        <sc-if value="{{ isFocus }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+            <span style="width:1px; height:18px; background:var(--border-hairline);"></span>
+            <button onClick="{{ selected.onCopy }}" title="Copy session ID" style="display:flex; align-items:center; gap:8px; height:24px; padding:0 8px 0 10px; background:var(--bg-panel); border:1px solid var(--border-hairline); border-radius:6px; cursor:pointer; min-width:0;" style-hover="background:var(--bg-hover); border-color:var(--border-strong);">
+              <span style="font-size:11.5px; color:var(--text-secondary); white-space:nowrap;">{{ selected.meta }}</span>
+              <span style="width:1px; height:12px; background:var(--border-hairline); flex:none;"></span>
+              <span style="font-family:var(--mono); font-size:11px; color:var(--accent); white-space:nowrap;">{{ selected.code }}</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.6" style="flex:none;"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            </button>
+          </div>
+        </sc-if>
+
+        <span style="flex:1;"></span>
+
+        <sc-if value="{{ isFocus }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; gap:4px;">
+            <button onClick="{{ selected.onZed }}" style="display:flex; align-items:center; gap:6px; height:28px; padding:0 11px; background:var(--bg-panel); border:1px solid var(--border-hairline); border-radius:7px; cursor:pointer; font-family:var(--ui); font-size:12px; color:var(--text-secondary);" style-hover="background:var(--bg-hover); color:var(--text-primary);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/></svg>
+              Open in Zed
+            </button>
+            <button title="Toggle inspector" onClick="{{ onToggleInspector }}" style="display:flex; width:28px; height:28px; align-items:center; justify-content:center; background:{{ inspBtnBg }}; border:1px solid var(--border-hairline); border-radius:7px; cursor:pointer; color:{{ inspBtnFg }};" style-hover="background:var(--bg-hover); color:var(--text-primary);">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16"/></svg>
+            </button>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- CONTENT -->
+      <div style="flex:1; min-height:0; position:relative;">
+
+        <!-- OVERVIEW WALL -->
+        <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+          <sc-if value="{{ wallEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;">
+              <div style="font-size:14px; color:var(--text-secondary);">No active sessions. Start one to put an agent to work.</div>
+              <button onClick="{{ onNewSession }}" style="display:flex; align-items:center; gap:7px; height:34px; padding:0 16px; background:var(--accent); color:#1A0F0A; border:none; border-radius:7px; font-family:var(--ui); font-size:13px; font-weight:600; cursor:pointer;" style-hover="background:var(--accent-hover);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                New session
+              </button>
+            </div>
+          </sc-if>
+          <div style="position:absolute; inset:0; overflow-x:auto; overflow-y:hidden;">
+            <div style="display:flex; gap:14px; padding:16px; height:100%; min-width:min-content;">
+              <sc-for list="{{ wallSessions }}" as="s" hint-placeholder-count="4">
+                <div style="flex:1 1 404px; min-width:380px; max-width:560px; height:100%; display:flex; flex-direction:column; background:var(--bg-panel); border:1px solid {{ s.cardBorder }}; border-top:2px solid {{ s.topBorder }}; border-radius:10px; overflow:hidden; animation:{{ s.cardGlow }};">
+                  <!-- column header -->
+                  <div style="flex:none; display:flex; align-items:center; gap:9px; padding:10px 11px; border-bottom:1px solid var(--border-hairline); background:var(--bg-panel);">
+                    <span style="display:inline-flex; align-items:center; gap:6px; height:21px; padding:0 8px; border-radius:999px; background:{{ s.pillBg }};">
+                      <span style="width:7px; height:7px; border-radius:999px; background:{{ s.statusColor }}; animation:{{ s.dotAnim }};"></span>
+                      <span style="font-size:11px; font-weight:500; color:{{ s.statusColor }};">{{ s.statusLabel }}</span>
+                    </span>
+                    <div style="min-width:0; flex:1;">
+                      <div style="font-size:13px; font-weight:500; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.name }}</div>
+                      <div style="font-size:11px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.meta }}</div>
+                    </div>
+                    <div style="display:flex; gap:2px; flex:none;">
+                      <button title="Expand" onClick="{{ s.onExpand }}" style="display:flex; width:26px; height:26px; align-items:center; justify-content:center; background:none; border:none; border-radius:6px; color:var(--text-secondary); cursor:pointer;" style-hover="background:var(--bg-hover); color:var(--text-primary);">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                      </button>
+
+                      <button title="Open in Zed" onClick="{{ s.onZed }}" style="display:flex; width:26px; height:26px; align-items:center; justify-content:center; background:none; border:none; border-radius:6px; color:var(--text-secondary); cursor:pointer;" style-hover="background:var(--bg-hover); color:var(--text-primary);">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/></svg>
+                      </button>
+                      <button title="Archive" onClick="{{ s.onArchive }}" style="display:flex; width:26px; height:26px; align-items:center; justify-content:center; background:none; border:none; border-radius:6px; color:var(--text-secondary); cursor:pointer;" style-hover="background:var(--bg-hover); color:var(--text-primary);">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- terminal -->
+                  <div onClick="{{ s.onFocusInput }}" style="flex:1; min-height:0; display:flex; flex-direction:column; background:var(--terminal-bg); font-family:var(--mono); font-size:12.5px; line-height:1.5; cursor:text;">
+                    <div style="flex:1; overflow-y:auto; padding:11px 12px;">
+                      <sc-for list="{{ s.lines }}" as="ln" hint-placeholder-count="5">
+                        <div style="white-space:pre-wrap; color:{{ ln.color }}; font-style:{{ ln.italic }};">{{ ln.text }}</div>
+                      </sc-for>
+                      <sc-if value="{{ s.awaiting }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-top:8px; padding:10px; border:1px solid rgba(224,163,62,0.32); border-radius:8px; background:rgba(224,163,62,0.06);">
+                          <div style="color:var(--text-primary); margin-bottom:8px;">{{ s.awaitFile }}</div>
+                          <div style="color:var(--text-secondary); margin-bottom:9px;">{{ s.awaitQuestion }}</div>
+                          <div style="display:flex; flex-direction:column; gap:4px;">
+                            <sc-for list="{{ s.awaitOptions }}" as="opt" hint-placeholder-count="3">
+                              <button onClick="{{ opt.onClick }}" style="display:flex; align-items:center; gap:8px; text-align:left; padding:6px 9px; border-radius:6px; border:1px solid {{ opt.border }}; background:{{ opt.bg }}; color:{{ opt.fg }}; font-family:var(--mono); font-size:12.5px; cursor:pointer;" style-hover="border-color:var(--accent);">
+                                <span style="color:var(--accent); width:10px;">{{ opt.caret }}</span>{{ opt.label }}
+                              </button>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-if>
+                    </div>
+                    <div style="flex:none; display:flex; align-items:center; gap:7px; padding:8px 12px; border-top:1px solid var(--border-hairline);">
+                      <span style="color:var(--accent);">❯</span>
+                      <input data-term="{{ s.id }}" value="{{ s.input }}" onInput="{{ s.onInput }}" onKeyDown="{{ s.onKey }}" placeholder="Send a message…" style="flex:1; background:none; border:none; outline:none; color:var(--text-primary); font-family:var(--mono); font-size:12.5px;" />
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- FOCUS -->
+        <sc-if value="{{ isFocus }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute; inset:0; display:flex;">
+            <!-- terminal -->
+            <div onClick="{{ selected.onFocusInput }}" style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--terminal-bg); font-family:var(--mono); font-size:12.5px; line-height:1.5; cursor:text;">
+              <div style="flex:1; overflow-y:auto; padding:18px 22px;">
+                <sc-for list="{{ selected.lines }}" as="ln" hint-placeholder-count="6">
+                  <div style="white-space:pre-wrap; color:{{ ln.color }}; font-style:{{ ln.italic }};">{{ ln.text }}</div>
+                </sc-for>
+                <sc-if value="{{ selected.awaiting }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:10px; max-width:560px; padding:12px 14px; border:1px solid rgba(224,163,62,0.32); border-radius:8px; background:rgba(224,163,62,0.06);">
+                    <div style="color:var(--text-primary); margin-bottom:8px;">{{ selected.awaitFile }}</div>
+                    <div style="color:var(--text-secondary); margin-bottom:10px;">{{ selected.awaitQuestion }}</div>
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                      <sc-for list="{{ selected.awaitOptions }}" as="opt" hint-placeholder-count="3">
+                        <button onClick="{{ opt.onClick }}" style="display:flex; align-items:center; gap:8px; text-align:left; padding:7px 10px; border-radius:6px; border:1px solid {{ opt.border }}; background:{{ opt.bg }}; color:{{ opt.fg }}; font-family:var(--mono); font-size:12.5px; cursor:pointer;" style-hover="border-color:var(--accent);">
+                          <span style="color:var(--accent); width:10px;">{{ opt.caret }}</span>{{ opt.label }}
+                        </button>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+                <div style="display:flex; gap:7px; margin-top:6px; color:var(--text-muted);"><span style="color:var(--accent);">❯</span><span style="width:8px; height:15px; background:var(--text-secondary); animation:caret 1.1s step-end infinite; display:inline-block;"></span></div>
+              </div>
+              <div style="flex:none; display:flex; align-items:center; gap:8px; padding:11px 22px; border-top:1px solid var(--border-hairline);">
+                <span style="color:var(--accent);">❯</span>
+                <input data-term="{{ selected.id }}" value="{{ selected.input }}" onInput="{{ selected.onInput }}" onKeyDown="{{ selected.onKey }}" placeholder="Send a message…" style="flex:1; background:none; border:none; outline:none; color:var(--text-primary); font-family:var(--mono); font-size:13px;" />
+              </div>
+            </div>
+
+            <!-- inspector -->
+            <sc-if value="{{ inspectorOpen }}" hint-placeholder-val="{{ true }}">
+              <div style="width:360px; flex:none; border-left:1px solid var(--border-hairline); background:var(--bg-panel); display:flex; flex-direction:column; min-height:0;">
+                <!-- tab strip -->
+                <div style="flex:none; display:flex; align-items:center; gap:2px; padding:0 8px; height:38px; border-bottom:1px solid var(--border-hairline);">
+                  <div style="display:flex; align-items:center; gap:6px; height:28px; padding:0 11px; border-radius:7px; background:var(--bg-hover); color:var(--text-primary); font-size:12.5px; font-weight:500;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 16v6M21 19h-6M3 6h18M3 12h11M3 18h7"/></svg>
+                    Diff
+                  </div>
+                  <span style="display:flex; align-items:center; height:28px; padding:0 9px; color:var(--text-muted); font-size:12.5px; cursor:default;">Files</span>
+                  <span style="flex:1;"></span>
+                  <button title="Collapse" onClick="{{ onToggleInspector }}" style="display:flex; width:26px; height:26px; align-items:center; justify-content:center; background:none; border:none; border-radius:6px; color:var(--text-secondary); cursor:pointer;" style-hover="background:var(--bg-hover); color:var(--text-primary);">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></svg>
+                  </button>
+                </div>
+
+                <sc-if value="{{ diff.has }}" hint-placeholder-val="{{ true }}">
+                  <!-- summary -->
+                  <div style="flex:none; display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--border-hairline);">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.6"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M18 6a9 9 0 0 1-9 9"/><circle cx="18" cy="6" r="3"/></svg>
+                    <span style="font-family:var(--mono); font-size:11.5px; color:var(--text-primary);">{{ diff.branch }}</span>
+                    <span style="flex:1;"></span>
+                    <span style="font-size:11px; color:var(--text-secondary);">{{ diff.summary }} </span>
+                    <span style="font-size:11px; color:var(--diff-add-fg); font-variant-numeric:tabular-nums;">{{ diff.adds }}</span>
+                    <span style="font-size:11px; color:var(--diff-del-fg); font-variant-numeric:tabular-nums;">{{ diff.dels }}</span>
+                  </div>
+                  <!-- files -->
+                  <div style="flex:none; max-height:148px; overflow-y:auto; padding:6px; border-bottom:1px solid var(--border-hairline);">
+                    <sc-for list="{{ diff.files }}" as="f" hint-placeholder-count="3">
+                      <div onClick="{{ f.onSelect }}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; background:{{ f.bg }};" style-hover="background:var(--bg-hover);">
+                        <span style="width:15px; text-align:center; font-family:var(--mono); font-size:11px; font-weight:700; color:{{ f.statusColor }};">{{ f.status }}</span>
+                        <span style="flex:1; min-width:0; font-family:var(--mono); font-size:11.5px; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; direction:rtl; text-align:left;">{{ f.path }}</span>
+                        <span style="font-size:11px; color:var(--diff-add-fg); font-variant-numeric:tabular-nums;">{{ f.add }}</span>
+                        <span style="font-size:11px; color:var(--diff-del-fg); font-variant-numeric:tabular-nums;">{{ f.del }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <!-- mode toggle -->
+                  <div style="flex:none; display:flex; align-items:center; gap:8px; padding:7px 12px; border-bottom:1px solid var(--border-hairline);">
+                    <span style="font-family:var(--mono); font-size:11px; color:var(--text-secondary); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ diff.activePath }}</span>
+                    <div style="display:flex; padding:2px; background:var(--bg-base); border:1px solid var(--border-hairline); border-radius:6px;">
+                      <button onClick="{{ diff.onUnified }}" style="height:20px; padding:0 9px; border:none; border-radius:4px; cursor:pointer; font-family:var(--ui); font-size:11px; color:{{ diff.uFg }}; background:{{ diff.uBg }};">Unified</button>
+                      <button onClick="{{ diff.onSplit }}" style="height:20px; padding:0 9px; border:none; border-radius:4px; cursor:pointer; font-family:var(--ui); font-size:11px; color:{{ diff.sFg }}; background:{{ diff.sBg }};">Split</button>
+                    </div>
+                  </div>
+                  <!-- diff body -->
+                  <div style="flex:1; min-height:0; overflow:auto; background:var(--terminal-bg);">
+                    <sc-if value="{{ diff.isUnified }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-family:var(--mono); font-size:12px; line-height:1.45;">
+                        <sc-for list="{{ diff.rows }}" as="r" hint-placeholder-count="8">
+                          <div style="display:flex; background:{{ r.bg }};">
+                            <span style="flex:none; width:34px; text-align:right; padding:0 6px; color:var(--diff-gutter); user-select:none;">{{ r.oldNo }}</span>
+                            <span style="flex:none; width:34px; text-align:right; padding:0 6px; color:var(--diff-gutter); user-select:none; border-right:1px solid var(--border-hairline);">{{ r.newNo }}</span>
+                            <span style="flex:none; width:14px; text-align:center; color:{{ r.fg }};">{{ r.sign }}</span>
+                            <span style="white-space:pre; color:{{ r.fg }}; padding-right:10px;">{{ r.text }}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ diff.isSplit }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-family:var(--mono); font-size:12px; line-height:1.45; min-width:min-content;">
+                        <sc-for list="{{ diff.rows }}" as="r" hint-placeholder-count="8">
+                          <div style="display:flex;">
+                            <div style="flex:1; min-width:200px; display:flex; background:{{ r.leftBg }}; border-right:1px solid var(--border-hairline);">
+                              <span style="flex:none; width:30px; text-align:right; padding:0 5px; color:var(--diff-gutter); user-select:none;">{{ r.leftNo }}</span>
+                              <span style="white-space:pre; color:{{ r.leftFg }}; padding:0 8px;">{{ r.leftText }}</span>
+                            </div>
+                            <div style="flex:1; min-width:200px; display:flex; background:{{ r.rightBg }};">
+                              <span style="flex:none; width:30px; text-align:right; padding:0 5px; color:var(--diff-gutter); user-select:none;">{{ r.rightNo }}</span>
+                              <span style="white-space:pre; color:{{ r.rightFg }}; padding:0 8px;">{{ r.rightText }}</span>
+                            </div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ diff.empty }}" hint-placeholder-val="{{ false }}">
+                  <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:24px; text-align:center; font-size:12.5px; color:var(--text-muted);">{{ diff.emptyText }}</div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOASTS -->
+  <div style="position:fixed; bottom:30px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; align-items:center; z-index:60; pointer-events:none;">
+    <sc-for list="{{ toasts }}" as="t" hint-placeholder-count="0">
+      <div style="display:flex; align-items:center; gap:9px; padding:9px 14px; background:var(--bg-elevated); border:1px solid var(--border-strong); border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,0.45); font-size:12.5px; color:var(--text-primary); animation:toastIn 160ms ease;">
+        <span style="width:7px; height:7px; border-radius:999px; background:var(--accent);"></span>{{ t.text }}
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- MODAL: NEW SESSION -->
+  <sc-if value="{{ showNewSession }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed; inset:0; z-index:70; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; animation:fadeIn 120ms ease;">
+      <div onClick="{{ stop }}" style="width:480px; max-width:92vw; background:var(--bg-elevated); border:1px solid var(--border-strong); border-radius:12px; box-shadow:0 8px 28px rgba(0,0,0,0.45); overflow:hidden; animation:sheetIn 160ms ease;">
+        <div style="display:flex; align-items:center; padding:15px 18px; border-bottom:1px solid var(--border-hairline);">
+          <span style="font-size:15px; font-weight:600;">New session</span>
+          <span style="flex:1;"></span>
+          <button onClick="{{ closeModal }}" style="display:flex; width:26px; height:26px; align-items:center; justify-content:center; background:none; border:none; border-radius:6px; color:var(--text-secondary); cursor:pointer;" style-hover="background:var(--bg-hover); color:var(--text-primary);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div style="padding:18px; display:flex; flex-direction:column; gap:16px;">
+          <div>
+            <div style="font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">Working directory</div>
+            <button onClick="{{ ns.onPick }}" style="display:flex; align-items:center; gap:9px; width:100%; height:34px; padding:0 11px; background:var(--bg-panel); border:1px solid var(--border-hairline); border-radius:7px; cursor:pointer; font-family:var(--mono); font-size:12px; color:var(--text-secondary);" style-hover="border-color:var(--border-strong);">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              <span style="color:{{ ns.repoColor }};">{{ ns.repoLabel }}</span>
+              <span style="flex:1;"></span>
+              <span style="font-size:11px; color:var(--accent);">Choose…</span>
+            </button>
+            <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:8px;">
+              <sc-for list="{{ ns.recents }}" as="r" hint-placeholder-count="5">
+                <button onClick="{{ r.onClick }}" style="height:24px; padding:0 9px; background:{{ r.bg }}; border:1px solid {{ r.border }}; border-radius:5px; cursor:pointer; font-family:var(--mono); font-size:11px; color:{{ r.fg }};" style-hover="border-color:var(--border-strong);">{{ r.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">Name <span style="text-transform:none; letter-spacing:0; font-weight:400; color:var(--text-muted);">(optional)</span></div>
+            <input value="{{ ns.name }}" onInput="{{ ns.onName }}" placeholder="e.g. add pagination" style="width:100%; height:34px; padding:0 11px; background:var(--bg-panel); border:1px solid var(--border-hairline); border-radius:7px; outline:none; color:var(--text-primary); font-family:var(--ui); font-size:13px;" style-focus="border-color:var(--accent);" />
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; padding:14px 18px; border-top:1px solid var(--border-hairline);">
+          <button onClick="{{ closeModal }}" style="height:32px; padding:0 14px; background:var(--bg-panel); border:1px solid var(--border-hairline); border-radius:7px; cursor:pointer; font-family:var(--ui); font-size:12.5px; color:var(--text-secondary);" style-hover="background:var(--bg-hover); color:var(--text-primary);">Cancel</button>
+          <button onClick="{{ ns.onCreate }}" style="height:32px; padding:0 16px; background:var(--accent); border:none; border-radius:7px; cursor:pointer; font-family:var(--ui); font-size:12.5px; font-weight:600; color:#1A0F0A;" style-hover="background:var(--accent-hover);">Create</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#D97757&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;floatAwaiting&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;inspectorDefault&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = this.initialState();
+    this._tid = 0;
+    this._kid = 100;
+    this._sid = 100;
+  }
+
+  initialState() {
+    const L = (kind, text) => ({ kind, text });
+    const sessions = [
+      {
+        id: 's1', code: 'cc_7f3a9e2', name: 'api-gateway refactor', repo: 'acme/api-gateway', branch: 'feat/rate-limit',
+        project: 'api-gateway', status: 'running', pinned: true, archived: false,
+        lines: [
+          L('prompt', '> Add a sliding-window rate limiter to the gateway'),
+          L('think', '· Mapping middleware insertion points in src/router.ts'),
+          L('tool', '⏺ Edit  src/router.ts'),
+          L('result', '   Updated 2 functions  +34 −6'),
+          L('tool', '⏺ Bash  npm run typecheck'),
+          L('ok', '   ✓ tsc --noEmit passed in 3.2s'),
+          L('think', '· Running unit tests…'),
+        ],
+        diff: {
+          branch: 'feat/rate-limit', adds: '+47', dels: '−12', summary: '3 files changed',
+          files: [
+            { path: 'src/router.ts', status: 'M', add: '+34', del: '−6' },
+            { path: 'src/middleware/rateLimit.ts', status: 'A', add: '+9', del: '−0' },
+            { path: 'src/config.ts', status: 'M', add: '+4', del: '−6' },
+          ],
+          hunks: {
+            'src/router.ts': [
+              { type: 'hunk', text: '@@ -11,7 +11,9 @@ const router = Router()' },
+              { type: 'context', oldNo: 11, newNo: 11, text: "import { Router } from 'express';" },
+              { type: 'context', oldNo: 12, newNo: 12, text: "import { auth } from './middleware/auth';" },
+              { type: 'add', newNo: 13, text: "import { rateLimit } from './middleware/rateLimit';" },
+              { type: 'context', oldNo: 13, newNo: 14, text: '' },
+              { type: 'context', oldNo: 14, newNo: 15, text: 'const router = Router();' },
+              { type: 'del', oldNo: 15, text: 'router.use(auth);' },
+              { type: 'add', newNo: 16, text: 'router.use(rateLimit({ windowMs: 60_000, max: 100 }));' },
+              { type: 'add', newNo: 17, text: 'router.use(auth);' },
+              { type: 'context', oldNo: 16, newNo: 18, text: '' },
+              { type: 'context', oldNo: 17, newNo: 19, text: 'export default router;' },
+            ],
+            'src/middleware/rateLimit.ts': [
+              { type: 'hunk', text: '@@ -0,0 +1,9 @@' },
+              { type: 'add', newNo: 1, text: "import type { Request, Response, NextFunction } from 'express';" },
+              { type: 'add', newNo: 2, text: '' },
+              { type: 'add', newNo: 3, text: 'export function rateLimit(opts: { windowMs: number; max: number }) {' },
+              { type: 'add', newNo: 4, text: '  const hits = new Map<string, number[]>();' },
+              { type: 'add', newNo: 5, text: '  return (req: Request, res: Response, next: NextFunction) => {' },
+              { type: 'add', newNo: 6, text: '    // sliding window per client IP' },
+              { type: 'add', newNo: 7, text: '    next();' },
+              { type: 'add', newNo: 8, text: '  };' },
+              { type: 'add', newNo: 9, text: '}' },
+            ],
+            'src/config.ts': [
+              { type: 'hunk', text: '@@ -4,8 +4,6 @@ export const config = {' },
+              { type: 'context', oldNo: 4, newNo: 4, text: 'export const config = {' },
+              { type: 'del', oldNo: 5, text: '  rateLimit: false,' },
+              { type: 'del', oldNo: 6, text: '  rateWindow: 0,' },
+              { type: 'add', newNo: 5, text: '  rateLimit: true,' },
+              { type: 'context', oldNo: 7, newNo: 6, text: "  logLevel: 'info'," },
+              { type: 'context', oldNo: 8, newNo: 7, text: '};' },
+            ],
+          },
+        },
+      },
+      {
+        id: 's2', code: 'cc_2b81d04', name: 'docs site copy', repo: 'acme/docs', branch: 'main',
+        project: 'docs', status: 'awaiting', pinned: false, archived: false,
+        lines: [
+          L('prompt', '> Tighten the hero copy on the docs landing page'),
+          L('think', '· Reviewing src/content/index.md'),
+          L('tool', '⏺ Edit  src/content/index.md'),
+        ],
+        awaiting: { file: 'Edit src/content/index.md', question: 'Do you want to make this edit?', options: ['Yes', "Yes, and don't ask again", 'No, tell Claude what to do'] },
+        diff: {
+          branch: 'main', adds: '+6', dels: '−3', summary: '1 file changed',
+          files: [{ path: 'src/content/index.md', status: 'M', add: '+6', del: '−3' }],
+          hunks: {
+            'src/content/index.md': [
+              { type: 'hunk', text: '@@ -1,5 +1,8 @@' },
+              { type: 'context', oldNo: 1, newNo: 1, text: '# Build with confidence' },
+              { type: 'del', oldNo: 2, text: 'A platform for your team to do things faster.' },
+              { type: 'add', newNo: 2, text: 'Ship reliable software faster — without the busywork.' },
+              { type: 'add', newNo: 3, text: '' },
+              { type: 'context', oldNo: 3, newNo: 4, text: '[Get started](/start)' },
+            ],
+          },
+        },
+      },
+      {
+        id: 's3', code: 'cc_e5c1a90', name: 'auth-service tests', repo: 'acme/auth', branch: 'chore/tests',
+        project: 'auth', status: 'done', pinned: false, archived: false,
+        lines: [
+          L('prompt', '> Add tests for the token refresh path'),
+          L('tool', '⏺ Write  tests/refresh.test.ts'),
+          L('result', '   +128 −0'),
+          L('tool', '⏺ Bash  npm test'),
+          L('ok', '   ✓ 14 passed (1.8s)'),
+          L('ok', '✓ Done — all tests green.'),
+        ],
+        diff: {
+          branch: 'chore/tests', adds: '+128', dels: '−0', summary: '1 file changed',
+          files: [{ path: 'tests/refresh.test.ts', status: 'A', add: '+128', del: '−0' }],
+          hunks: {
+            'tests/refresh.test.ts': [
+              { type: 'hunk', text: '@@ -0,0 +1,8 @@' },
+              { type: 'add', newNo: 1, text: "import { describe, it, expect } from 'vitest';" },
+              { type: 'add', newNo: 2, text: "import { refresh } from '../src/token';" },
+              { type: 'add', newNo: 3, text: '' },
+              { type: 'add', newNo: 4, text: "describe('refresh', () => {" },
+              { type: 'add', newNo: 5, text: "  it('rotates an expired token', async () => {" },
+              { type: 'add', newNo: 6, text: '    expect((await refresh(stale)).token).not.toBe(stale);' },
+              { type: 'add', newNo: 7, text: '  });' },
+              { type: 'add', newNo: 8, text: '});' },
+            ],
+          },
+        },
+      },
+      {
+        id: 's4', code: 'cc_4d70f6b', name: 'data-pipeline', repo: 'acme/etl', branch: 'fix/backfill',
+        project: 'etl', status: 'error', pinned: false, archived: false,
+        lines: [
+          L('prompt', '> Backfill the events table from the 2024 archive'),
+          L('tool', '⏺ Bash  node scripts/backfill.js'),
+          L('err', '   ✗ connection to warehouse timed out after 30s'),
+          L('err', '   ↳ exit code 1'),
+          L('err', '✗ Stopped — see log above.'),
+        ],
+        diff: null,
+      },
+      {
+        id: 's5', code: 'cc_9a0c3e1', name: 'scratch', repo: 'acme/sandbox', branch: 'main',
+        project: 'sandbox', status: 'idle', pinned: false, archived: false,
+        lines: [L('plain', 'Session ready. Type a prompt to start.')],
+        diff: null,
+      },
+    ];
+
+    const skills = [
+      { id: 'k1', name: 'code-review', repo: 'github.com/me/claude-skills', provider: 'GitHub', sync: 'synced', syncedAt: '2m', projects: { 'api-gateway': true, docs: true, auth: true, etl: false, sandbox: false } },
+      { id: 'k2', name: 'commit-style', repo: 'github.com/me/claude-skills', provider: 'GitHub', sync: 'synced', syncedAt: '2m', projects: { 'api-gateway': true, docs: false, auth: true, etl: true, sandbox: false } },
+      { id: 'k3', name: 'test-writer', repo: 'gitlab.com/me/skills', provider: 'GitLab', sync: 'outdated', syncedAt: '1d', projects: { 'api-gateway': false, docs: false, auth: true, etl: false, sandbox: false } },
+    ];
+
+    return {
+      view: 'overview',
+      repos: ['acme/api-gateway', 'acme/docs', 'acme/auth', 'acme/etl', 'acme/sandbox'],
+      selectedId: 's1',
+      inspectorOpen: this.props.inspectorDefault ?? true,
+      diffMode: 'unified',
+      selectedFile: null,
+      groupCollapsed: { ARCHIVED: true },
+      modal: null,
+      toasts: [],
+      hoveredId: null,
+      sessions,
+      skills,
+      termInputs: {},
+      smSelectedId: 'k1',
+      newSession: { repo: null, name: '', skills: {} },
+      newSkill: { name: '', provider: 'GitHub', url: '' },
+    };
+  }
+
+  // ---- status meta ----
+  statusMeta(s) {
+    const m = {
+      running: { label: 'running', color: 'var(--status-running)' },
+      awaiting: { label: 'awaiting', color: 'var(--status-awaiting)' },
+      done: { label: 'done', color: 'var(--status-done)' },
+      error: { label: 'error', color: 'var(--status-error)' },
+      idle: { label: 'idle', color: 'var(--status-idle)' },
+    };
+    return m[s] || m.idle;
+  }
+  syncMeta(s) {
+    const m = {
+      synced: { color: 'var(--status-done)', text: 'Synced' },
+      syncing: { color: 'var(--status-running)', text: 'Syncing…' },
+      outdated: { color: 'var(--status-awaiting)', text: 'Out of date' },
+      error: { color: 'var(--status-error)', text: 'Sync failed — check the repository URL' },
+    };
+    return m[s] || m.synced;
+  }
+  lineColor(kind) {
+    return {
+      prompt: 'var(--text-primary)', think: 'var(--text-muted)', tool: 'var(--text-primary)',
+      result: 'var(--text-secondary)', ok: 'var(--status-done)', err: 'var(--status-error)',
+      plain: 'var(--text-secondary)',
+    }[kind] || 'var(--text-secondary)';
+  }
+
+  // ---- helpers ----
+  updateSession(id, fn) {
+    this.setState(s => ({ sessions: s.sessions.map(x => x.id === id ? fn({ ...x }) : x) }));
+  }
+  toast(text) {
+    const id = ++this._tid;
+    this.setState(s => ({ toasts: [...s.toasts, { id, text }] }));
+    setTimeout(() => this.setState(s => ({ toasts: s.toasts.filter(t => t.id !== id) })), 2600);
+  }
+
+  // ---- actions ----
+  select = (id) => this.setState({ selectedId: id, view: 'focus', selectedFile: null });
+  setView = (v) => this.setState({ view: v });
+  toggleInspector = () => this.setState(s => ({ inspectorOpen: !s.inspectorOpen }));
+  setDiffMode = (m) => this.setState({ diffMode: m });
+  selectFile = (p) => this.setState({ selectedFile: p });
+  toggleGroup = (label) => this.setState(s => ({ groupCollapsed: { ...s.groupCollapsed, [label]: !s.groupCollapsed[label] } }));
+  openModal = (m) => this.setState({ modal: m });
+  closeModal = () => this.setState({ modal: null });
+  stop = (e) => { e.stopPropagation(); };
+  hover = (id) => this.setState({ hoveredId: id });
+  setFilter = (v) => this.setState({ filter: v });
+
+  archive = (id, e) => { if (e) e.stopPropagation(); this.updateSession(id, x => ({ ...x, archived: true, pinned: false })); const n = this.state.sessions.find(x => x.id === id); this.toast('Archived ' + (n ? n.name : 'session')); };
+  archiveRepo = (repo, e) => {
+    if (e) e.stopPropagation();
+    const n = this.state.sessions.filter(x => x.repo === repo && !x.archived).length;
+    this.setState(s => ({ sessions: s.sessions.map(x => x.repo === repo && !x.archived ? { ...x, archived: true, pinned: false } : x) }));
+    this.toast(n ? 'Archived ' + n + ' session' + (n > 1 ? 's' : '') + ' in ' + repo : 'No active sessions in ' + repo);
+  };
+  unarchive = (id, e) => { if (e) e.stopPropagation(); this.updateSession(id, x => ({ ...x, archived: false })); };
+  remove = (id, e) => {
+    if (e) e.stopPropagation();
+    const n = this.state.sessions.find(x => x.id === id);
+    this.setState(s => {
+      const sessions = s.sessions.filter(x => x.id !== id);
+      let sel = s.selectedId;
+      if (sel === id) sel = (sessions.find(x => !x.archived) || sessions[0] || {}).id || null;
+      return { sessions, selectedId: sel };
+    });
+    this.toast('Removed ' + (n ? n.name : 'session'));
+  };
+  zed = (sess, e) => { if (e) e.stopPropagation(); this.toast('Opening ' + sess.repo + ' in Zed…'); };
+  genCode = () => 'cc_' + Math.random().toString(16).slice(2, 9);
+  fallbackCopy = (text) => { try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch (_) {} };
+  copyText = (text) => { try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).catch(() => this.fallbackCopy(text)); } else { this.fallbackCopy(text); } } catch (_) { this.fallbackCopy(text); } };
+  copySession = (sess, e) => { if (e) e.stopPropagation(); this.copyText(sess.code); this.toast('Copied session ID  ' + sess.code); };
+  fork = (sess, e) => {
+    if (e) e.stopPropagation();
+    const id = 's' + (++this._sid);
+    const lines = sess.lines.map(l => ({ ...l }));
+    const f = { id, code: this.genCode(), name: sess.name + ' (fork)', repo: sess.repo, branch: sess.branch, project: sess.project,
+      status: 'idle', pinned: false, archived: false,
+      lines: [...lines, { kind: 'think', text: '· Forked from ' + sess.code + ' — history copied.' }], diff: sess.diff, awaiting: null };
+    this.setState(s => ({ sessions: [...s.sessions, f], selectedId: id, view: 'focus', selectedFile: null }));
+    this.toast('Forked ' + sess.name);
+  };
+  newSessionInRepo = (repo, e) => {
+    if (e) e.stopPropagation();
+    const project = repo.split('/').pop();
+    const id = 's' + (++this._sid);
+    const f = { id, code: this.genCode(), name: 'new session', repo, branch: 'main', project,
+      status: 'idle', pinned: false, archived: false,
+      lines: [{ kind: 'plain', text: 'Session ready. Type a prompt to start.' }], diff: null, awaiting: null };
+    this.setState(s => ({ sessions: [...s.sessions, f], repos: s.repos.includes(repo) ? s.repos : [...s.repos, repo], selectedId: id, view: 'focus', selectedFile: null }));
+    this.toast('New session in ' + repo);
+  };
+  focusInput = (id) => {
+    setTimeout(() => {
+      try {
+        const el = document.querySelector('input[data-term="' + id + '"]');
+        if (el) el.focus();
+      } catch (_) {}
+    }, 0);
+  };
+
+  setTerm = (id, v) => this.setState(s => ({ termInputs: { ...s.termInputs, [id]: v } }));
+  termKey = (id, e) => {
+    if (e.key !== 'Enter') return;
+    const v = (this.state.termInputs[id] || '').trim();
+    if (!v) return;
+    this.updateSession(id, x => ({ ...x, lines: [...x.lines, { kind: 'prompt', text: '> ' + v }] }));
+    this.setState(s => ({ termInputs: { ...s.termInputs, [id]: '' } }));
+  };
+
+  approve = (id, idx, e) => {
+    if (e) e.stopPropagation();
+    this.updateSession(id, x => {
+      const lines = [...x.lines];
+      if (idx === 2) {
+        lines.push({ kind: 'think', text: '· Waiting for new instructions…' });
+        return { ...x, awaiting: null, status: 'running', lines };
+      }
+      lines.push({ kind: 'result', text: '   Applied edit to src/content/index.md  +6 −3' });
+      lines.push({ kind: 'ok', text: '✓ Done — change written.' });
+      return { ...x, awaiting: null, status: 'done', lines };
+    });
+    this.toast(idx === 2 ? 'Edit declined' : 'Edit applied');
+  };
+
+  // ---- skills ----
+  openSkills = (id) => this.setState({ modal: 'skills', smSelectedId: id });
+  smSelect = (id) => this.setState({ smSelectedId: id });
+  syncSkill = (id) => {
+    this.setState(s => ({ skills: s.skills.map(k => k.id === id ? { ...k, sync: 'syncing' } : k) }));
+    setTimeout(() => {
+      this.setState(s => ({ skills: s.skills.map(k => k.id === id ? { ...k, sync: 'synced', syncedAt: 'now' } : k) }));
+      this.toast('Skill synced');
+    }, 1400);
+  };
+  toggleSkillProject = (skillId, project) => {
+    this.setState(s => ({ skills: s.skills.map(k => k.id === skillId ? { ...k, projects: { ...k.projects, [project]: !k.projects[project] } } : k) }));
+  };
+
+  setNewSkill = (patch) => this.setState(s => ({ newSkill: { ...s.newSkill, ...patch } }));
+  createSkill = () => {
+    const f = this.state.newSkill;
+    const name = (f.name || '').trim() || 'new-skill';
+    const url = (f.url || '').trim() || 'github.com/me/skills';
+    const id = 'k' + (++this._kid);
+    const projects = {}; ['api-gateway', 'docs', 'auth', 'etl', 'sandbox'].forEach(p => projects[p] = false);
+    const skill = { id, name, repo: url, provider: f.provider, sync: 'syncing', syncedAt: 'now', projects };
+    this.setState(s => ({ skills: [...s.skills, skill], modal: null, newSkill: { name: '', provider: 'GitHub', url: '' } }));
+    setTimeout(() => { this.setState(s => ({ skills: s.skills.map(k => k.id === id ? { ...k, sync: 'synced' } : k) })); this.toast(name + ' synced'); }, 1500);
+  };
+
+  // ---- new session ----
+  setNewSession = (patch) => this.setState(s => ({ newSession: { ...s.newSession, ...patch } }));
+  pickRepo = (repo) => this.setState(s => ({ newSession: { ...s.newSession, repo } }));
+  toggleNewSessionSkill = (kid) => this.setState(s => ({ newSession: { ...s.newSession, skills: { ...s.newSession.skills, [kid]: !s.newSession.skills[kid] } } }));
+  createSession = () => {
+    const f = this.state.newSession;
+    const repo = f.repo || 'acme/sandbox';
+    const project = repo.split('/').pop();
+    const name = (f.name || '').trim() || (project + ' session');
+    const id = 's' + (++this._sid);
+    const sess = { id, code: this.genCode(), name, repo, branch: 'main', project, status: 'running', pinned: false, archived: false,
+      lines: [{ kind: 'prompt', text: '> Session started in ' + repo }, { kind: 'think', text: '· Agent ready. Awaiting your first instruction.' }], diff: null };
+    this.setState(s => ({ sessions: [...s.sessions, sess], repos: s.repos.includes(repo) ? s.repos : [...s.repos, repo], modal: null, view: 'overview', selectedId: id, newSession: { repo: null, name: '', skills: {} } }));
+    this.toast('Started ' + name);
+  };
+
+  // ---- render ----
+  renderVals() {
+    const st = this.state;
+    const accent = this.props.accentColor ?? '#D97757';
+    const floatAwaiting = this.props.floatAwaiting ?? true;
+    const active = st.sessions.filter(s => !s.archived);
+    const archived = st.sessions.filter(s => s.archived);
+    const selected = st.sessions.find(s => s.id === st.selectedId) || active[0] || st.sessions[0];
+
+    const enrichLines = (sess) => sess.lines.map(l => ({ text: l.text, color: this.lineColor(l.kind), italic: l.kind === 'think' ? 'italic' : 'normal' }));
+    const enrichAwait = (sess) => {
+      if (!sess.awaiting) return [];
+      return sess.awaiting.options.map((o, i) => ({
+        label: o, caret: i === 0 ? '❯' : ' ',
+        bg: i === 0 ? 'var(--accent-dim)' : 'transparent',
+        border: i === 0 ? 'rgba(217,119,87,0.4)' : 'var(--border-hairline)',
+        fg: i === 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
+        onClick: (e) => this.approve(sess.id, i, e),
+      }));
+    };
+
+    // ---- sidebar groups (one persistent row per repository) ----
+    const groups = [];
+    const byRepo = {};
+    active.forEach(s => { (byRepo[s.repo] = byRepo[s.repo] || []).push(s); });
+    const repoList = st.repos.slice();
+    active.forEach(s => { if (!repoList.includes(s.repo)) repoList.push(s.repo); });
+    const mkRow = (s) => {
+      const meta = this.statusMeta(s.status);
+      const isSel = s.id === st.selectedId;
+      const isHover = st.hoveredId === s.id;
+      return {
+        name: s.name, meta: s.branch,
+        dotColor: meta.color, dotAnim: s.status === 'running' ? 'pulseDot 1.6s ease-in-out infinite' : 'none',
+        rowBg: isSel ? 'var(--accent-dim)' : 'transparent',
+        barColor: isSel ? 'var(--accent)' : 'transparent',
+        actionsOpacity: isHover ? 1 : 0,
+        onSelect: () => this.select(s.id),
+        onEnter: () => this.hover(s.id), onLeave: () => this.hover(null),
+        onArchive: (e) => this.archive(s.id, e), onRemove: (e) => this.remove(s.id, e),
+      };
+    };
+    const chev = (open) => open ? 'rotate(90deg)' : 'rotate(0deg)';
+    repoList.forEach(repo => {
+      const list = byRepo[repo] || [];
+      const empty = list.length === 0;
+      const open = !st.groupCollapsed[repo];
+      groups.push({
+        label: repo, count: list.length, open, chevron: chev(open),
+        dimmed: empty, labelColor: empty ? 'var(--text-muted)' : 'var(--text-secondary)',
+        canAdd: true, addColor: empty ? 'var(--accent)' : 'var(--text-muted)', onNew: (e) => this.newSessionInRepo(repo, e),
+        canArchive: !empty, onArchive: (e) => this.archiveRepo(repo, e),
+        onToggle: () => this.toggleGroup(repo), sessions: list.map(mkRow),
+        empty, emptyText: 'No active agents — click + to start one',
+      });
+    });
+    const aOpen = !st.groupCollapsed['ARCHIVED'];
+    groups.push({ label: 'archived', count: archived.length, open: aOpen, chevron: chev(aOpen), dimmed: true, labelColor: 'var(--text-muted)', canAdd: false, addColor: 'var(--text-muted)', onNew: () => {}, canArchive: false, onArchive: () => {}, onToggle: () => this.toggleGroup('ARCHIVED'), sessions: archived.map(mkRow), empty: archived.length === 0, emptyText: 'Nothing archived' });
+
+    // ---- skills sidebar ----
+    const skills = st.skills.map(k => {
+      const m = this.syncMeta(k.sync);
+      return { name: k.name, repoShort: k.repo.replace(/^https?:\/\//, ''), syncColor: m.color, syncAnim: k.sync === 'syncing' ? 'pulseDot 1.2s ease-in-out infinite' : 'none', syncedAt: k.syncedAt, onOpen: () => this.openSkills(k.id) };
+    });
+
+    // ---- wall ----
+    let wall = active.slice();
+    if (floatAwaiting) wall.sort((a, b) => (b.status === 'awaiting' ? 1 : 0) - (a.status === 'awaiting' ? 1 : 0));
+    const enrichWall = (s) => {
+      const meta = this.statusMeta(s.status);
+      const aw = s.status === 'awaiting';
+      return {
+        id: s.id,
+        name: s.name, meta: s.repo + ' · ' + s.branch,
+        statusColor: meta.color, statusLabel: meta.label,
+        pillBg: 'rgba(255,255,255,0.04)',
+        dotAnim: s.status === 'running' ? 'pulseDot 1.6s ease-in-out infinite' : 'none',
+        cardBorder: aw ? 'rgba(224,163,62,0.3)' : 'var(--border-hairline)',
+        topBorder: aw ? 'var(--status-awaiting)' : 'transparent',
+        cardGlow: aw ? 'awaitGlow 2.4s ease-in-out infinite' : 'none',
+        lines: enrichLines(s),
+        awaiting: !!s.awaiting, awaitFile: s.awaiting ? s.awaiting.file : '', awaitQuestion: s.awaiting ? s.awaiting.question : '', awaitOptions: enrichAwait(s),
+        input: st.termInputs[s.id] || '',
+        onInput: (e) => this.setTerm(s.id, e.target.value),
+        onKey: (e) => this.termKey(s.id, e),
+        onExpand: (e) => { if (e) e.stopPropagation(); this.select(s.id); },
+        onZed: (e) => this.zed(s, e),
+        onFork: (e) => this.fork(s, e),
+        onArchive: (e) => this.archive(s.id, e),
+        onFocusInput: () => this.focusInput(s.id),
+      };
+    };
+
+    // ---- selected (focus) ----
+    const selMeta = selected ? this.statusMeta(selected.status) : { color: '#888', label: '' };
+    const selObj = selected ? {
+      id: selected.id,
+      name: selected.name, meta: selected.repo + ' · ' + selected.branch,
+      statusColor: selMeta.color, statusLabel: selMeta.label,
+      dotAnim: selected.status === 'running' ? 'pulseDot 1.6s ease-in-out infinite' : 'none',
+      pillBg: 'rgba(255,255,255,0.04)', pillBorder: 'var(--border-hairline)',
+      lines: enrichLines(selected),
+      awaiting: !!selected.awaiting, awaitFile: selected.awaiting ? selected.awaiting.file : '', awaitQuestion: selected.awaiting ? selected.awaiting.question : '', awaitOptions: enrichAwait(selected),
+      input: st.termInputs[selected.id] || '',
+      onInput: (e) => this.setTerm(selected.id, e.target.value),
+      onKey: (e) => this.termKey(selected.id, e),
+      onZed: (e) => this.zed(selected, e),
+      code: selected.code,
+      onCopy: (e) => this.copySession(selected, e),
+      onFork: (e) => this.fork(selected, e),
+      onFocusInput: () => this.focusInput(selected.id),
+    } : {};
+
+    // ---- diff ----
+    let diffObj = { has: false, empty: true, emptyText: 'No changes yet on this branch.' };
+    if (selected && selected.diff) {
+      const d = selected.diff;
+      const activePath = (st.selectedFile && d.hunks[st.selectedFile]) ? st.selectedFile : d.files[0].path;
+      const files = d.files.map(f => ({
+        path: f.path, status: f.status, add: f.add, del: f.del,
+        statusColor: f.status === 'A' ? 'var(--diff-add-fg)' : f.status === 'D' ? 'var(--diff-del-fg)' : 'var(--status-running)',
+        bg: f.path === activePath ? 'var(--bg-hover)' : 'transparent',
+        onSelect: () => this.selectFile(f.path),
+      }));
+      const rawRows = d.hunks[activePath] || [];
+      const rows = rawRows.map(r => {
+        if (r.type === 'hunk') {
+          return { bg: 'rgba(91,141,239,0.08)', fg: 'var(--status-running)', sign: '', oldNo: '', newNo: '', text: r.text,
+            leftBg: 'rgba(91,141,239,0.08)', rightBg: 'rgba(91,141,239,0.08)', leftNo: '', rightNo: '', leftText: r.text, rightText: '', leftFg: 'var(--status-running)', rightFg: 'var(--status-running)' };
+        }
+        const add = r.type === 'add', del = r.type === 'del';
+        return {
+          bg: add ? 'var(--diff-add-bg)' : del ? 'var(--diff-del-bg)' : 'transparent',
+          fg: add ? 'var(--diff-add-fg)' : del ? 'var(--diff-del-fg)' : 'var(--text-secondary)',
+          sign: add ? '+' : del ? '−' : ' ',
+          oldNo: r.oldNo != null ? r.oldNo : '', newNo: r.newNo != null ? r.newNo : '', text: r.text,
+          leftBg: del ? 'var(--diff-del-bg)' : 'transparent',
+          rightBg: add ? 'var(--diff-add-bg)' : 'transparent',
+          leftNo: (!add && r.oldNo != null) ? r.oldNo : '',
+          rightNo: (!del && r.newNo != null) ? r.newNo : '',
+          leftText: add ? '' : r.text, rightText: del ? '' : r.text,
+          leftFg: del ? 'var(--diff-del-fg)' : 'var(--text-secondary)',
+          rightFg: add ? 'var(--diff-add-fg)' : 'var(--text-secondary)',
+        };
+      });
+      const isU = st.diffMode === 'unified';
+      diffObj = {
+        has: true, empty: false, emptyText: '',
+        branch: d.branch, summary: d.summary, adds: d.adds, dels: d.dels,
+        files, activePath, rows,
+        isUnified: isU, isSplit: !isU,
+        onUnified: () => this.setDiffMode('unified'), onSplit: () => this.setDiffMode('split'),
+        uFg: isU ? 'var(--text-primary)' : 'var(--text-secondary)', uBg: isU ? 'var(--bg-hover)' : 'transparent',
+        sFg: !isU ? 'var(--text-primary)' : 'var(--text-secondary)', sBg: !isU ? 'var(--bg-hover)' : 'transparent',
+      };
+    }
+
+    // ---- new session modal ----
+    const recents = ['acme/api-gateway', 'acme/docs', 'acme/auth', 'acme/etl', 'acme/web', 'acme/sandbox'].map(r => ({
+      label: r, onClick: () => this.pickRepo(r),
+      bg: st.newSession.repo === r ? 'var(--accent-dim)' : 'var(--bg-panel)',
+      border: st.newSession.repo === r ? 'rgba(217,119,87,0.4)' : 'var(--border-hairline)',
+      fg: st.newSession.repo === r ? 'var(--text-primary)' : 'var(--text-secondary)',
+    }));
+    const nsSkills = st.skills.map(k => {
+      const on = !!st.newSession.skills[k.id];
+      return { name: k.name, onToggle: () => this.toggleNewSessionSkill(k.id),
+        bg: on ? 'var(--accent-dim)' : 'var(--bg-panel)', border: on ? 'rgba(217,119,87,0.4)' : 'var(--border-hairline)',
+        fg: on ? 'var(--text-primary)' : 'var(--text-secondary)', dot: on ? 'var(--accent)' : 'var(--text-muted)' };
+    });
+    const ns = {
+      repoLabel: st.newSession.repo || 'No directory selected', repoColor: st.newSession.repo ? 'var(--text-primary)' : 'var(--text-muted)',
+      onPick: () => this.pickRepo('acme/api-gateway'),
+      recents, name: st.newSession.name, onName: (e) => this.setNewSession({ name: e.target.value }),
+      skills: nsSkills, onCreate: this.createSession,
+    };
+
+    // ---- new skill modal ----
+    const nk = {
+      name: st.newSkill.name, onName: (e) => this.setNewSkill({ name: e.target.value }),
+      url: st.newSkill.url, onUrl: (e) => this.setNewSkill({ url: e.target.value }),
+      providers: ['GitHub', 'GitLab', 'Custom'].map(p => ({ label: p, onClick: () => this.setNewSkill({ provider: p }),
+        bg: st.newSkill.provider === p ? 'var(--accent-dim)' : 'var(--bg-panel)', border: st.newSkill.provider === p ? 'rgba(217,119,87,0.4)' : 'var(--border-hairline)',
+        fg: st.newSkill.provider === p ? 'var(--text-primary)' : 'var(--text-secondary)' })),
+      onCreate: this.createSkill,
+    };
+
+    // ---- skills manager ----
+    const smSel = st.skills.find(k => k.id === st.smSelectedId) || st.skills[0];
+    const smSkills = st.skills.map(k => {
+      const m = this.syncMeta(k.sync);
+      return { name: k.name, repo: k.repo, syncColor: m.color, syncAnim: k.sync === 'syncing' ? 'pulseDot 1.2s ease-in-out infinite' : 'none',
+        statusColor: m.color, statusText: m.text + ' · ' + k.syncedAt, bg: k.id === st.smSelectedId ? 'var(--bg-hover)' : 'transparent', onSelect: () => this.smSelect(k.id) };
+    });
+    const projList = ['api-gateway', 'docs', 'auth', 'etl', 'sandbox'];
+    let smSelObj = {};
+    if (smSel) {
+      const m = this.syncMeta(smSel.sync);
+      smSelObj = {
+        name: smSel.name, provider: smSel.provider + ' ·', repo: smSel.repo, syncColor: m.color,
+        syncAnim: smSel.sync === 'syncing' ? 'pulseDot 1.2s ease-in-out infinite' : 'none',
+        statusColor: m.color, statusText: m.text + ' · ' + smSel.syncedAt,
+        spinAnim: smSel.sync === 'syncing' ? 'pulseDot 1s linear infinite' : 'none',
+        failed: smSel.sync === 'error', onSync: () => this.syncSkill(smSel.id),
+        projects: projList.map(p => {
+          const on = !!smSel.projects[p];
+          return { name: p, onToggle: () => this.toggleSkillProject(smSel.id, p),
+            trackBg: on ? 'var(--accent)' : 'rgba(255,255,255,0.1)', knobLeft: on ? '16px' : '2px' };
+        }),
+      };
+    }
+
+    return {
+      accent,
+      isOverview: st.view === 'overview', isFocus: st.view === 'focus',
+      onOverview: () => this.setView('overview'), onFocusView: () => this.setView('focus'),
+      ovFg: st.view === 'overview' ? 'var(--text-primary)' : 'var(--text-secondary)',
+      ovBg: st.view === 'overview' ? 'var(--bg-hover)' : 'transparent',
+      fcFg: st.view === 'focus' ? 'var(--text-primary)' : 'var(--text-secondary)',
+      fcBg: st.view === 'focus' ? 'var(--bg-hover)' : 'transparent',
+      onNewSession: () => this.openModal('newSession'),
+      onNewSkill: () => this.openModal('newSkill'),
+      onSettings: () => this.toast('Settings — not in this prototype'),
+      groups, skills,
+      wallSessions: wall.map(enrichWall), wallEmpty: active.length === 0,
+      selected: selObj,
+      inspectorOpen: st.inspectorOpen, onToggleInspector: this.toggleInspector,
+      inspBtnBg: st.inspectorOpen ? 'var(--bg-hover)' : 'var(--bg-panel)', inspBtnFg: st.inspectorOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+      diff: diffObj,
+      toasts: st.toasts,
+      showNewSession: st.modal === 'newSession', showNewSkill: st.modal === 'newSkill', showSkills: st.modal === 'skills',
+      closeModal: this.closeModal, stop: this.stop,
+      ns, nk, sm: { skills: smSkills, sel: smSelObj },
+    };
+  }
+}
+</script>
+</body>
+</html>
