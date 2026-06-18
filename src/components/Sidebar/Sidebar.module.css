@@ -67,32 +67,39 @@
   padding-right: var(--space-8);
 }
 
-.repoToggle {
+/* Repo title — left-click filters Overview to this repo (#34). */
+.repoTitle {
   display: flex;
   flex: 1;
   min-width: 0;
   align-items: center;
   gap: var(--space-6);
+  height: 100%;
   padding: 0 var(--space-8);
   border: 0;
+  border-radius: var(--radius-chip);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
+  text-align: left;
   cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 
-.repoEmpty .repoToggle {
+.repoTitle:hover {
+  color: var(--text-primary);
+}
+
+.repoEmpty .repoTitle {
   color: var(--text-muted);
 }
 
-.chevron {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  transition: transform var(--dur-fast) var(--ease-out);
-}
-
-.chevronOpen {
-  transform: rotate(90deg);
+/* Active Overview filter — clear accent marking (wins over the empty/muted rule). */
+.repoTitle.repoActive {
+  color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .repoName {

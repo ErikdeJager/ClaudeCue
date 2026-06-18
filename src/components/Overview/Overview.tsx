@@ -91,6 +91,8 @@ function Overview() {
   const openInZed = useStore((s) => s.openInZed);
   const removeSession = useStore((s) => s.removeSession);
   const openNewSession = useStore((s) => s.openNewSession);
+  const filter = useStore((s) => s.overviewRepoFilter);
+  const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
 
   if (sessions.length === 0) {
     return <EmptyState onNewSession={() => openNewSession()} />;
@@ -103,20 +105,45 @@ function Overview() {
     setView("focus");
   };
 
+  // The sidebar repo filter (#34) narrows the wall to one repo's agents.
+  const shown = filter
+    ? sessions.filter((s) => s.repoPath === filter)
+    : sessions;
+
   return (
-    <div className={styles.wall}>
-      {sessions.map((session) => (
-        <SessionCard
-          key={session.id}
-          session={session}
-          branch={branches[session.repoPath] ?? ""}
-          selected={session.id === selectedId}
-          onSelect={() => select(session.id)}
-          onExpand={() => expand(session.id)}
-          onOpenInZed={() => void openInZed(session.repoPath)}
-          onRemove={() => void removeSession(session.id)}
-        />
-      ))}
+    <div className={styles.overview}>
+      {filter && (
+        <div className={styles.filterBar}>
+          <span className={styles.filterLabel}>
+            Showing <strong>{repoName(filter)}</strong>
+          </span>
+          <button
+            type="button"
+            className={styles.showAll}
+            onClick={() => setOverviewRepoFilter(null)}
+          >
+            Show all
+          </button>
+        </div>
+      )}
+      {shown.length === 0 ? (
+        <div className={styles.filterEmpty}>No agents in this repo.</div>
+      ) : (
+        <div className={styles.wall}>
+          {shown.map((session) => (
+            <SessionCard
+              key={session.id}
+              session={session}
+              branch={branches[session.repoPath] ?? ""}
+              selected={session.id === selectedId}
+              onSelect={() => select(session.id)}
+              onExpand={() => expand(session.id)}
+              onOpenInZed={() => void openInZed(session.repoPath)}
+              onRemove={() => void removeSession(session.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

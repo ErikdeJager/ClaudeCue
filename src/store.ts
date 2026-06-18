@@ -117,6 +117,8 @@ export interface AppState {
   sessions: SessionView[];
   selectedId: string | null;
   view: View;
+  /** Overview filter: show only this repo's agents, or all when null (#34). */
+  overviewRepoFilter: string | null;
   inspectorOpen: boolean;
   recents: string[];
   /** Current branch per repo path (from git reading); "" when unknown/non-git. */
@@ -137,6 +139,9 @@ export interface AppState {
   // --- Sync reducers ---
   setView: (view: View) => void;
   select: (id: string | null) => void;
+  /** Toggle the Overview repo filter (clicking the active repo clears it); pass
+   * null to clear ("Show all"). #34 */
+  setOverviewRepoFilter: (repo: string | null) => void;
   /** Switch to Focus, ensuring an agent is selected (last/first); no-op if none. */
   showFocus: () => void;
   toggleInspector: () => void;
@@ -180,6 +185,7 @@ export const useStore = create<AppState>()((set, get) => ({
   sessions: [],
   selectedId: null,
   view: "overview",
+  overviewRepoFilter: null,
   inspectorOpen: false,
   recents: [],
   branches: {},
@@ -199,6 +205,13 @@ export const useStore = create<AppState>()((set, get) => ({
   // never forces Focus. Callers that intend a view change (Overview "Expand",
   // the ViewSwitch) call setView explicitly.
   select: (id) => set({ selectedId: id }),
+
+  // Toggle the Overview repo filter: clicking the active repo (or passing null)
+  // clears it; any other repo sets it (#34).
+  setOverviewRepoFilter: (repo) =>
+    set((s) => ({
+      overviewRepoFilter: s.overviewRepoFilter === repo ? null : repo,
+    })),
 
   // Switch to Focus from anywhere (#25). Keep the current selection if it's still
   // valid, else focus the first agent; with no agents this is a no-op so the
@@ -456,6 +469,9 @@ export const useStore = create<AppState>()((set, get) => ({
         recents: s.recents.filter((r) => r !== repoPath),
         selectedId: clearSelection ? null : s.selectedId,
         view: clearSelection ? "overview" : s.view,
+        // Drop a now-dangling Overview filter on the forgotten repo (#34).
+        overviewRepoFilter:
+          s.overviewRepoFilter === repoPath ? null : s.overviewRepoFilter,
       };
     });
     get().pushToast(

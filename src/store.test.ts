@@ -24,6 +24,7 @@ beforeEach(() => {
     sessions: [],
     selectedId: null,
     view: "overview",
+    overviewRepoFilter: null,
     inspectorOpen: false,
     recents: [],
     branches: {},
@@ -97,7 +98,20 @@ describe("app store", () => {
     expect(useStore.getState().sessions[0]?.exitedCode).toBe(1);
   });
 
-  it("forgetRepo drops the repo's sessions + recent and fixes selection (#31)", async () => {
+  it("setOverviewRepoFilter toggles, switches, and clears (#34)", () => {
+    useStore.getState().setOverviewRepoFilter("/repo/x");
+    expect(useStore.getState().overviewRepoFilter).toBe("/repo/x");
+    // clicking the active repo clears it
+    useStore.getState().setOverviewRepoFilter("/repo/x");
+    expect(useStore.getState().overviewRepoFilter).toBeNull();
+    // another repo sets it; null is "Show all"
+    useStore.getState().setOverviewRepoFilter("/repo/y");
+    expect(useStore.getState().overviewRepoFilter).toBe("/repo/y");
+    useStore.getState().setOverviewRepoFilter(null);
+    expect(useStore.getState().overviewRepoFilter).toBeNull();
+  });
+
+  it("forgetRepo drops the repo's sessions + recent, selection, and filter (#31/#34)", async () => {
     useStore.setState({
       sessions: [
         { ...session("a"), repoPath: "/repo/x" },
@@ -106,6 +120,7 @@ describe("app store", () => {
       recents: ["/repo/x", "/repo/y"],
       selectedId: "a",
       view: "focus",
+      overviewRepoFilter: "/repo/x",
     });
     // ipc calls reject without a Tauri host and are caught; the state update runs.
     await useStore.getState().forgetRepo("/repo/x");
@@ -113,6 +128,7 @@ describe("app store", () => {
     expect(useStore.getState().recents).toEqual(["/repo/y"]);
     expect(useStore.getState().selectedId).toBeNull();
     expect(useStore.getState().view).toBe("overview");
+    expect(useStore.getState().overviewRepoFilter).toBeNull();
   });
 
   it("toggles the inspector", () => {

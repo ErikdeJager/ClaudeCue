@@ -2251,9 +2251,9 @@ Sky #89dceb · Sapphire #74c7ec · Blue #89b4fa · Lavender #b4befe`.
 
 ---
 
-### 34. [ ] Sidebar repos: non-collapsible titles + click-to-filter Overview
+### 34. [x] Sidebar repos: non-collapsible titles + click-to-filter Overview
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -2270,28 +2270,49 @@ Today `src/components/Sidebar/Sidebar.tsx` keeps a `collapsed` Set and a chevron
 
 **Subtasks**
 
-1. [ ] Remove the collapse state, chevron, and expand/collapse behavior; render each
+1. [x] Remove the collapse state, chevron, and expand/collapse behavior; render each
    repo as a plain (always-shown) title row with its sessions listed beneath. Keep the
    per-repo **+** (new session) and the #31 context menu.
-2. [ ] Add store state `overviewRepoFilter: string | null` + a `setOverviewRepoFilter`
+2. [x] Add store state `overviewRepoFilter: string | null` + a `setOverviewRepoFilter`
    action (clicking a repo toggles it; clicking the active one clears it).
-3. [ ] Clicking a repo **title** sets the filter **and** ensures the view is Overview
+3. [x] Clicking a repo **title** sets the filter **and** ensures the view is Overview
    (so the effect is visible). The active-filter repo is visually marked in the sidebar.
-4. [ ] Overview consumes the filter (rendering handled in #36); add a clear
+4. [x] Overview consumes the filter (rendering handled in #36); add a clear
    "Showing <repo> — Show all" control in Overview to reset.
 
 **Acceptance criteria**
 
-- [ ] Repos are plain, non-collapsible titles; no chevron/collapse remains.
-- [ ] Clicking a repo title filters Overview to that repo; clicking again / "Show all"
+- [x] Repos are plain, non-collapsible titles; no chevron/collapse remains.
+- [x] Clicking a repo title filters Overview to that repo; clicking again / "Show all"
   clears it; the active filter is indicated in the sidebar.
-- [ ] Right-click context menu (#31) still works on the title.
+- [x] Right-click context menu (#31) still works on the title.
 
 **Notes**
 
 - Files: `src/components/Sidebar/Sidebar.tsx` (+ `Sidebar.module.css`), `src/store.ts`
   (`overviewRepoFilter`). Coordinates with #31 (context menu on the same row), #25
   (view toggle in the sidebar), #20 (repo order). The filter is consumed by #36.
+- **Done 2026-06-19.** **Sidebar:** dropped the `collapsed` Set + `toggle` + the
+  `ChevronRight` (import removed) + the `.repoToggle`/`.chevron` CSS. Each repo is now a
+  plain `.repoTitle` button (always-shown sessions beneath); **left-click toggles the
+  Overview filter to that repo and `setView("overview")`** so the effect is visible;
+  the active repo is marked `.repoTitle.repoActive` (accent text + `--accent-dim` bg,
+  specificity-tied + source-ordered to win over the empty/muted rule), with
+  `aria-pressed`. The per-repo **+** and the **#31 right-click menu are intact** — the
+  `onContextMenu` stays on `.repoHeader`, so right-clicking the title (contextmenu
+  bubbles past the button) still opens it while left-click filters. **Store:**
+  `overviewRepoFilter: string | null` + `setOverviewRepoFilter(repo)` — a **toggle**
+  (clicking the active repo, or passing `null`, clears it); `forgetRepo` also drops a
+  now-dangling filter on the forgotten repo. **Overview consumes it:** narrows the wall
+  to `sessions.filter(repoPath === filter)`, wrapped in an `.overview` column with a
+  **"Showing <repo> · Show all"** filter bar (Show all → `setOverviewRepoFilter(null)`);
+  a filtered repo with no agents shows "No agents in this repo." (#36 will add the
+  grouped/badged rendering on top of this same filter). **+1 store test**
+  (toggle/switch/clear) + extended the `forgetRepo` test to assert the filter clears →
+  **39 frontend**. **Hard gate green:** frontend `build`/`lint`/`format:check`/`test`
+  (39). Pure frontend change — no Rust. The filter/toggle/forget-clear logic is
+  unit-tested; the sidebar marking + filter-bar are runtime-visual, not launched
+  headlessly.
 
 ---
 

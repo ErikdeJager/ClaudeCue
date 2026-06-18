@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import { repoName } from "../../paths";
 import { dedupeBranchLabels, repoOrder, useStore } from "../../store";
@@ -60,8 +60,10 @@ function Sidebar() {
   const openNewSession = useStore((s) => s.openNewSession);
   const refreshBranches = useStore((s) => s.refreshBranches);
   const forgetRepo = useStore((s) => s.forgetRepo);
+  const setView = useStore((s) => s.setView);
+  const overviewRepoFilter = useStore((s) => s.overviewRepoFilter);
+  const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // Right-click repo context menu (#31): anchored at the cursor; `confirming`
   // arms the destructive Forget when the repo has running agents.
   const [menu, setMenu] = useState<{
@@ -104,14 +106,6 @@ function Sidebar() {
       ).length
     : 0;
 
-  const toggle = (repo: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(repo)) next.delete(repo);
-      else next.add(repo);
-      return next;
-    });
-
   return (
     <aside className={styles.sidebar} aria-label="Sessions">
       <button
@@ -136,7 +130,7 @@ function Sidebar() {
         {repos.map((repo) => {
           const repoSessions = sessions.filter((s) => s.repoPath === repo);
           const isEmpty = repoSessions.length === 0;
-          const isCollapsed = collapsed.has(repo);
+          const isFiltered = overviewRepoFilter === repo;
           // Primary label = the repo's branch, or the folder name when non-git /
           // not yet known. All sessions in a group share it, so index duplicates.
           const baseLabel = (branches[repo] ?? "") || repoName(repo);
@@ -154,17 +148,18 @@ function Sidebar() {
                   setConfirming(false);
                 }}
               >
+                {/* Left-click a repo title filters Overview to it (toggle);
+                    right-click opens the #31 context menu. */}
                 <button
                   type="button"
-                  className={styles.repoToggle}
-                  onClick={() => toggle(repo)}
-                  title={repo}
+                  className={`${styles.repoTitle} ${isFiltered ? styles.repoActive : ""}`}
+                  onClick={() => {
+                    setOverviewRepoFilter(repo);
+                    setView("overview");
+                  }}
+                  title={`Filter Overview to ${repoName(repo)}`}
+                  aria-pressed={isFiltered}
                 >
-                  <ChevronRight
-                    size={14}
-                    strokeWidth={1.5}
-                    className={`${styles.chevron} ${isCollapsed ? "" : styles.chevronOpen}`}
-                  />
                   <span className={styles.repoName}>{repoName(repo)}</span>
                   {!isEmpty && (
                     <span className={styles.count}>{repoSessions.length}</span>
@@ -181,19 +176,18 @@ function Sidebar() {
                 </button>
               </div>
 
-              {!isCollapsed &&
-                repoSessions.map((session, i) => (
-                  <SessionRow
-                    key={session.id}
-                    session={session}
-                    // rowLabels has one entry per session; fallback satisfies
-                    // noUncheckedIndexedAccess and is never reached at runtime.
-                    label={rowLabels[i] ?? baseLabel}
-                    selected={session.id === selectedId}
-                    onSelect={() => select(session.id)}
-                    onRemove={() => void removeSession(session.id)}
-                  />
-                ))}
+              {repoSessions.map((session, i) => (
+                <SessionRow
+                  key={session.id}
+                  session={session}
+                  // rowLabels has one entry per session; fallback satisfies
+                  // noUncheckedIndexedAccess and is never reached at runtime.
+                  label={rowLabels[i] ?? baseLabel}
+                  selected={session.id === selectedId}
+                  onSelect={() => select(session.id)}
+                  onRemove={() => void removeSession(session.id)}
+                />
+              ))}
             </div>
           );
         })}
