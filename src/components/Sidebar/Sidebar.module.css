@@ -8,13 +8,13 @@
   overflow: hidden;
 }
 
+/* Primary action — slim: icon + label left, a subtle ⌘N hint pushed right. */
 .newButton {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: var(--space-6);
   margin: var(--space-12);
-  padding: var(--space-8);
+  padding: var(--space-4) var(--space-12);
   border: 0;
   border-radius: var(--radius-control);
   background: var(--accent);
@@ -28,6 +28,14 @@
 
 .newButton:hover {
   background: var(--accent-hover);
+}
+
+.kbd {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+  font-weight: 400;
+  opacity: 0.7;
 }
 
 /* Always-visible Overview/Focus toggle, aligned with the New session button. */

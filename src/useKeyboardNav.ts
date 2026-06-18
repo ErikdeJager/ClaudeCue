@@ -1,15 +1,15 @@
-// Global keyboard navigation (#24): Shift+Arrow moves between agents and
-// switches views.
+// Global keyboard shortcuts.
 //
-//   Shift+← / Shift+→  select prev/next agent (wall order, wrap-around)
+//   Shift+← / Shift+→  select prev/next agent (wall order, wrap-around)   (#24)
 //   Shift+↓            Focus the selected agent
 //   Shift+↑            back to Overview (keeps the selection)
+//   ⌘N / Ctrl+N        open the new-session flow from anywhere            (#26)
 //
 // xterm forwards keystrokes to the PTY when a terminal is focused, so the
 // listener runs in the **capture phase on window** — it fires before xterm's
 // textarea handler, and `stopPropagation()` keeps the focused terminal from ever
-// seeing these combos. Only the four Shift+Arrow combos are intercepted; all
-// other keys (normal typing, Shift+letters, Shift+Tab, Cmd/Ctrl/Alt combos) pass
+// seeing these combos. Only the handled combos are intercepted; every other key
+// (normal typing, Shift+letters, Shift+Tab, other Cmd/Ctrl/Alt combos) passes
 // straight through.
 
 import { useEffect } from "react";
@@ -19,6 +19,22 @@ import { adjacentSessionId, useStore } from "./store";
 export function useKeyboardNav(): void {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // ⌘N / Ctrl+N — open the new-session flow from anywhere (#26). Intercept
+      // before the webview's default (new window) and before xterm; no-op when
+      // the flow is already open.
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "n"
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        const { newSessionOpen, openNewSession } = useStore.getState();
+        if (!newSessionOpen) openNewSession();
+        return;
+      }
+
       // Plain Shift + Arrow only — leave Cmd/Ctrl/Alt combos (and claude's own
       // Shift usage) untouched.
       if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;

@@ -88,6 +88,7 @@ function Sidebar() {
       >
         <Plus size={16} strokeWidth={1.5} />
         New session
+        <kbd className={styles.kbd}>⌘N</kbd>
       </button>
 
       <div className={styles.viewSwitch}>

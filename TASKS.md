@@ -1671,9 +1671,9 @@ it's **always visible** (both views) for one-click switching.
 
 ---
 
-### 26. [ ] Slimmer New session button + ⌘N shortcut
+### 26. [x] Slimmer New session button + ⌘N shortcut
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-18
 
@@ -1684,23 +1684,41 @@ The New session button is too tall/bulky. Make it **thinner and cleaner**, and a
 
 **Subtasks**
 
-1. [ ] Slim `.newButton` in `Sidebar.module.css` (less padding/height; keep it clearly
+1. [x] Slim `.newButton` in `Sidebar.module.css` (less padding/height; keep it clearly
    the primary action, on-system tokens).
-2. [ ] Add a global **⌘N** handler that opens the new-session flow (`openNewSession()`);
+2. [x] Add a global **⌘N** handler that opens the new-session flow (`openNewSession()`);
    don't fire disruptively while typing in an input/terminal; no-op when the popover
    is already open.
-3. [ ] Optionally show a subtle ⌘N hint on the button.
+3. [x] Optionally show a subtle ⌘N hint on the button.
 
 **Acceptance criteria**
 
-- [ ] The button is visibly slimmer/cleaner and still obviously primary.
-- [ ] ⌘N opens the new-session flow from anywhere in the app.
+- [x] The button is visibly slimmer/cleaner and still obviously primary.
+- [x] ⌘N opens the new-session flow from anywhere in the app.
 
 **Notes**
 
 - Files: `src/components/Sidebar/Sidebar.tsx` (+ css), an app-level key hook,
   `src/store.ts` (`openNewSession`). Coordinates with #25 (toggle under this button)
   and #27 (the flow this opens). Verify ⌘N doesn't collide with a native binding.
+- **Done 2026-06-19.** **Slimmer button:** `.newButton` vertical padding cut
+  `var(--space-8)`→`var(--space-4)` (~32px→~26px tall) and re-laid-out from centered
+  to **icon + label left, hint right** (dropped `justify-content: center`); keeps the
+  full `--accent` fill so it's still obviously primary. **⌘N hint:** a `<kbd>` "⌘N"
+  pushed right via `margin-left: auto`, subtle (`--mono`, `--fs-meta-sm`, `opacity:
+  0.7`, inherits the button's white — no off-system color). **Global shortcut:** added
+  to the existing app-level key hook (`useKeyboardNav`, now "global keyboard
+  shortcuts") — the same **capture-phase window** listener intercepts **⌘N / Ctrl+N**
+  (no Shift/Alt), `preventDefault` + `stopPropagation` (suppresses the webview's
+  default new-window *and* keeps it from reaching a focused terminal — so it fires
+  from anywhere, incl. while a terminal is focused, without typing a char), then
+  `openNewSession()` — **no-op when `newSessionOpen`** already. **No native
+  collision:** the backend defines no custom menu (grep clean), so Tauri's default
+  macOS menu has no ⌘N binding for the handler to fight. **Hard gate green:** frontend
+  `build`/`lint`/`format:check`/`test` (**35**). Pure frontend change — no Rust
+  touched; no new tests (CSS + a DOM keyboard handler; `openNewSession` already
+  covered). Button slimming + ⌘N interception are visual/interaction, not launched
+  headlessly; the handler is sound by construction + the no-collision check.
 
 ---
 
