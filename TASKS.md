@@ -10,7 +10,586 @@ whose dependencies are all complete can run in parallel. The automation skills
 
 ---
 
+## Project context
+
+**ClaudeCue** — a **macOS** desktop app (**Rust + Tauri 2 + React/TypeScript**) for
+running and managing many live `claude` CLI sessions at once: an **Overview** "agent
+wall" of real terminals, a **Focus** view for one session with a **git-diff
+inspector**, and a repo-grouped **sidebar**. Each session is a **real PTY running
+`claude`** — ClaudeCue provides the window chrome, navigation, persistence and
+git-reading; the terminals come from the Claude Code CLI itself.
+
+**Stack:** Tauri 2 · React + TypeScript + Vite · **Zustand** · plain CSS with
+CSS-variable design tokens (CSS Modules) · **xterm.js** terminals · **`portable-pty`**
+(Rust) · JSON persistence in the app-data dir · **Lucide** icons · **JetBrains Mono**
+(bundled, offline).
+
+**v1 decisions / out of scope:** no status system (no pills/dots/awaiting-glow/
+floating) · no app-rendered approval UI (users answer in the terminal) · no Archive
+(single **Remove = kill + forget**) · no Skills manager · no Fork · no settings
+screen · no light mode · no multi-window · no auth · no code signing/notarization ·
+**no git writes** — ClaudeCue only *reads* git (current branch + working-tree diff
+vs `HEAD`); it never creates branches or commits. `claude` is assumed on `PATH`
+(clear in-app error if missing).
+
+> The original design spec and interactive prototype (`HANDOFF.md`,
+> `Conductor.dc.html`) are preserved in git history (commit `b02efd8`
+> "System referances") if exact prototype details are ever needed.
+
+---
+
+## Design reference (dark theme only)
+
+Define as CSS variables; do not introduce off-system colors.
+
+- **Surfaces:** `--bg-base #0B0B0C` · `--bg-sidebar #111113` · `--bg-panel #141416` ·
+  `--bg-elevated #1A1A1D` · `--bg-hover #1E1E22` · `--terminal-bg #0E0E10`
+- **Borders:** `--border-hairline rgba(255,255,255,.07)` ·
+  `--border-strong rgba(255,255,255,.12)`
+- **Text:** `--text-primary #EDEDEF` · `--text-secondary #9A9AA0` · `--text-muted #5E5E66`
+- **Accent** (brand only — New session button + selected row; **never** a status):
+  `--accent #D97757` · `--accent-hover #E08A6D` · `--accent-dim rgba(217,119,87,.14)`
+- **Diff:** add `#4BB58A` on `rgba(75,181,138,.12)` · del `#E5534B` on
+  `rgba(229,83,75,.12)` · gutter `#5E5E66`
+- *Reserved for later (unused in v1, no status UI):* running `#5B8DEF`,
+  awaiting `#E0A33E`, done `#4BB58A`, error `#E5534B`, idle `#6B6B73`.
+
+**Type:** UI/chrome → system stack (`-apple-system, "SF Pro Text", ui-sans-serif,
+system-ui`); terminal + diff → `JetBrains Mono`, fallback `ui-monospace, "SF Mono",
+monospace`. Scale: eyebrow 11px/600/uppercase · UI default 13px · meta 11–12px ·
+terminal 12.5px/1.5 · diff 12px/1.45.
+**Spacing** 4px base (4·6·8·12·16·20·24·32). **Radii** window/panels 10px,
+buttons/inputs 7px, chips 5px, dots 999px. **Depth** hairline borders + bg layering;
+one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motion**
+120–180ms ease-out; respect `prefers-reduced-motion`. **Icons** Lucide line, 16px,
+1.5 stroke.
+
+---
+
 ## Tasks
 
-<!-- Add real tasks below, numbered in order. Bump the number for each new task,
-     and set the marker to [ ] when open and [x] when complete. -->
+### 1. [ ] Project scaffolding — macOS Tauri 2 + React/TS/Vite
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-18
+
+**Description**
+
+Stand up the greenfield project: a Tauri 2 desktop app with a React + TypeScript +
+Vite frontend and a Rust backend crate under `src-tauri`. The repo currently has no
+application code at all, so this task establishes the structure, tooling and a
+runnable empty window every other task builds on. macOS is the only target.
+
+**Subtasks**
+
+1. [ ] Initialize a Tauri 2 app named **ClaudeCue** (bundle identifier e.g.
+   `com.claudecue.app`) with the React + TypeScript + Vite frontend template.
+2. [ ] Establish the folder structure: `src/` (frontend), `src-tauri/` (Rust),
+   shared TS types location, and a `src/styles/` dir for tokens (task #2).
+3. [ ] Configure scripts: `tauri dev`, `tauri build`; wire Vite + TS strict mode.
+4. [ ] Add ESLint + Prettier (or Biome) for the frontend and `rustfmt`/`clippy`
+   config for the backend; add format/lint scripts.
+5. [ ] Add `.gitignore` entries for `node_modules`, `dist`, `src-tauri/target`,
+   build artifacts.
+6. [ ] Add a starter `CLAUDE.md` describing the architecture, stack and the v1
+   scope decisions captured in **Project context** above.
+
+**Acceptance criteria**
+
+- [ ] `tauri dev` launches an empty ClaudeCue window on macOS.
+- [ ] `tauri build` completes without errors.
+- [ ] Lint + format run clean on the scaffold for both frontend and backend.
+
+**Notes**
+
+- Tauri 2.x. Keep the frontend/backend boundary clean; later tasks add commands.
+
+---
+
+### 2. [ ] Design tokens, fonts & global styles
+
+**Status:** Not started
+**Depends on:** #1
+**Created:** 2026-06-18
+
+**Description**
+
+Port the dark-only design system from the **Design reference** section above into the
+app as CSS custom properties, bundle the JetBrains Mono font for offline use, and set
+global base styles. This is the visual foundation for every component.
+
+**Subtasks**
+
+1. [ ] Define all design tokens (surfaces, borders, text, accent, diff colors,
+   `--mono`, `--ui`) as CSS variables on `:root`.
+2. [ ] Bundle **JetBrains Mono** locally (woff2) and `@font-face` it; do **not**
+   load from a CDN (the app must work offline).
+3. [ ] Global reset + base: `box-sizing`, full-height `html,body`, antialiasing,
+   `overflow:hidden` app body, themed custom scrollbars.
+4. [ ] Define reusable keyframes (e.g. blinking caret) and a global
+   `@media (prefers-reduced-motion: reduce)` that disables animations.
+5. [ ] Encode the type scale, spacing scale, radii and the single popover/modal
+   shadow as tokens/utilities so components stay on-system.
+6. [ ] Decide and document the styling convention (CSS Modules + token variables);
+   add a tiny sample component proving tokens + mono font render.
+
+**Acceptance criteria**
+
+- [ ] Tokens are available app-wide and a sample renders on `--bg-base` with the
+  correct text colors and JetBrains Mono.
+- [ ] Fonts load with no network access.
+- [ ] Reduced-motion preference visibly disables animations.
+
+**Notes**
+
+- Status colors are intentionally **not** used in v1 (no status UI) but may be kept
+  as reserved tokens per the Design reference.
+
+---
+
+### 3. [ ] Custom window chrome (titlebar)
+
+**Status:** Not started
+**Depends on:** #1, #2
+**Created:** 2026-06-18
+
+**Description**
+
+Replace the native titlebar with a custom 38px bar that keeps the **native macOS
+traffic-light buttons** inset over it, with a centered **"ClaudeCue"** title. The bar
+must be draggable to move the window.
+
+**Subtasks**
+
+1. [ ] Configure the Tauri window for a hidden titlebar with inset/overlay traffic
+   lights (macOS `titleBarStyle` overlay + transparent title), positioned to align
+   in the 38px bar.
+2. [ ] Build the React titlebar: 38px tall, hairline bottom border, subtle
+   sidebar→base gradient, centered `ClaudeCue` label in `--text-secondary`.
+3. [ ] Mark the bar as a drag region (`data-tauri-drag-region`) while keeping
+   interactive controls non-draggable.
+4. [ ] Leave left-side space so the title never collides with the traffic lights.
+
+**Acceptance criteria**
+
+- [ ] Traffic-light close/minimize/zoom work and sit correctly in the custom bar.
+- [ ] Dragging the bar moves the window; dragging a control does not.
+- [ ] Matches the design (38px, centered title, hairline border).
+
+**Notes**
+
+- No workspace label in v1 — the title is just "ClaudeCue".
+
+---
+
+### 4. [ ] Rust session/PTY core
+
+**Status:** Not started
+**Depends on:** #1
+**Created:** 2026-06-18
+
+**Description**
+
+The backend heart: spawn and manage one real PTY per session, each running the
+`claude` CLI in a chosen working directory, streaming output to the frontend and
+accepting input. No status detection and no approval parsing in v1 — just a faithful
+terminal pipe.
+
+**Subtasks**
+
+1. [ ] Add `portable-pty`; implement a session manager holding a registry of
+   sessions keyed by an internal session id.
+2. [ ] `spawn_session(cwd, name?)`: open a PTY and launch `claude` in `cwd`; capture
+   a stable session id for resume (task #5). Run `claude` directly (interactive).
+3. [ ] Stream PTY stdout/stderr to the frontend via a Tauri event per session
+   (e.g. `session://output` with `{ id, bytes }`); keep a bounded scrollback buffer
+   server-side for late subscribers.
+4. [ ] Commands: `write_stdin(id, data)`, `resize_pty(id, cols, rows)`,
+   `kill_session(id)`, plus `open_in_editor(cwd)` that shells out to `zed <cwd>`.
+5. [ ] Detect a missing/unrunnable `claude` binary on `PATH` and return a typed
+   error the frontend can surface; detect child exit and emit an `exited` event with
+   the exit code.
+6. [ ] Unit-test the manager: spawn lifecycle, stdin→stdout round-trip (using a
+   simple shell/echo in tests), resize, kill, and the missing-binary error path.
+
+**Acceptance criteria**
+
+- [ ] A spawned process streams output to the frontend and receives stdin.
+- [ ] Killing a session terminates its child and frees the slot.
+- [ ] Missing `claude` yields a clear, typed error (no panic/crash).
+- [ ] Manager unit tests pass.
+
+**Notes**
+
+- Resume needs a known session id — see #5 for capturing/persisting it.
+
+---
+
+### 5. [ ] Rust persistence + resume
+
+**Status:** Not started
+**Depends on:** #4
+**Created:** 2026-06-18
+
+**Description**
+
+Make sessions survive app restarts. Persist session metadata to a JSON file in the
+app-data directory and, on launch, restore the list and resume each underlying
+`claude` session by id.
+
+**Subtasks**
+
+1. [ ] Define a serializable model: `{ id, claude_session_id, repo_path, name,
+   created_at }` plus a list of **recent working directories**.
+2. [ ] Persist to a JSON file in the Tauri app-data dir (atomic write); load on
+   startup. Update on create/remove.
+3. [ ] Capture each session's Claude session id at spawn time (verify the exact
+   mechanism during implementation: prefer `claude --session-id <uuid>` if
+   supported, else read the session file Claude writes); store it with the session.
+4. [ ] On boot, rebuild the session list and resume processes via
+   `claude --resume <claude_session_id>` (confirm flag during implementation).
+5. [ ] Remove (kill + forget) deletes the persisted record so it does not return.
+6. [ ] Unit-test (de)serialization, recents de-duplication/ordering, and the
+   add/remove update path.
+
+**Acceptance criteria**
+
+- [ ] Sessions and recents survive an app restart.
+- [ ] A restored session resumes its Claude conversation (same session id).
+- [ ] Removing a session prevents it from reappearing after restart.
+- [ ] Persistence unit tests pass.
+
+**Notes**
+
+- If the exact `claude` resume flags differ from assumptions, capture the verified
+  approach here in Notes for downstream tasks.
+
+---
+
+### 6. [ ] Rust git reading (branch + working-tree diff)
+
+**Status:** Not started
+**Depends on:** #1
+**Created:** 2026-06-18
+
+**Description**
+
+Read-only git support powering the sidebar branch labels and the Focus diff
+inspector. ClaudeCue never writes git — it only reports the current branch and the
+working-tree diff against `HEAD` for a given directory.
+
+**Subtasks**
+
+1. [ ] `current_branch(cwd)` → branch name (or a sensible fallback for detached
+   HEAD / non-git directories).
+2. [ ] `working_diff(cwd)` → working tree vs `HEAD` (staged + unstaged), parsed into
+   the structured shape below.
+3. [ ] Parse into: summary `{ branch, files_changed, adds, dels }`; `files: [{ path,
+   status: "M"|"A"|"D", add, del }]`; and per-file `hunks: [{ type:
+   "hunk"|"context"|"add"|"del", old_no?, new_no?, text }]`.
+4. [ ] Handle non-git folders, clean trees (no changes), binary files, and renames
+   gracefully.
+5. [ ] Choose the implementation (shell out to `git` vs a crate like `git2`) and
+   document the choice; unit-test the parser against fixtures.
+
+**Acceptance criteria**
+
+- [ ] Branch + diff return correctly for a dirty repo fixture.
+- [ ] Clean tree returns an empty/no-changes result; non-git folder doesn't error.
+- [ ] Diff parser unit tests pass for add/delete/modify/context lines and counts.
+
+**Notes**
+
+- Output shape mirrors the prototype's diff model so the inspector (#13) maps 1:1.
+
+---
+
+### 7. [ ] Frontend app shell + store + IPC + cross-cutting actions
+
+**Status:** Not started
+**Depends on:** #2, #3, #4
+**Created:** 2026-06-18
+
+**Description**
+
+The frontend backbone: a Zustand store mirroring backend state plus UI state, typed
+bindings to the Tauri commands/events, the top-level layout (titlebar + sidebar slot
++ main area), Overview/Focus routing, and shared actions used across views.
+
+**Subtasks**
+
+1. [ ] Zustand store: `sessions`, `selectedId`, `view` ('overview' | 'focus'),
+   `inspectorOpen`, `recents`, and a global `claudeMissing` error flag.
+2. [ ] Typed IPC layer: wrappers for `spawn_session`, `write_stdin`, `resize_pty`,
+   `kill_session`, `open_in_editor`, `current_branch`, `working_diff`; subscribe to
+   `session://output` and `exited` events and route them into the store.
+3. [ ] Layout scaffold: titlebar (#3) + left sidebar region + main content region
+   with Overview/Focus switching.
+4. [ ] Cross-cutting actions: `removeSession` (kill + forget), `openInZed`,
+   `copyToClipboard`, and a bottom-center **toast** system (animated in, auto-dismiss).
+5. [ ] Global states: a "claude not found" surface and the no-sessions empty state
+   hook used by the wall (#11).
+
+**Acceptance criteria**
+
+- [ ] Switching Overview/Focus updates the store and layout.
+- [ ] Backend output events update the store; toasts fire and auto-dismiss.
+- [ ] `claude`-missing flag renders a clear, actionable message.
+
+**Notes**
+
+- Keep terminal byte streams out of React state where possible (xterm consumes them
+  directly in #8) to avoid re-render storms.
+
+---
+
+### 8. [ ] xterm.js terminal component
+
+**Status:** Not started
+**Depends on:** #4, #7
+**Created:** 2026-06-18
+
+**Description**
+
+A reusable React terminal bound to a single session, used in both the Overview wall
+and Focus view. It renders the live PTY stream, sends keystrokes to stdin, fits to
+its container, and is themed with the design tokens.
+
+**Subtasks**
+
+1. [ ] Integrate `@xterm/xterm` + fit addon (and a perf addon such as
+   `@xterm/addon-webgl` if viable); theme it from the tokens (`--terminal-bg`, text
+   colors, JetBrains Mono 12.5px/1.5).
+2. [ ] Subscribe to that session's output events and write bytes into xterm; on
+   mount, replay the server-side scrollback buffer.
+3. [ ] Send user keystrokes/paste to `write_stdin`; the user interacts entirely in
+   the terminal (no separate input box, no approval buttons).
+4. [ ] Observe container resize → fit → `resize_pty(cols, rows)` so the PTY matches.
+5. [ ] Render an "process exited (code N)" state when the `exited` event fires, with
+   a restart affordance.
+
+**Acceptance criteria**
+
+- [ ] Live two-way I/O with a real `claude`/shell PTY works.
+- [ ] Resizing the container reflows the terminal and the PTY.
+- [ ] Theme matches the design; scrollback replays on remount.
+- [ ] Exit state shows and offers restart.
+
+**Notes**
+
+- This component is embedded by #11 (wall) and #12 (focus); keep it presentation-only
+  and driven by session id.
+
+---
+
+### 9. [ ] Sidebar (repo groups + sessions)
+
+**Status:** Not started
+**Depends on:** #5, #6, #7
+**Created:** 2026-06-18
+
+**Description**
+
+The left sidebar: a top **New session** button and a session list **grouped by
+repository**, sourced from persisted recents so repos persist even with no active
+sessions. No status dots and no Archived group in v1.
+
+**Subtasks**
+
+1. [ ] Top **+ New session** button (filled `--accent`) that opens the modal (#10).
+2. [ ] One persistent row per repo (from recents + active sessions): collapse
+   chevron, repo path (mono), a **+** to start a session in that repo, and a session
+   count.
+3. [ ] A repo with no active sessions stays listed but **greyed**, with its **+**
+   highlighted in coral.
+4. [ ] Session rows: name + a second line with the branch (from #6); selected row
+   gets `--accent-dim` background + a 2px coral left bar; on hover show a **Remove**
+   (kill + forget) ghost action.
+5. [ ] Wire selection (→ Focus), per-repo new session, and Remove to the store
+   actions from #7.
+
+**Acceptance criteria**
+
+- [ ] Sessions group correctly under their repos; groups collapse/expand.
+- [ ] Empty repos appear greyed with a coral **+**; recents persist across restart.
+- [ ] Selecting a row focuses it; Remove kills the process and deletes the record.
+
+**Notes**
+
+- No status dot is shown next to rows (status is out of scope for v1).
+
+---
+
+### 10. [ ] New session modal
+
+**Status:** Not started
+**Depends on:** #5, #7
+**Created:** 2026-06-18
+
+**Description**
+
+A modal to start a session: choose a working directory (with recent-folder chips) and
+an optional display name, then spawn an interactive `claude` session there and select
+it.
+
+**Subtasks**
+
+1. [ ] Modal shell: overlay + sheet with the design's animations and the soft modal
+   shadow; close on backdrop click / Escape / Cancel.
+2. [ ] Working-directory picker using the Tauri dialog (folder select); show the
+   chosen path.
+3. [ ] Recent-folder chips from persisted recents (#5); clicking one selects it.
+4. [ ] Optional **Name** field (defaults from the folder name if blank).
+5. [ ] **Create** → `spawn_session(cwd, name)`, add to store + recents, select it,
+   close the modal, toast confirmation.
+
+**Acceptance criteria**
+
+- [ ] Picking a folder and creating starts a live session in that directory.
+- [ ] Recents update and reappear next launch.
+- [ ] Cancel/Escape/backdrop close without creating a session.
+
+**Notes**
+
+- No initial-prompt field in v1 — the user types the first prompt in the terminal.
+
+---
+
+### 11. [ ] Overview wall (the agent wall)
+
+**Status:** Not started
+**Depends on:** #8
+**Created:** 2026-06-18
+
+**Description**
+
+The Overview: all active sessions shown as **equal-width terminal columns side by
+side**, filling the area and scrolling horizontally when there are more than fit.
+Each column is a card embedding a live terminal (#8).
+
+**Subtasks**
+
+1. [ ] Horizontal, equal-width card layout on `--bg-panel` that fills the area and
+   scrolls horizontally past capacity.
+2. [ ] Sticky card header: session name + `repo · branch` meta, right-aligned
+   actions **Expand** (→ Focus), **Open in Zed**, **Remove**.
+3. [ ] Embed the xterm terminal (#8) as the card body; clicking the body focuses the
+   terminal input.
+4. [ ] Centered empty state ("No active sessions…") with a **New session** button
+   when there are none.
+5. [ ] Wire Expand/Open in Zed/Remove to store actions.
+
+**Acceptance criteria**
+
+- [ ] Multiple live terminals tile at equal width and scroll horizontally.
+- [ ] Expand opens that session in Focus; Open in Zed and Remove work.
+- [ ] Empty state shows with a working New session button.
+
+**Notes**
+
+- No status pill, amber awaiting-glow, or auto-floating in v1 — cards are uniform.
+
+---
+
+### 12. [ ] Focus view + toolbar
+
+**Status:** Not started
+**Depends on:** #6, #8
+**Created:** 2026-06-18
+
+**Description**
+
+The single-session view: one large terminal filling the main area, with a toolbar
+carrying view switching, a copy-able session chip, Open in Zed, and the inspector
+toggle (the inspector content itself is task #13).
+
+**Subtasks**
+
+1. [ ] Large terminal (#8) for the selected session filling the main area.
+2. [ ] Toolbar: an **Overview / Focus** segmented control.
+3. [ ] A click-to-copy chip showing `repo · branch · sessionID` (copies the session
+   id to the clipboard with a toast).
+4. [ ] **Open in Zed** button and an **inspector toggle** button.
+5. [ ] Collapsible inspector container with a 200ms slide and an **extensible tab
+   strip** (Diff tab placeholder now; built to accept more tabs later) — content
+   filled by #13.
+
+**Acceptance criteria**
+
+- [ ] The selected session's terminal fills the Focus area.
+- [ ] The chip copies the session id; Overview/Focus switching works.
+- [ ] The inspector panel slides open/closed; the tab strip is present.
+
+**Notes**
+
+- Don't hard-bind the inspector to a single tab — leave room for future tabs.
+
+---
+
+### 13. [ ] Git Diff inspector
+
+**Status:** Not started
+**Depends on:** #6, #12
+**Created:** 2026-06-18
+
+**Description**
+
+Fill the Focus inspector's **Diff** tab: a ~360px collapsible panel showing the
+session's working-tree diff vs `HEAD` (from #6) — summary, changed-files list, and a
+unified/split diff body styled with the tokens.
+
+**Subtasks**
+
+1. [ ] Top summary: branch + `N files changed, +A −D` using the diff/accent colors.
+2. [ ] Changed-files list with `M / A / D` glyphs and per-file `+N −M` counts;
+   selecting a file shows its hunks (default to the first file).
+3. [ ] Diff body: line numbers in `--diff-gutter`, added/removed lines tinted with
+   the diff colors, mono font; render `hunk`/`context`/`add`/`del` row types.
+4. [ ] **Unified | Split** toggle (unified default; split shows old/new side by side).
+5. [ ] Empty/no-changes state ("No changes yet on this branch.") and refresh when the
+   selected session or its working tree changes.
+
+**Acceptance criteria**
+
+- [ ] The panel reflects the real `git diff HEAD` of the focused session's folder.
+- [ ] Selecting a file shows its hunks; unified and split both render correctly.
+- [ ] Counts and M/A/D glyphs match; clean tree shows the empty state.
+
+**Notes**
+
+- Consumes the structured diff shape from #6 directly (1:1 with the prototype model).
+
+---
+
+### 14. [ ] Packaging + docs
+
+**Status:** Not started
+**Depends on:** #9, #10, #11, #12, #13
+**Created:** 2026-06-18
+
+**Description**
+
+Produce a runnable macOS artifact and the docs to build/run it. No code signing or
+notarization in v1 (unsigned `.app`/`.dmg`).
+
+**Subtasks**
+
+1. [ ] App icon set + bundle metadata (name, identifier, version, category).
+2. [ ] `tauri build` producing an unsigned macOS `.app` and `.dmg`.
+3. [ ] README: prerequisites (incl. `claude` installed + authenticated on `PATH`),
+   dev (`tauri dev`) and build instructions, and a short feature overview.
+4. [ ] Update/finalize `CLAUDE.md` with the implemented architecture.
+5. [ ] Manual end-to-end verification pass (see acceptance) and note any caveats.
+
+**Acceptance criteria**
+
+- [ ] A fresh `.dmg` installs and the app launches on macOS.
+- [ ] End-to-end: create a session → use the terminal → restart the app → the
+  session resumes → diff shows → Remove works.
+- [ ] README + CLAUDE.md are accurate.
+
+**Notes**
+
+- Signing/notarization is deliberately out of scope; expect a Gatekeeper warning on
+  first open.
