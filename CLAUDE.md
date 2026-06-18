@@ -30,7 +30,10 @@ clear error if it is missing).
 ├── index.html              # Vite entry
 ├── src/                    # Frontend (React + TS)
 │   ├── main.tsx            # React bootstrap (loads fonts + tokens + global CSS)
-│   ├── App.tsx             # Root component
+│   ├── App.tsx             # App shell: titlebar + sidebar + Overview/Focus
+│   ├── store.ts            # Zustand store (state + cross-cutting actions)
+│   ├── ipc.ts              # Typed Tauri command/event wrappers
+│   ├── outputBus.ts        # Per-session output pub/sub (bytes kept out of store)
 │   ├── components/         # React components (CSS Module alongside each)
 │   ├── styles/             # tokens.css (design tokens) + global.css (reset/base)
 │   └── types/              # Shared TS types (backend-mirrored models)

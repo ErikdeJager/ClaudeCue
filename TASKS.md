@@ -368,9 +368,9 @@ working-tree diff against `HEAD` for a given directory.
 
 ---
 
-### 7. [ ] Frontend app shell + store + IPC + cross-cutting actions
+### 7. [x] Frontend app shell + store + IPC + cross-cutting actions
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #2, #3, #4
 **Created:** 2026-06-18
 
@@ -382,28 +382,42 @@ bindings to the Tauri commands/events, the top-level layout (titlebar + sidebar 
 
 **Subtasks**
 
-1. [ ] Zustand store: `sessions`, `selectedId`, `view` ('overview' | 'focus'),
+1. [x] Zustand store: `sessions`, `selectedId`, `view` ('overview' | 'focus'),
    `inspectorOpen`, `recents`, and a global `claudeMissing` error flag.
-2. [ ] Typed IPC layer: wrappers for `spawn_session`, `write_stdin`, `resize_pty`,
+2. [x] Typed IPC layer: wrappers for `spawn_session`, `write_stdin`, `resize_pty`,
    `kill_session`, `open_in_editor`, `current_branch`, `working_diff`; subscribe to
    `session://output` and `exited` events and route them into the store.
-3. [ ] Layout scaffold: titlebar (#3) + left sidebar region + main content region
+3. [x] Layout scaffold: titlebar (#3) + left sidebar region + main content region
    with Overview/Focus switching.
-4. [ ] Cross-cutting actions: `removeSession` (kill + forget), `openInZed`,
+4. [x] Cross-cutting actions: `removeSession` (kill + forget), `openInZed`,
    `copyToClipboard`, and a bottom-center **toast** system (animated in, auto-dismiss).
-5. [ ] Global states: a "claude not found" surface and the no-sessions empty state
+5. [x] Global states: a "claude not found" surface and the no-sessions empty state
    hook used by the wall (#11).
 
 **Acceptance criteria**
 
-- [ ] Switching Overview/Focus updates the store and layout.
-- [ ] Backend output events update the store; toasts fire and auto-dismiss.
-- [ ] `claude`-missing flag renders a clear, actionable message.
+- [x] Switching Overview/Focus updates the store and layout.
+- [x] Backend output events update the store; toasts fire and auto-dismiss.
+- [x] `claude`-missing flag renders a clear, actionable message.
 
 **Notes**
 
 - Keep terminal byte streams out of React state where possible (xterm consumes them
   directly in #8) to avoid re-render storms.
+- **Done 2026-06-18.** `src/store.ts` (Zustand) holds sessions/selectedId/view/
+  inspectorOpen/recents/claudeMissing/toasts + sync reducers + async cross-cutting
+  actions (spawn/remove/openInZed/copyToClipboard/refresh/init). `src/ipc.ts`
+  wraps every Tauri command; `subscribeSessionEvents` routes `session://exited`
+  into the store (markExited + toast) and — per the Notes — routes
+  `session://output` bytes to `src/outputBus.ts` (a pub/sub the #8 xterm consumes)
+  rather than into React state. `src/types/index.ts` mirrors the Rust models.
+  `App.tsx` composes Titlebar + Sidebar region + main area with Overview/Focus
+  routing (driven by a temporary `ViewSwitch`); `Toaster` (bottom-center, animated,
+  auto-dismiss) and the `ClaudeMissing` banner are top-level. Empty-state and the
+  Overview/Focus/Sidebar shells are placeholders filled by #9/#11/#12. Added
+  `zustand` + `vitest`; **8 store unit tests pass** (view/select/inspector/upsert/
+  drop/markExited/claudeMissing/toast-auto-dismiss). Verified `npm run build`
+  (strict tsc) + ESLint + Prettier + `npm test`. GUI not launched visually.
 
 ---
 

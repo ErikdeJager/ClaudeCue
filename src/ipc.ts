@@ -1,0 +1,63 @@
+// Typed IPC layer: thin wrappers over the Tauri commands plus session-event
+// subscription. Keeping every `invoke` call here means the rest of the app talks
+// to typed functions, not stringly-typed command names.
+
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+
+import type {
+  ExitPayload,
+  OutputPayload,
+  SessionRecord,
+  WorkingDiff,
+} from "./types";
+
+export const spawnSession = (cwd: string, name?: string) =>
+  invoke<SessionRecord>("spawn_session", { cwd, name: name ?? null });
+
+export const writeStdin = (id: string, data: string) =>
+  invoke<void>("write_stdin", { id, data });
+
+export const resizePty = (id: string, cols: number, rows: number) =>
+  invoke<void>("resize_pty", { id, cols, rows });
+
+export const killSession = (id: string) => invoke<void>("kill_session", { id });
+
+export const sessionScrollback = (id: string) =>
+  invoke<number[]>("session_scrollback", { id });
+
+export const listSessions = () => invoke<SessionRecord[]>("list_sessions");
+
+export const listRecents = () => invoke<string[]>("list_recents");
+
+export const openInEditor = (cwd: string) =>
+  invoke<void>("open_in_editor", { cwd });
+
+export const currentBranch = (cwd: string) =>
+  invoke<string>("current_branch", { cwd });
+
+export const workingDiff = (cwd: string) =>
+  invoke<WorkingDiff>("working_diff", { cwd });
+
+export interface SessionEventHandlers {
+  onOutput: (payload: OutputPayload) => void;
+  onExited: (payload: ExitPayload) => void;
+}
+
+/** Subscribe to the per-session output/exit events. Returns an unlisten fn. */
+export async function subscribeSessionEvents(
+  handlers: SessionEventHandlers,
+): Promise<UnlistenFn> {
+  const unlistenOutput = await listen<OutputPayload>(
+    "session://output",
+    (event) => handlers.onOutput(event.payload),
+  );
+  const unlistenExited = await listen<ExitPayload>(
+    "session://exited",
+    (event) => handlers.onExited(event.payload),
+  );
+  return () => {
+    unlistenOutput();
+    unlistenExited();
+  };
+}

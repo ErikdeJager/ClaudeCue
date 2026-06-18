@@ -1,18 +1,45 @@
+import { useEffect } from "react";
+
+import ClaudeMissing from "./components/ClaudeMissing/ClaudeMissing";
+import Focus from "./components/Focus/Focus";
+import Overview from "./components/Overview/Overview";
+import Sidebar from "./components/Sidebar/Sidebar";
 import Titlebar from "./components/Titlebar/Titlebar";
-import DesignSample from "./components/DesignSample/DesignSample";
+import Toaster from "./components/Toaster/Toaster";
+import ViewSwitch from "./components/ViewSwitch/ViewSwitch";
+import { useStore } from "./store";
 
 /**
- * Root component. The custom titlebar (#3) sits above the main content area.
- * The body currently shows the design-system sample (#2); the sidebar and
- * Overview/Focus views replace it in later tasks.
+ * Application shell: custom titlebar (#3) over a sidebar region (#9) and the main
+ * content area, which routes between the Overview wall (#11) and Focus view (#12).
+ * Cross-cutting surfaces (toasts, the claude-missing banner) live at the top
+ * level. State + IPC are wired through the Zustand store.
  */
 function App() {
+  const view = useStore((s) => s.view);
+  const claudeMissing = useStore((s) => s.claudeMissing);
+  const init = useStore((s) => s.init);
+
+  useEffect(() => {
+    void init();
+  }, [init]);
+
   return (
     <div className="app">
       <Titlebar />
+      {claudeMissing && <ClaudeMissing />}
       <div className="app-body">
-        <DesignSample />
+        <Sidebar />
+        <main className="main">
+          <div className="main-topbar">
+            <ViewSwitch />
+          </div>
+          <div className="main-content">
+            {view === "overview" ? <Overview /> : <Focus />}
+          </div>
+        </main>
       </div>
+      <Toaster />
     </div>
   );
 }

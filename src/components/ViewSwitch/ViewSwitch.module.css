@@ -1,0 +1,29 @@
+.group {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  background: var(--bg-base);
+}
+
+.option,
+.active {
+  padding: 4px var(--space-12);
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.option:hover {
+  color: var(--text-primary);
+}
+
+.active {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
