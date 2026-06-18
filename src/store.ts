@@ -27,6 +27,13 @@ let toastSeq = 0;
 // are suppressed during this window to avoid a wall of them (#30). Module-local
 // (no component reacts to it), like `toastSeq`.
 let booting = false;
+// Subscribe to session events exactly once: StrictMode double-invokes the init
+// effect in dev, which would otherwise register duplicate listeners and
+// double-fire every exit toast (#32).
+let eventsSubscribed = false;
+// Sessions killed intentionally (Remove / Forget) — their backend `Exited` event
+// must not add a second "Session exited" toast on top of the action's toast (#32).
+const intentionalKills = new Set<string>();
 
 function toSessionView(record: SessionRecord): SessionView {
   return {
@@ -263,31 +270,40 @@ export const useStore = create<AppState>()((set, get) => ({
     set((s) => ({ update: { ...s.update, dismissed: true } })),
 
   init: async () => {
-    try {
-      await ipc.subscribeSessionEvents({
-        onOutput: ({ id, bytes }) => {
-          emitSessionOutput(id, Uint8Array.from(bytes));
-          // First live output proves a reconnecting session is alive — clear the
-          // flag. A plain read keeps output off the re-render path; the setter
-          // only runs on the one transition (#30).
-          if (get().sessions.find((x) => x.id === id)?.reconnecting) {
-            get().markConnected(id);
-          }
-        },
-        onExited: ({ id, code }) => {
-          // A boot-resume that fails (e.g. no saved conversation) shows its state
-          // in the terminal + a Restart — don't pile onto a toast wall during the
-          // boot window. Genuine runtime exits (after boot) still toast.
-          get().markExited(id, code);
-          if (!booting) {
-            get().pushToast(
-              code != null ? `Session exited (code ${code})` : "Session exited",
-            );
-          }
-        },
-      });
-    } catch {
-      // Event subscription only works inside the Tauri webview.
+    // Subscribe exactly once. The flag is set *before* the await so StrictMode's
+    // synchronous double-invoke can't register a second set of listeners (#32).
+    if (!eventsSubscribed) {
+      eventsSubscribed = true;
+      try {
+        await ipc.subscribeSessionEvents({
+          onOutput: ({ id, bytes }) => {
+            emitSessionOutput(id, Uint8Array.from(bytes));
+            // First live output proves a reconnecting session is alive — clear
+            // the flag. A plain read keeps output off the re-render path; the
+            // setter only runs on the one transition (#30).
+            if (get().sessions.find((x) => x.id === id)?.reconnecting) {
+              get().markConnected(id);
+            }
+          },
+          onExited: ({ id, code }) => {
+            get().markExited(id, code);
+            // One notification per close (#32): skip the generic exit toast for
+            // intentional kills (Remove/Forget already toast) and during the boot
+            // resume window (#30). Unexpected exits still toast exactly once.
+            const intentional = intentionalKills.delete(id);
+            if (!booting && !intentional) {
+              get().pushToast(
+                code != null
+                  ? `Session exited (code ${code})`
+                  : "Session exited",
+              );
+            }
+          },
+        });
+      } catch {
+        // Event subscription only works inside the Tauri webview.
+        eventsSubscribed = false;
+      }
     }
     await get().refresh();
     void get().checkForUpdate();
@@ -411,6 +427,9 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   removeSession: async (id) => {
+    // Intentional kill — the backend `Exited` toast is suppressed (#32); the
+    // "Session removed" toast below is the single notification.
+    intentionalKills.add(id);
     try {
       await ipc.killSession(id);
     } catch {
@@ -426,6 +445,8 @@ export const useStore = create<AppState>()((set, get) => ({
       .map((s) => s.id);
     // Kill + forget every session's process (kill_session also drops its record),
     // then drop the folder from persisted recents so it can't reappear on restart.
+    // Mark them intentional so their exit events don't each pop a toast (#32).
+    ids.forEach((id) => intentionalKills.add(id));
     await Promise.all(ids.map((id) => ipc.killSession(id).catch(() => {})));
     await ipc.removeRecent(repoPath).catch(() => {});
     set((s) => {

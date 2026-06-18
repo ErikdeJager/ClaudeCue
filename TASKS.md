@@ -2093,9 +2093,9 @@ left behind. (A context menu is used so more per-repo actions can be added later
 
 ---
 
-### 32. [ ] One toast on close, and move all toasts to the bottom-right
+### 32. [x] One toast on close, and move all toasts to the bottom-right
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-18
 
@@ -2116,21 +2116,21 @@ Likely causes of the double toast:
 
 **Subtasks**
 
-1. [ ] **Single subscription:** make `init`/`subscribeSessionEvents` idempotent — use
+1. [x] **Single subscription:** make `init`/`subscribeSessionEvents` idempotent — use
    the returned unlisten fn (clean up in the effect) or guard so only one set of
    listeners is ever active. Verify only one `exited` handler runs.
-2. [ ] **De-dupe close notifications:** when a session is intentionally removed/killed,
+2. [x] **De-dupe close notifications:** when a session is intentionally removed/killed,
    suppress the generic "Session exited" toast (the "Session removed" toast suffices);
    keep a single toast for *unexpected* exits.
-3. [ ] **Bottom-right position:** move `.toaster` (`Toaster.module.css`) from
+3. [x] **Bottom-right position:** move `.toaster` (`Toaster.module.css`) from
    bottom-center to bottom-right, stacked **above** the existing `UpdatePopup` (already
    bottom-right at `right/bottom: 24px`) so they don't overlap.
 
 **Acceptance criteria**
 
-- [ ] Closing an agent shows exactly one notification (no duplicate "exited" toast).
-- [ ] Unexpected exits still toast once.
-- [ ] All toasts appear bottom-right and don't collide with the update popup.
+- [x] Closing an agent shows exactly one notification (no duplicate "exited" toast).
+- [x] Unexpected exits still toast once.
+- [x] All toasts appear bottom-right and don't collide with the update popup.
 
 **Notes**
 
@@ -2139,6 +2139,28 @@ Likely causes of the double toast:
   returns an unlisten fn), `src/components/Toaster/Toaster.module.css`,
   `src/components/UpdatePopup/UpdatePopup.module.css` (coordinate stacking). Don't
   remove StrictMode — fix the subscription lifecycle instead.
+- **Done 2026-06-19.** All frontend; StrictMode kept. **Single subscription:** a
+  module-local `eventsSubscribed` guard wraps `subscribeSessionEvents` in `init`, set
+  **synchronously before the `await`** so StrictMode's double-invoke (and any re-`init`)
+  registers exactly one set of listeners — `onExited` fires once per exit. (Reset to
+  false if the subscribe throws, e.g. outside Tauri, so a real retry can still attach.)
+  **De-dupe:** a module-local `intentionalKills: Set<string>` — `removeSession` and
+  `forgetRepo` add their id(s) **before** killing; `onExited` does
+  `intentionalKills.delete(id)` and skips the generic toast when it was intentional
+  (the action's own "Session removed" / "Forgot folder + N agents" is the single
+  notification) **or** during the boot window (`booting`, #30). An *unexpected* exit
+  (not in the set, not booting) still toasts exactly once. This also collapses the
+  N exit toasts a multi-agent Forget would have popped. **Bottom-right:** `.toaster`
+  moved from bottom-center (`left:50%`/`translateX`) to `right/bottom: var(--space-24)`,
+  `align-items: flex-end`, `z-index: 70` (above the UpdatePopup's 60); the `Toaster`
+  reads the store `update` slice and adds a `.raised` class
+  (`bottom: calc(var(--space-24) + 64px)`) while the bottom-right UpdatePopup is
+  visible (`available && !dismissed && !installing`) so the two never overlap.
+  **Hard gate green:** frontend `build`/`lint`/`format:check`/`test` (38). Pure
+  frontend change — no Rust, no new tests (the dedupe lives in the event handler and
+  the StrictMode double-fire only manifests at runtime; existing reducer tests still
+  green). The single-notification + bottom-right placement are runtime-visual, sound by
+  construction but not launched headlessly.
 
 ---
 
