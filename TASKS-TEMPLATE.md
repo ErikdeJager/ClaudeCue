@@ -13,6 +13,7 @@ Each task is **numbered** (ordered) and has a top-level **completion marker** �
 
 **Status:** Not started · _(Not started | In progress | Blocked | Done)_
 **Owner:** _who is responsible (optional)_
+**Depends on:** none · _(task numbers this waits for, e.g. #2, #3 — leave "none" if independent)_
 **Created:** YYYY-MM-DD · **Due:** YYYY-MM-DD _(optional)_
 
 **Description**
