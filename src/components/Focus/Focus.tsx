@@ -3,6 +3,7 @@ import { Copy, ExternalLink, PanelRight } from "lucide-react";
 
 import { repoName } from "../../paths";
 import { useStore } from "../../store";
+import DiffInspector from "../DiffInspector/DiffInspector";
 import Terminal from "../Terminal/Terminal";
 import ViewSwitch from "../ViewSwitch/ViewSwitch";
 import styles from "./Focus.module.css";
@@ -102,9 +103,11 @@ function Focus() {
                 </div>
                 <div className={styles.inspectorBody}>
                   {activeTab === "diff" && (
-                    <p className={styles.placeholder}>
-                      The working-tree diff inspector is filled in task #13.
-                    </p>
+                    <DiffInspector
+                      key={session.repoPath}
+                      repoPath={session.repoPath}
+                      active={inspectorOpen}
+                    />
                   )}
                 </div>
               </div>

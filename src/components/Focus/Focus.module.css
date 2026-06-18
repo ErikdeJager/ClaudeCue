@@ -146,14 +146,7 @@
 }
 
 .inspectorBody {
+  display: flex;
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: var(--space-16);
-}
-
-.placeholder {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--fs-meta);
 }

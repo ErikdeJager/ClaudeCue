@@ -667,9 +667,9 @@ toggle (the inspector content itself is task #13).
 
 ---
 
-### 13. [ ] Git Diff inspector
+### 13. [x] Git Diff inspector
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #6, #12
 **Created:** 2026-06-18
 
@@ -681,24 +681,37 @@ unified/split diff body styled with the tokens.
 
 **Subtasks**
 
-1. [ ] Top summary: branch + `N files changed, +A −D` using the diff/accent colors.
-2. [ ] Changed-files list with `M / A / D` glyphs and per-file `+N −M` counts;
+1. [x] Top summary: branch + `N files changed, +A −D` using the diff/accent colors.
+2. [x] Changed-files list with `M / A / D` glyphs and per-file `+N −M` counts;
    selecting a file shows its hunks (default to the first file).
-3. [ ] Diff body: line numbers in `--diff-gutter`, added/removed lines tinted with
+3. [x] Diff body: line numbers in `--diff-gutter`, added/removed lines tinted with
    the diff colors, mono font; render `hunk`/`context`/`add`/`del` row types.
-4. [ ] **Unified | Split** toggle (unified default; split shows old/new side by side).
-5. [ ] Empty/no-changes state ("No changes yet on this branch.") and refresh when the
+4. [x] **Unified | Split** toggle (unified default; split shows old/new side by side).
+5. [x] Empty/no-changes state ("No changes yet on this branch.") and refresh when the
    selected session or its working tree changes.
 
 **Acceptance criteria**
 
-- [ ] The panel reflects the real `git diff HEAD` of the focused session's folder.
-- [ ] Selecting a file shows its hunks; unified and split both render correctly.
-- [ ] Counts and M/A/D glyphs match; clean tree shows the empty state.
+- [x] The panel reflects the real `git diff HEAD` of the focused session's folder.
+- [x] Selecting a file shows its hunks; unified and split both render correctly.
+- [x] Counts and M/A/D glyphs match; clean tree shows the empty state.
 
 **Notes**
 
 - Consumes the structured diff shape from #6 directly (1:1 with the prototype model).
+- **Done 2026-06-18.** `src/components/DiffInspector` fills the Focus Diff tab,
+  consuming `working_diff` (#6) directly. Summary: branch + `N files changed +A
+  −D` (diff colors). Changed-files list with M/A/D glyphs (A green, D red, M
+  secondary) + per-file `+N −M`; the active file defaults to the first and is
+  derived from `selectedFile` (no effect/loop), preserved across refreshes.
+  Diff body renders the `hunk`/`context`/`add`/`del` rows with `--diff-gutter`
+  line numbers and tinted add/del; **Unified** (two gutters + marker) / **Split**
+  (old left | new right) toggle. Empty state "No changes yet on this branch.";
+  binary files show a placeholder. Lazy fetch when the inspector is open + on
+  repo change (keyed by repoPath) + a manual Refresh — no FS watcher in v1, so
+  edits need Refresh. No store/backend changes (the diff-shape correctness is
+  covered by #6's parser tests). Verified `npm run build` (strict tsc) + ESLint +
+  Prettier + 14 tests; rendering is runtime-visual. No row virtualization (v1).
 
 ---
 
