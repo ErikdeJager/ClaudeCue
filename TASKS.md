@@ -1139,9 +1139,9 @@ a11y.
 
 ---
 
-### 18. [ ] Fix garbled terminal rendering on view switch, resize & new agents
+### 18. [x] Fix garbled terminal rendering on view switch, resize & new agents
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-18
 
@@ -1171,31 +1171,36 @@ resizes, and adding/removing agents — never garbled.
 
 **Subtasks**
 
-1. [ ] **Keep terminals mounted across Overview↔Focus.** Stop unmounting the terminal
+1. [x] **Keep terminals mounted across Overview↔Focus.** Stop unmounting the terminal
    when `view` changes. Evaluate: render both views and toggle visibility
    (CSS `display`/visibility) while keeping the xterm instances alive; or hoist the
    live `Terminal` instances into a persistent layer and reparent the DOM node into
    the active view. A terminal is created **once per session** and survives view
    switches (no dispose/recreate, no scrollback replay on switch).
-2. [ ] **Debounce + correctly sequence resize.** Debounce the `ResizeObserver`
+2. [x] **Debounce + correctly sequence resize.** Debounce the `ResizeObserver`
    handler; `fit.fit()` to compute cols/rows, then a single `resize_pty(cols,rows)`
    after layout settles. Don't resize a hidden terminal — defer the fit until it
    becomes visible, then fit once on show so `claude` repaints at the right size.
-3. [ ] **Fix scrollback-replay corruption.** Replay is only needed for a *freshly
+3. [x] **Fix scrollback-replay corruption.** Replay is only needed for a *freshly
    mounted* terminal (first appearance / app boot), not on every view switch. Ensure
    a replayed snapshot renders at a matching size, or trigger a `claude` full redraw
    via a PTY resize after sizing. Confirm the live-vs-scrollback ordering still holds.
 4. [ ] **Verify the real failure cases:** switch Overview↔Focus repeatedly, add a
    2nd/3rd agent so the wall re-tiles, resize the window narrow↔wide, toggle the
-   inspector. Text stays aligned throughout.
+   inspector. Text stays aligned throughout. _(manual GUI pass — see Notes; not
+   runnable headlessly without a display + real `claude`.)_
 
 **Acceptance criteria**
 
 - [ ] Switching Overview↔Focus never garbles a terminal; history is intact and
-  correctly laid out (no duplicated/overlapping lines).
+  correctly laid out (no duplicated/overlapping lines). _(manual GUI pass — fix
+  verified by construction: the dispose/recreate + replay-on-switch root cause is
+  eliminated.)_
 - [ ] Adding/removing an agent re-tiles the wall without corrupting other terminals.
+  _(manual GUI pass — re-tile resizes are now debounced; see Notes.)_
 - [ ] Resizing the window or toggling the inspector reflows terminals cleanly.
-- [ ] Hard gate green: `npm run build`, `npm run lint`, `npm test`,
+  _(manual GUI pass — debounced single resize after layout settles.)_
+- [x] Hard gate green: `npm run build`, `npm run lint`, `npm test`,
   `cargo fmt --check`, `cargo clippy`, `cargo test`.
 
 **Notes**
@@ -1211,6 +1216,44 @@ resizes, and adding/removing agents — never garbled.
   core convention, don't regress it.
 - Keeping instances alive across views should *reduce* WebGL context churn; verify it
   doesn't worsen the context-cap fallback with many agents.
+- **Done 2026-06-18.** Approach: a **persistent terminal pool**
+  (`src/components/Terminal/terminalPool.ts`) owns exactly **one xterm instance per
+  session**, decoupled from React's view mounting. Each instance lives in its own DOM
+  node that is **reparented** into whichever view slot currently shows it (Overview
+  card / Focus stage) and **parked** in an off-screen, still-measurable layer
+  otherwise — so a view switch **reparents, never disposes/recreates**, the terminal.
+  `Terminal.tsx` is now a thin *slot* (`mountTerminal`/`unmountTerminal` on mount/
+  cleanup, guarded by slot-ownership so an Overview→Focus swap can't double-claim a
+  host); the xterm/FitAddon/WebGL/scrollback lifecycle moved into the pool. **Subtask
+  1:** scrollback now replays **exactly once at host creation** (the host outlives the
+  views), never on a switch — killing the width-mismatched replay that scrambled
+  `claude`'s TUI. **Subtask 2:** the `ResizeObserver` is **debounced (120ms)** and
+  `applyResize` **skips parked/0×0 terminals**, so a re-tile / inspector slide / window
+  drag resizes the PTY **once after layout settles** instead of repeatedly mid-redraw;
+  reparenting into a new slot triggers one debounced fit→`resize_pty` so `claude`
+  repaints at the right size. **Subtask 3:** covered by subtask 1 (replay-once) plus
+  the post-reparent resize forcing a redraw. `App.tsx` gained a `reconcileTerminals`
+  effect that disposes a host **only when its session is truly removed** (an
+  exited-but-listed session keeps its terminal + overlay). No backend change —
+  `resize_pty` already sends SIGWINCH so `claude` redraws. Extracted the pure
+  `terminalsToDispose` set-diff to `poolReconcile.ts` (+5 unit tests, **20 frontend**;
+  Vitest env is `node`, so the pure helper is isolated from the xterm/CSS imports).
+  CLAUDE.md "Views" note updated to describe the pool. **Hard gate green:** frontend
+  `build`/`lint`/`format:check`/`test` (20) + `cargo fmt`/`clippy -D warnings`/`test`
+  (23) all clean.
+- **Subtask 4 / the three visual acceptance criteria left unchecked:** they need a
+  **live GUI + a real `claude` on PATH**, which this headless automation can't drive
+  (same constraint noted for #14/#15). The fix is verified **by construction** — the
+  two documented root causes (dispose/recreate + replay-on-switch; un-debounced
+  per-tick resize) are structurally removed — and by the full hard gate. **Recommended
+  human pass:** switch Overview↔Focus repeatedly, spawn a 2nd/3rd agent (wall
+  re-tiles), drag the window narrow↔wide, toggle the inspector — text should stay
+  aligned throughout, with history intact and no duplicated/overlapping lines.
+- **Punch-list carried forward** (from #16/#17, minus what this closes): `DiffInspector`
+  row virtualization (replace the 600-row cap); parallelize the background boot-resume
+  + cache branch/diff results; modal focus-trap for fuller a11y. The "keep terminals
+  mounted across Overview↔Focus" and "scrollback↔live overlap on mount" items are now
+  **resolved** by the pool.
 
 ---
 

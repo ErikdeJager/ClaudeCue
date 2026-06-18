@@ -42,8 +42,12 @@ clear error if it is missing).
   `DiffInspector` and sidebar render the structured result.
 - **Views:** the store holds `sessions / selectedId / view / inspectorOpen /
   recents / branches / claudeMissing / toasts`; the app mounts **Overview or
-  Focus** (not both), so each session's terminal is single-instanced and replays
-  scrollback on remount.
+  Focus** (not both). Each session's xterm is owned by a **persistent terminal
+  pool** (`Terminal/terminalPool.ts`), created once and **reparented** into the
+  active view's slot (parked off-screen otherwise) — so a view switch never
+  disposes/recreates the terminal or replays scrollback (which would garble
+  `claude`'s width-specific TUI redraw). Scrollback replays once at creation;
+  resizes are debounced + applied only while visible.
 
 ## Layout
 

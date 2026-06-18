@@ -8,6 +8,12 @@
   overflow: hidden;
 }
 
+/* Reparent target: the pool moves the live terminal node in/out of this box. */
+.slot {
+  position: absolute;
+  inset: 0;
+}
+
 .terminal {
   position: absolute;
   inset: 0;
