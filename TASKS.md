@@ -1819,9 +1819,9 @@ isolation is a separate future effort — do not reference it here).
 
 ---
 
-### 28. [ ] Session chip copies a "resume" command, not the bare session id
+### 28. [x] Session chip copies a "resume" command, not the bare session id
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-18
 
@@ -1834,22 +1834,35 @@ terminal restarts the session: **`claude --resume <session-id>`**.
 
 **Subtasks**
 
-1. [ ] Change the chip's copy action to copy `claude --resume <session.id>` (the
+1. [x] Change the chip's copy action to copy `claude --resume <session.id>` (the
    `claude_session_id`/`id` are the same by design in `pty.rs`).
-2. [ ] Update the toast/label to reflect that a resume command was copied.
-3. [ ] Make any other copyable session-id surface consistent.
+2. [x] Update the toast/label to reflect that a resume command was copied.
+3. [x] Make any other copyable session-id surface consistent.
 
 **Acceptance criteria**
 
-- [ ] Clicking the chip copies `claude --resume <id>`; pasting it in a terminal
+- [x] Clicking the chip copies `claude --resume <id>`; pasting it in a terminal
   resumes that conversation.
-- [ ] Toast confirms the resume command was copied.
+- [x] Toast confirms the resume command was copied.
 
 **Notes**
 
 - Files: `src/components/Focus/Focus.tsx`, `src/store.ts` (`copyToClipboard`). The
   resume flag must match the backend's boot resume (`pty.rs::resume_session` →
   `claude --resume <id>`); keep them consistent (see #30).
+- **Done 2026-06-19.** The Focus chip now copies **`claude --resume <session.id>`**
+  (was the bare `session.id`); `title` → "Copy resume command (claude --resume
+  <id>)". The flag matches `pty.rs::resume_session` (`["--resume", claude_session_id]`),
+  verified, and `id == claude_session_id` by design, so the pasted command resumes that
+  exact conversation. The toast label changed `"session id"` → `"resume command"`, so
+  `copyToClipboard`'s `Copied <label>` now reads **"Copied resume command"** (no
+  `store.ts` change — it already formats the toast from the label). The chip's *visible*
+  text stays the compact `repo · branch · id8`; only the copied payload changed.
+  Subtask 3: the Focus chip is the **only** copyable session-id surface (grep
+  confirmed), so consistency is trivially met. **Hard gate green:** frontend
+  `build`/`lint`/`format:check`/`test` (35). Pure frontend one-liner — no Rust, no new
+  tests (behavior is a label/string change; `copyToClipboard` already covered).
+  Runtime clipboard/paste is visual and not launched headlessly.
 
 ---
 

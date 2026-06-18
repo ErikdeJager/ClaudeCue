@@ -37,8 +37,13 @@ function Focus() {
             <button
               type="button"
               className={styles.chip}
-              onClick={() => void copyToClipboard(session.id, "session id")}
-              title="Copy session id"
+              onClick={() =>
+                void copyToClipboard(
+                  `claude --resume ${session.id}`,
+                  "resume command",
+                )
+              }
+              title="Copy resume command (claude --resume <id>)"
             >
               <span className={styles.chipText}>
                 {repoName(session.repoPath)}
