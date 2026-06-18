@@ -1,0 +1,10 @@
+# Re-include this project's .claude/ directory (skills + project settings).
+# Overrides the global ~/.config/git/ignore rule that ignores .claude/ everywhere,
+# so the project-scoped skills are tracked and shared with the repo.
+!.claude/
+
+# Isolated agent worktrees (managed by the isolate-agent / develop-tasks skills)
+.worktree/
+
+# Generated task handoff briefs
+.handoffs/
