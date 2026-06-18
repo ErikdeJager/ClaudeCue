@@ -8,10 +8,3 @@ Do the following steps in order:
 4. Implement the task.
 5. Commit and push your changes directly to main.
 6. You are now finished.
-
-
-## Notes
-- Dependencies come from each task's `Depends on:` line (see `TASKS-TEMPLATE.md`). Treat `none`/empty as independent.
-- To stop: the completion line above is the signal — end the `/loop` (interrupt it). If left running after completion, each pass simply finds nothing to do and re-prints the banner harmlessly.
-- Raise/lower the concurrency cap by editing step 3 if your machine can handle more.
-- Workers and merges need git/gh permission; `.claude/settings.json` pre-approves them. Tasks that add a build or test command may need that command allow-listed too.
