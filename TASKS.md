@@ -2384,9 +2384,9 @@ want** (a palette of presets + a custom color). Colors persist across restarts.
 
 ---
 
-### 36. [ ] Overview grouped by repo, with colored repo badges + repo filter
+### 36. [x] Overview grouped by repo, with colored repo badges + repo filter
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #34, #35
 **Created:** 2026-06-19
 
@@ -2399,23 +2399,23 @@ the per-repo color from #35), and the wall respects the **repo filter** from #34
 
 **Subtasks**
 
-1. [ ] Sort/group the Overview cards by repo (repos in the sidebar's alphabetical order
+1. [x] Sort/group the Overview cards by repo (repos in the sidebar's alphabetical order
    from #20; agents contiguous within each repo). Add a light group delineation
    (e.g. a thin colored rule/header per repo using the repo color) so groups read
    clearly without breaking the equal-width column flow.
-2. [ ] Add a **colored repo badge** to each agent card header (repo name + a color
+2. [x] Add a **colored repo badge** to each agent card header (repo name + a color
    dot/chip in the repo color). Keep it compact; on-system tokens.
-3. [ ] Apply the **filter** (#34): when `overviewRepoFilter` is set, render only that
+3. [x] Apply the **filter** (#34): when `overviewRepoFilter` is set, render only that
    repo's group and show the "Showing <repo> — Show all" control.
-4. [ ] Preserve the selected-agent highlight (#23) and the persistent terminal pool
+4. [x] Preserve the selected-agent highlight (#23) and the persistent terminal pool
    (#18) — grouping/filtering must not dispose/recreate terminals.
 
 **Acceptance criteria**
 
-- [ ] Agents are always grouped by repo and visually adjacent; each card shows a
+- [x] Agents are always grouped by repo and visually adjacent; each card shows a
   colored repo badge.
-- [ ] Selecting a sidebar repo filters Overview to it; "Show all" clears it.
-- [ ] No terminal remount/garble when grouping/filtering changes (pool intact).
+- [x] Selecting a sidebar repo filters Overview to it; "Show all" clears it.
+- [x] No terminal remount/garble when grouping/filtering changes (pool intact).
 
 **Notes**
 
@@ -2423,6 +2423,25 @@ the per-repo color from #35), and the wall respects the **repo filter** from #34
   (`overviewRepoFilter`, `repoColors`). Builds on #34 (filter), #35 (colors), and
   respects #18 (pool) / #23 (selection). This grouped layout is the base that #38
   extends with non-agent panels.
+- **Done 2026-06-19.** Overview cards are now **sorted into `ordered`** with #20's
+  comparator (repoName lowercased → full path → `createdAt`), so agents from the same
+  folder are **contiguous** and repos follow the sidebar's alphabetical order. **No
+  remount:** cards keep `key={session.id}`, so React **reorders** (moves) the DOM nodes
+  instead of remounting — the `<Terminal>` slots don't re-run and the persistent pool
+  (#18) keeps every xterm alive (filtering parks/re-grabs hosts, never disposes), and
+  the #23 selection highlight (`selected` prop) is unaffected. **Group delineation +
+  badge:** each `SessionCard` takes a `color` (`repoColor(repoPath, repoColors)`, #35)
+  and renders a **2px repo-color top band** (inline `borderTopColor` over a transparent
+  `border-top`) — contiguous same-repo cards share it, reading as a group — plus a
+  **colored badge** in the header (a `--radius-dot` color dot + the repo name, replacing
+  the plain meta line); the first card of each new repo group gets a `groupStart` left
+  divider. On-system tokens only. **Filter:** unchanged from #34 (filtered repo's group
+  only + "Showing <repo> · Show all"). **Hard gate green:** frontend `build`/`lint`/
+  `format:check`/`test` (41). Pure frontend change — no Rust, no new tests (the sort
+  reuses #20's tested ordering and `repoColor` is already unit-tested; grouping/badges
+  are visual). The grouped layout + colored bands/badges are runtime-visual, not
+  launched headlessly; the no-remount guarantee is by construction (stable keys + the
+  #18 pool). Base for #38 (mixed non-agent panels).
 
 ---
 

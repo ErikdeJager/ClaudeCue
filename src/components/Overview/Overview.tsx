@@ -1,7 +1,7 @@
 import { ExternalLink, Maximize2, X } from "lucide-react";
 
 import { repoName } from "../../paths";
-import { useStore } from "../../store";
+import { repoColor, useStore } from "../../store";
 import type { SessionView } from "../../types";
 import EmptyState from "../EmptyState/EmptyState";
 import Terminal from "../Terminal/Terminal";
@@ -10,6 +10,10 @@ import styles from "./Overview.module.css";
 interface SessionCardProps {
   session: SessionView;
   branch: string;
+  /** Per-repo color (#35) — the card's top band + badge dot. */
+  color: string;
+  /** First card of a new repo group — gets a divider. */
+  groupStart: boolean;
   selected: boolean;
   onSelect: () => void;
   onExpand: () => void;
@@ -20,6 +24,8 @@ interface SessionCardProps {
 function SessionCard({
   session,
   branch,
+  color,
+  groupStart,
   selected,
   onSelect,
   onExpand,
@@ -27,15 +33,22 @@ function SessionCard({
   onRemove,
 }: SessionCardProps) {
   return (
-    <div className={`${styles.card} ${selected ? styles.cardSelected : ""}`}>
+    <div
+      className={`${styles.card} ${selected ? styles.cardSelected : ""} ${groupStart ? styles.cardGroupStart : ""}`}
+      style={{ borderTopColor: color }}
+    >
       <header className={styles.header}>
         <div className={styles.titleBlock}>
           <span className={styles.name}>
             {session.name ?? repoName(session.repoPath)}
           </span>
+          {/* Colored repo badge: the per-repo color dot + repo name (#36). */}
           <span className={styles.meta}>
-            {repoName(session.repoPath)}
-            {branch && ` · ${branch}`}
+            <span className={styles.metaDot} style={{ background: color }} />
+            <span className={styles.metaText}>
+              {repoName(session.repoPath)}
+              {branch && ` · ${branch}`}
+            </span>
           </span>
         </div>
         <div className={styles.actions}>
@@ -93,6 +106,7 @@ function Overview() {
   const openNewSession = useStore((s) => s.openNewSession);
   const filter = useStore((s) => s.overviewRepoFilter);
   const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
+  const repoColors = useStore((s) => s.repoColors);
 
   if (sessions.length === 0) {
     return <EmptyState onNewSession={() => openNewSession()} />;
@@ -109,6 +123,19 @@ function Overview() {
   const shown = filter
     ? sessions.filter((s) => s.repoPath === filter)
     : sessions;
+
+  // Always group by repo: sidebar's alphabetical order (#20), agents contiguous
+  // within a repo (stable by createdAt). Stable keys mean React reorders rather
+  // than remounts, so the terminal pool (#18) + selection (#23) are untouched.
+  const ordered = [...shown].sort((a, b) => {
+    const byName = repoName(a.repoPath)
+      .toLowerCase()
+      .localeCompare(repoName(b.repoPath).toLowerCase());
+    if (byName !== 0) return byName;
+    const byPath = a.repoPath.localeCompare(b.repoPath);
+    if (byPath !== 0) return byPath;
+    return a.createdAt - b.createdAt;
+  });
 
   return (
     <div className={styles.overview}>
@@ -130,11 +157,15 @@ function Overview() {
         <div className={styles.filterEmpty}>No agents in this repo.</div>
       ) : (
         <div className={styles.wall}>
-          {shown.map((session) => (
+          {ordered.map((session, i) => (
             <SessionCard
               key={session.id}
               session={session}
               branch={branches[session.repoPath] ?? ""}
+              color={repoColor(session.repoPath, repoColors)}
+              groupStart={
+                i > 0 && ordered[i - 1]?.repoPath !== session.repoPath
+              }
               selected={session.id === selectedId}
               onSelect={() => select(session.id)}
               onExpand={() => expand(session.id)}

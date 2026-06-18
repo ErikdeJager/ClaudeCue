@@ -69,8 +69,16 @@
   display: flex;
   flex: 1 0 360px;
   flex-direction: column;
+  /* Repo-color top band (#36) — filled via inline borderTopColor; contiguous
+     same-repo cards share it, reading as a group. */
+  border-top: 2px solid transparent;
   border-right: 1px solid var(--border-hairline);
   overflow: hidden;
+}
+
+/* First card of a new repo group — a divider separating it from the previous. */
+.cardGroupStart {
+  border-left: 1px solid var(--border-strong);
 }
 
 /* Selected agent: an on-brand accent frame drawn over the card (no layout shift,
@@ -117,11 +125,26 @@
   white-space: nowrap;
 }
 
+/* Colored repo badge (#36): a color dot + the repo name. */
 .meta {
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--fs-meta-sm);
+}
+
+.metaDot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: var(--radius-dot);
+}
+
+.metaText {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
