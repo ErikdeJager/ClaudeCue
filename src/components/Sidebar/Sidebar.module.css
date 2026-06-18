@@ -164,18 +164,20 @@
   cursor: pointer;
 }
 
-.rowName {
+/* Primary label = the branch (a git ref → mono), prominent. */
+.rowPrimary {
   overflow: hidden;
   color: var(--text-primary);
+  font-family: var(--mono);
   font-size: var(--fs-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.rowBranch {
+/* Secondary = the optional custom name, thin/muted beneath the branch. */
+.rowSecondary {
   overflow: hidden;
   color: var(--text-muted);
-  font-family: var(--mono);
   font-size: var(--fs-meta-sm);
   text-overflow: ellipsis;
   white-space: nowrap;

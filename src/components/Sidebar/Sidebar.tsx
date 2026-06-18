@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { ChevronRight, Plus, X } from "lucide-react";
 
 import { repoName } from "../../paths";
-import { repoOrder, useStore } from "../../store";
+import { dedupeBranchLabels, repoOrder, useStore } from "../../store";
 import type { SessionView } from "../../types";
 import styles from "./Sidebar.module.css";
 
 interface SessionRowProps {
   session: SessionView;
-  branch: string;
+  /** Primary label: the (deduped) branch, or folder name for a non-git repo. */
+  label: string;
   selected: boolean;
   onSelect: () => void;
   onRemove: () => void;
@@ -16,7 +17,7 @@ interface SessionRowProps {
 
 function SessionRow({
   session,
-  branch,
+  label,
   selected,
   onSelect,
   onRemove,
@@ -24,10 +25,10 @@ function SessionRow({
   return (
     <div className={`${styles.row} ${selected ? styles.rowSelected : ""}`}>
       <button type="button" className={styles.rowMain} onClick={onSelect}>
-        <span className={styles.rowName}>
-          {session.name ?? repoName(session.repoPath)}
-        </span>
-        <span className={styles.rowBranch}>{branch || "no branch"}</span>
+        <span className={styles.rowPrimary}>{label}</span>
+        {session.name && (
+          <span className={styles.rowSecondary}>{session.name}</span>
+        )}
       </button>
       <button
         type="button"
@@ -97,6 +98,12 @@ function Sidebar() {
           const repoSessions = sessions.filter((s) => s.repoPath === repo);
           const isEmpty = repoSessions.length === 0;
           const isCollapsed = collapsed.has(repo);
+          // Primary label = the repo's branch, or the folder name when non-git /
+          // not yet known. All sessions in a group share it, so index duplicates.
+          const baseLabel = (branches[repo] ?? "") || repoName(repo);
+          const rowLabels = dedupeBranchLabels(
+            repoSessions.map(() => baseLabel),
+          );
 
           return (
             <div key={repo} className={styles.group}>
@@ -131,11 +138,13 @@ function Sidebar() {
               </div>
 
               {!isCollapsed &&
-                repoSessions.map((session) => (
+                repoSessions.map((session, i) => (
                   <SessionRow
                     key={session.id}
                     session={session}
-                    branch={branches[repo] ?? ""}
+                    // rowLabels has one entry per session; fallback satisfies
+                    // noUncheckedIndexedAccess and is never reached at runtime.
+                    label={rowLabels[i] ?? baseLabel}
                     selected={session.id === selectedId}
                     onSelect={() => select(session.id)}
                     onRemove={() => void removeSession(session.id)}

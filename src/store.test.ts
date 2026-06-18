@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { repoOrder, useStore } from "./store";
+import { dedupeBranchLabels, repoOrder, useStore } from "./store";
 import type { SessionView } from "./types";
 
 function session(id: string): SessionView {
@@ -154,5 +154,31 @@ describe("repoOrder", () => {
       "/one/app",
       "/two/app",
     ]);
+  });
+});
+
+describe("dedupeBranchLabels", () => {
+  it("indexes repeated labels, leaving the first bare", () => {
+    expect(dedupeBranchLabels(["main", "main", "main"])).toEqual([
+      "main",
+      "main (2)",
+      "main (3)",
+    ]);
+  });
+
+  it("leaves distinct labels untouched", () => {
+    expect(dedupeBranchLabels(["main", "dev"])).toEqual(["main", "dev"]);
+  });
+
+  it("indexes each label group independently, preserving order", () => {
+    expect(dedupeBranchLabels(["main", "dev", "main"])).toEqual([
+      "main",
+      "dev",
+      "main (2)",
+    ]);
+  });
+
+  it("returns an empty array for no sessions", () => {
+    expect(dedupeBranchLabels([])).toEqual([]);
   });
 });

@@ -1375,9 +1375,9 @@ repo groups **alphabetically** (stable) so adding an agent never moves the group
 
 ---
 
-### 21. [ ] Sidebar agent labels = branch name (optional custom name as thin sub-text)
+### 21. [x] Sidebar agent labels = branch name (optional custom name as thin sub-text)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-18
 
@@ -1400,19 +1400,19 @@ Decisions (from feedback):
 
 **Subtasks**
 
-1. [ ] In `SessionRow`, make the (deduped) branch the primary label and render
+1. [x] In `SessionRow`, make the (deduped) branch the primary label and render
    `session.name` (if set) as the thin sub-line.
-2. [ ] Implement per-group branch dedup indexing (pure helper, unit-tested).
-3. [ ] Non-git fallback to folder name; empty/unknown branch handled gracefully.
-4. [ ] Adjust `Sidebar.module.css` so the (branch primary / name secondary) hierarchy
+2. [x] Implement per-group branch dedup indexing (pure helper, unit-tested).
+3. [x] Non-git fallback to folder name; empty/unknown branch handled gracefully.
+4. [x] Adjust `Sidebar.module.css` so the (branch primary / name secondary) hierarchy
    reads correctly.
 
 **Acceptance criteria**
 
-- [ ] Rows show the branch as the main label; a custom name (if any) appears as thin
+- [x] Rows show the branch as the main label; a custom name (if any) appears as thin
   sub-text beneath.
-- [ ] Duplicate branches in a group are indexed (`main`, `main (2)`).
-- [ ] Non-git folders fall back to the folder name; no crash on missing branch.
+- [x] Duplicate branches in a group are indexed (`main`, `main (2)`).
+- [x] Non-git folders fall back to the folder name; no crash on missing branch.
 
 **Notes**
 
@@ -1421,6 +1421,22 @@ Decisions (from feedback):
   (`branches: Record<path, branch>`), so all agents in one folder share a branch
   today — hence the dedup index. Related: #27 keeps the optional name field that feeds
   the sub-text. (Per-agent branches via worktrees are intentionally out of scope.)
+- **Done 2026-06-18.** Flipped the `SessionRow` hierarchy: primary label is now the
+  **branch** (`.rowPrimary`, mono + `--text-primary` since it's a git ref), and the
+  optional `session.name` renders **beneath** as thin muted sub-text (`.rowSecondary`,
+  `--text-muted`/`--fs-meta-sm`) only when set (`{session.name && …}`). **Dedup
+  indexing:** new pure `dedupeBranchLabels(labels)` in `store.ts` appends `(2)`,
+  `(3)`… to repeated labels in stable order (`main`, `main (2)`, `main (3)`), leaving
+  the first bare; the Sidebar computes one `baseLabel` per group
+  (`(branches[repo] ?? "") || repoName(repo)`) and feeds the per-session list through
+  it. **Non-git / unknown branch** falls back to the folder name via that same
+  `baseLabel` (no more "no branch", no crash). Renamed the CSS classes
+  `.rowName`→`.rowPrimary` / `.rowBranch`→`.rowSecondary` and swapped their styles for
+  the new hierarchy. **+4 `dedupeBranchLabels` unit tests** (index/distinct/
+  independent-groups/empty). **Hard gate green:** frontend `build`/`lint`/
+  `format:check`/`test` (**26**). Pure frontend change — no Rust touched (Rust gate
+  unchanged since #19). Dedup + fallback logic is unit-tested + type-checked; the
+  visual hierarchy is a CSS swap not launched headlessly.
 
 ---
 

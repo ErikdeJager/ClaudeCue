@@ -62,6 +62,21 @@ export function repoOrder(
   });
 }
 
+/**
+ * Disambiguate repeated sidebar row labels. Branch is tracked per repo path, so
+ * every session in a repo group shares the same branch label; this appends a
+ * 1-based index to the 2nd+ occurrence (`main`, `main (2)`, `main (3)`) so rows
+ * stay distinguishable. Order is preserved (stable within the group). Pure.
+ */
+export function dedupeBranchLabels(labels: string[]): string[] {
+  const counts = new Map<string, number>();
+  return labels.map((label) => {
+    const n = (counts.get(label) ?? 0) + 1;
+    counts.set(label, n);
+    return n === 1 ? label : `${label} (${n})`;
+  });
+}
+
 export interface AppState {
   // --- State ---
   sessions: SessionView[];
