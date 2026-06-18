@@ -2631,3 +2631,280 @@ the output-activity heuristic below if nothing better is feasible.
   starts using the reserved `--status-*` tokens. That's intentional now. Keep it to a
   busy/idle indicator (no approval UI, still answered in the terminal).
 - Pairs with #36 (per-card chrome) and #33 (status colors).
+
+---
+
+### 43. [ ] Overview: drag-to-reorder agents/panels within their repo cluster
+
+**Status:** Not started
+**Depends on:** #36, #38
+**Created:** 2026-06-19
+
+**Description**
+
+In Overview, the user should be able to **drag to reorder** items, but items stay
+**clustered by repo** — agents/panels from the same folder remain grouped together; you
+can only rearrange *within* a cluster. E.g. with three agents in one folder, drag to
+reorder those three; you can't move an agent out of its repo group.
+
+This implements the drag-and-drop reordering that #38 deferred (it shipped left/right
+move buttons) and applies it to **agent panels too** (not just diff/markdown panels).
+The per-cluster order must **persist**.
+
+**Subtasks**
+
+1. [ ] Adopt **dnd-kit** (`@dnd-kit/core` + `@dnd-kit/sortable`) as the app's drag-and-
+   drop library (modern, lightweight ~6KB core, headless, accessible — keyboard +
+   screen-reader, transform-based perf). It's reused by the Canvas tasks (#46/#47), so
+   the app has **one** DnD system.
+2. [ ] Make each repo cluster a sortable context; allow reordering items **within** the
+   cluster only (constrain drops so an item can't cross into another repo's group).
+3. [ ] Persist the per-repo item order (extend the #38 overview-panel layout / store);
+   agents that appear/disappear (spawn/exit) merge into the saved order sensibly
+   (new agents append; removed ones drop out).
+4. [ ] Keep the persistent terminal pool (#18) intact — reordering reparents DOM nodes,
+   never disposes terminals. Smooth drag animation (transform/opacity, reduced-motion
+   aware).
+
+**Acceptance criteria**
+
+- [ ] Agents/panels can be reordered by dragging, but only within their repo cluster
+  (clusters never interleave).
+- [ ] The order persists across restart; spawning/closing agents doesn't scramble it.
+- [ ] No terminal remount/garble while dragging (pool intact).
+
+**Notes**
+
+- Files: `src/components/Overview/*`, `src/store.ts` + persisted layout (#38),
+  `package.json` (dnd-kit). Builds on #36 (grouping) + #38 (panels). dnd-kit chosen over
+  react-dnd (heavier, steeper learning curve) and the deprecated react-beautiful-dnd;
+  `@dnd-kit/sortable` fits list reordering and dnd-kit also covers the Canvas drop zones
+  (#46/#47).
+
+---
+
+### 44. [ ] Universal read-only file viewer (markdown rendered/raw toggle + light code highlighting)
+
+**Status:** Not started
+**Depends on:** #40
+**Created:** 2026-06-19
+
+**Description**
+
+Generalize the markdown viewer (#40) into a **universal read-only file viewer** that can
+open **any** file in the repo:
+
+- **Markdown** → **rendered** by default, with a toggle to raw text. The toggle is an
+  **eye icon** (rendered/preview) ↔ **code icon** (raw source).
+- **Code files** → **lightweight syntax highlighting** (read-only; no language server,
+  no editing — just colors).
+- **Plain text / other** → raw text (mono).
+- **Hot-reload** on disk change (from #40).
+
+This `FileViewer` becomes the single content component reused by the Focus inspector
+(#40), Overview columns (#41), and Canvas panels (#47). Keep it **lightweight** — the
+user explicitly does not want a full editor / LSP.
+
+**Subtasks**
+
+1. [ ] Build a `FileViewer` component taking a file path: it fetches content
+   (`read_text_file` from #40), detects type by extension, and renders the right mode.
+2. [ ] **Markdown mode:** reuse #40's `react-markdown` + `remark-gfm` rendering (no raw
+   HTML) for the rendered view; add the **eye/code toggle** to switch rendered ↔ raw.
+3. [ ] **Code mode:** add **Prism.js** (via `react-syntax-highlighter`'s Prism build, or
+   `prismjs` directly) for read-only highlighting — import only a **curated language set**
+   (ts/tsx/js/jsx, rust, python, json, css, html, bash, toml, yaml, md…) and lazy-load
+   others to keep the bundle small. Use a **Catppuccin Prism theme** to match #33.
+4. [ ] **Plain/unknown:** render raw mono text. Guard large files (cap size / virtualize
+   or show a "file too large" notice) so a huge file can't jank.
+5. [ ] Keep hot-reload (poll while visible; preserve scroll on unchanged) from #40.
+6. [ ] Backend: generalize #40's `read_text_file` / file listing to **any file** (not
+   just `*.md`); still **validate the path is inside the repo** and treat content as
+   untrusted.
+
+**Acceptance criteria**
+
+- [ ] Opening a markdown file shows the rendered view with a working eye/code toggle to
+  raw; opening a code file shows lightweight syntax highlighting; other files show raw.
+- [ ] Highlighting is read-only and lightweight (no editor/LSP); bundle impact is small
+  (curated/lazy languages).
+- [ ] Hot-reload + repo-scoped path validation still hold; large files don't jank.
+
+**Notes**
+
+- Files: a new shared `src/components/FileViewer/*`, `src/components/Focus/Focus.tsx`
+  (use it in the file tab), `src-tauri/src/commands.rs` (generalize read/list),
+  `package.json` (prismjs / react-syntax-highlighter). **Generalizes #40 and #41** —
+  those should consume `FileViewer` (the markdown tab/column becomes a file tab/column);
+  if tackled together, build `FileViewer` first. **Library choice (researched):** Prism
+  is the lightweight client-side pick (~20KB core + per-language, ~5ms for 10 blocks,
+  modular) vs Shiki (accurate but ~MB + WASM, SSR-oriented) and highlight.js (zero-config
+  but larger/slower). Read-only display only — do not pull in CodeMirror/Monaco.
+
+---
+
+### 45. [ ] Sidebar tree: show opened files under their repo (draggable + clickable)
+
+**Status:** Not started
+**Depends on:** #44
+**Created:** 2026-06-19
+
+**Description**
+
+The sidebar becomes a **tree**: each repo lists its **sessions** *and* its **opened
+files** beneath it. When the user opens a file (via the file viewer #44 — in Focus, an
+Overview column, or Canvas), that file appears in the sidebar tree under its repo. File
+entries are **clickable** (open/focus the file) and **draggable** (into Canvas, #47).
+This satisfies "I want the files I have opened to appear in the left tree structure with
+the folders."
+
+**Subtasks**
+
+1. [ ] Add an **open-files** concept to the store: a per-repo list of opened file paths
+   (`openFiles: Record<repoPath, string[]>`) with open/close actions. Opening a file
+   anywhere (FileViewer #44) registers it; closing removes it. Persist it.
+2. [ ] Render opened files under each repo in the sidebar (below its sessions) as tree
+   rows with a file icon + name (mono), truncating long names. Repos remain the
+   non-collapsible titles from #34; files are children.
+3. [ ] Clicking a file entry opens/focuses it (e.g. in the Focus file tab, or selects its
+   Canvas panel if present). A hover **close** (×) removes it from the tree.
+4. [ ] Make file entries **draggable** (dnd-kit, #43) so they can be dropped into Canvas
+   (#47). Sessions remain draggable into Canvas too (#47).
+
+**Acceptance criteria**
+
+- [ ] Opening a file makes it appear under its repo in the sidebar tree; closing removes
+  it; the list persists across restart.
+- [ ] File entries are clickable (open/focus) and draggable (into Canvas).
+- [ ] Repos stay non-collapsible titles (#34); the tree reads clearly.
+
+**Notes**
+
+- Files: `src/components/Sidebar/Sidebar.tsx` (+ css), `src/store.ts` (`openFiles`),
+  persisted via the backend store. Depends on #44 (the file-open concept + viewer) and
+  reuses dnd-kit (#43). Coordinates with #34 (sidebar repos) and #47 (drag into Canvas).
+
+---
+
+### 46. [ ] Canvas mode: recursive split-panel layout engine
+
+**Status:** Not started
+**Depends on:** #18, #25
+**Created:** 2026-06-19
+
+**Description**
+
+Add a **third view, "Canvas"**, alongside Overview and Focus — a new button in the
+sidebar view switch (under the New session button, with the #25 toggle). Canvas is a
+**recursive split-panel workspace** (a tiling / BSP layout, like an IDE's editor grid):
+
+- The empty canvas shows a **center drop zone**; dropping content creates the first panel
+  filling the canvas.
+- Dragging content onto a panel's **left / right / top / bottom edge splits that panel in
+  half** in that direction, placing the new content in the new half. This is
+  **recursive** — any panel can be split again, indefinitely, into smaller panels.
+- The **borders between panels are draggable** to resize neighbors.
+- The layout **persists** across restarts.
+
+This task is the **layout engine + interactions**; wiring real content and sidebar
+drag-in is #47 (the engine renders panels from a content descriptor and exposes a generic
+"drop content here / split here" API).
+
+**Design / approach (researched — plan carefully):**
+
+- Model the layout as a **binary split tree**: each node is either a *split*
+  (`{ dir: 'row'|'col', a, b, sizes }`) or a *leaf* (`{ panelId }`). Recursive splitting
+  = replacing a leaf with a split whose children are the old leaf + the new one.
+- **Recommended build:** a **custom BSP tree** + **`react-resizable-panels`** for the
+  resizable splitters (accessible, no manual pointer math) + **dnd-kit** (#43) for the
+  edge-drop "split" zones and the center drop — this keeps **one DnD system** app-wide and
+  gives **full control over keeping terminals alive** (the #18 pool must reparent, never
+  unmount, on relayout).
+- **Evaluate first / alternative:** **dockview** (zero-dependency docking manager) does
+  edge-drop-to-split, resizing, external drag-in, and layout persistence out of the box —
+  much faster to build — *but* it owns panel lifecycle and ships its own DnD; only adopt
+  it if panels (especially terminals via the #18 pool) can be kept alive across relayout
+  and it composes with the app's dnd-kit. `react-mosaic` is another BSP option but its
+  split UX is button-based and it uses react-dnd (a second DnD system). Pick one and
+  record why in the notes.
+
+**Subtasks**
+
+1. [ ] Add **Canvas** to the view switch (#25) and route it as a third top-level view in
+   `App.tsx` (Overview / Focus / Canvas).
+2. [ ] Implement the BSP layout tree + rendering of leaf panels; empty-state center drop
+   creates the first panel.
+3. [ ] **Edge-split:** dropping onto a panel's L/R/T/B edge splits it (recursive); show
+   clear drop-zone affordances on the edges during a drag.
+4. [ ] **Resizable borders** between panels (react-resizable-panels or equivalent), with
+   sensible min sizes; smooth.
+5. [ ] **Persist** the canvas layout tree; restore on launch.
+6. [ ] Panels close (removing a leaf collapses its split); reparent terminals via the #18
+   pool on every relayout — never dispose.
+
+**Acceptance criteria**
+
+- [ ] Canvas is selectable from the sidebar; an empty canvas accepts a center drop to
+  create the first panel.
+- [ ] Dropping on a panel edge splits it L/R/T/B, recursively; borders resize; panels
+  close.
+- [ ] The layout persists across restart; terminals are never torn down by relayout.
+
+**Notes**
+
+- Files: `src/App.tsx` (route Canvas), `src/components/ViewSwitch/*` + sidebar (#25, add
+  Canvas), a new `src/components/Canvas/*` (engine), `src/store.ts` + backend store
+  (persist layout), reuse the #18 terminal pool, dnd-kit (#43), `package.json`
+  (react-resizable-panels [+ dockview if chosen]). **Content wiring + sidebar drag-in is
+  #47.** Keep terminal-pool keep-alive the deciding factor in the library choice.
+
+---
+
+### 47. [ ] Canvas content + drag-and-drop from the sidebar (agents, files, diffs)
+
+**Status:** Not started
+**Depends on:** #44, #45, #46
+**Created:** 2026-06-19
+
+**Description**
+
+Wire **real content** into Canvas (#46) and let the user **drag items from the sidebar**
+into it. A canvas panel can host:
+
+- an **agent terminal** (via the #18 pool),
+- a **file viewer** (#44 — markdown rendered/raw, code highlighted, any file),
+- a **diff viewer** (the shared diff component from #39),
+- (markdown is just the file viewer in rendered mode).
+
+Dragging a **session** or an **opened file** from the sidebar tree (#45) into the canvas
+either creates the first panel (center drop) or splits a panel (edge drop, #46), placing
+that content there.
+
+**Subtasks**
+
+1. [ ] Define a canvas **panel content descriptor** (`{ kind: 'agent'|'file'|'diff',
+   ref }`) the #46 engine renders; map each kind to its component (terminal pool /
+   `FileViewer` #44 / shared diff #39).
+2. [ ] Make sidebar **sessions** and **opened files** (#45) **draggable** (dnd-kit, #43)
+   with payloads the canvas drop zones accept (center + edges from #46).
+3. [ ] On drop, create/split a panel with the dropped content; persist it in the canvas
+   layout (#46). Support adding a diff viewer for a repo and a file viewer for a path.
+4. [ ] Panel headers show what they contain (agent name / file name / "diff · branch")
+   with the repo color badge (#35); panels are closeable.
+5. [ ] Empty / instructional state when the canvas has no panels ("Drag an agent or file
+   here").
+
+**Acceptance criteria**
+
+- [ ] Dragging an agent or file from the sidebar into Canvas creates/splits a panel with
+  that content; panels render agents, file viewers, and diffs correctly.
+- [ ] Canvas content persists across restart; closing panels works; terminals stay alive.
+- [ ] Content components are shared (no duplicate terminal/file/diff implementations).
+
+**Notes**
+
+- Files: `src/components/Canvas/*` (content rendering + drop handling),
+  `src/components/Sidebar/Sidebar.tsx` (draggable sources, #45), reuse `FileViewer`
+  (#44), the shared diff (#39), the terminal pool (#18), dnd-kit (#43). Depends on #46
+  (engine), #44 (file viewer), #45 (sidebar drag sources); reuses #39. Completes the
+  Canvas feature.
