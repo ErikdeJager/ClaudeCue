@@ -1,18 +1,66 @@
-import { ExternalLink, Maximize2, X } from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Maximize2,
+  X,
+} from "lucide-react";
 
 import { repoName } from "../../paths";
 import { repoColor, useStore } from "../../store";
-import type { SessionView } from "../../types";
+import type { OverviewPanel, SessionView } from "../../types";
 import EmptyState from "../EmptyState/EmptyState";
 import Terminal from "../Terminal/Terminal";
 import styles from "./Overview.module.css";
 
+/**
+ * Shared column chrome (#38): every Overview column — an agent terminal, a diff
+ * panel (#39), or a markdown panel (#41) — renders inside this frame (repo-color
+ * top band, header with a title + actions, and a body), so adding/closing/
+ * reordering panels all share one layout. Terminal columns keep stable keys at
+ * the Overview level, so React reorders (never remounts) them and the persistent
+ * pool (#18) is untouched.
+ */
+interface PanelColumnProps {
+  color: string;
+  groupStart: boolean;
+  selected?: boolean;
+  title: ReactNode;
+  actions: ReactNode;
+  onClickBody?: () => void;
+  children: ReactNode;
+}
+
+function PanelColumn({
+  color,
+  groupStart,
+  selected = false,
+  title,
+  actions,
+  onClickBody,
+  children,
+}: PanelColumnProps) {
+  return (
+    <div
+      className={`${styles.card} ${selected ? styles.cardSelected : ""} ${groupStart ? styles.cardGroupStart : ""}`}
+      style={{ borderTopColor: color }}
+    >
+      <header className={styles.header}>
+        <div className={styles.titleBlock}>{title}</div>
+        <div className={styles.actions}>{actions}</div>
+      </header>
+      <div className={styles.body} onClick={onClickBody}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 interface SessionCardProps {
   session: SessionView;
   branch: string;
-  /** Per-repo color (#35) — the card's top band + badge dot. */
   color: string;
-  /** First card of a new repo group — gets a divider. */
   groupStart: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -32,68 +80,164 @@ function SessionCard({
   onOpenInZed,
   onRemove,
 }: SessionCardProps) {
+  const title = (
+    <>
+      <span className={styles.name}>
+        {session.name ?? repoName(session.repoPath)}
+      </span>
+      <span className={styles.meta}>
+        <span className={styles.metaDot} style={{ background: color }} />
+        <span className={styles.metaText}>
+          {repoName(session.repoPath)}
+          {branch && ` · ${branch}`}
+        </span>
+      </span>
+    </>
+  );
+  const actions = (
+    <>
+      <button
+        type="button"
+        className={styles.action}
+        onClick={onExpand}
+        title="Expand to Focus"
+        aria-label="Expand to Focus"
+      >
+        <Maximize2 size={15} strokeWidth={1.5} />
+      </button>
+      <button
+        type="button"
+        className={styles.action}
+        onClick={onOpenInZed}
+        title="Open in Zed"
+        aria-label="Open in Zed"
+      >
+        <ExternalLink size={15} strokeWidth={1.5} />
+      </button>
+      <button
+        type="button"
+        className={styles.action}
+        onClick={onRemove}
+        title="Remove (kill + forget)"
+        aria-label="Remove session"
+      >
+        <X size={15} strokeWidth={1.5} />
+      </button>
+    </>
+  );
   return (
-    <div
-      className={`${styles.card} ${selected ? styles.cardSelected : ""} ${groupStart ? styles.cardGroupStart : ""}`}
-      style={{ borderTopColor: color }}
+    // Clicking the card body selects it (highlight in place); Expand goes to
+    // Focus. The terminal inside keeps its own click-to-focus.
+    <PanelColumn
+      color={color}
+      groupStart={groupStart}
+      selected={selected}
+      title={title}
+      actions={actions}
+      onClickBody={onSelect}
     >
-      <header className={styles.header}>
-        <div className={styles.titleBlock}>
-          <span className={styles.name}>
-            {session.name ?? repoName(session.repoPath)}
-          </span>
-          {/* Colored repo badge: the per-repo color dot + repo name (#36). */}
-          <span className={styles.meta}>
-            <span className={styles.metaDot} style={{ background: color }} />
-            <span className={styles.metaText}>
-              {repoName(session.repoPath)}
-              {branch && ` · ${branch}`}
-            </span>
-          </span>
-        </div>
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.action}
-            onClick={onExpand}
-            title="Expand to Focus"
-            aria-label="Expand to Focus"
-          >
-            <Maximize2 size={15} strokeWidth={1.5} />
-          </button>
-          <button
-            type="button"
-            className={styles.action}
-            onClick={onOpenInZed}
-            title="Open in Zed"
-            aria-label="Open in Zed"
-          >
-            <ExternalLink size={15} strokeWidth={1.5} />
-          </button>
-          <button
-            type="button"
-            className={styles.action}
-            onClick={onRemove}
-            title="Remove (kill + forget)"
-            aria-label="Remove session"
-          >
-            <X size={15} strokeWidth={1.5} />
-          </button>
-        </div>
-      </header>
-      {/* Clicking the card body selects it (highlight in place); Expand still
-          goes to Focus. The terminal inside keeps its own click-to-focus. */}
-      <div className={styles.body} onClick={onSelect}>
-        <Terminal sessionId={session.id} />
-      </div>
-    </div>
+      <Terminal sessionId={session.id} />
+    </PanelColumn>
   );
 }
 
+function panelLabel(panel: OverviewPanel): string {
+  if (panel.kind === "diff") return "Diff";
+  if (panel.file) return panel.file.split("/").pop() || "Markdown";
+  return "Markdown";
+}
+
+interface ExtraPanelProps {
+  panel: OverviewPanel;
+  repoPath: string;
+  color: string;
+  groupStart: boolean;
+  canMoveLeft: boolean;
+  canMoveRight: boolean;
+  onMoveLeft: () => void;
+  onMoveRight: () => void;
+  onClose: () => void;
+}
+
+function ExtraPanel({
+  panel,
+  repoPath,
+  color,
+  groupStart,
+  canMoveLeft,
+  canMoveRight,
+  onMoveLeft,
+  onMoveRight,
+  onClose,
+}: ExtraPanelProps) {
+  const title = (
+    <>
+      <span className={styles.name}>{panelLabel(panel)}</span>
+      <span className={styles.meta}>
+        <span className={styles.metaDot} style={{ background: color }} />
+        <span className={styles.metaText}>{repoName(repoPath)}</span>
+      </span>
+    </>
+  );
+  const actions = (
+    <>
+      <button
+        type="button"
+        className={styles.action}
+        onClick={onMoveLeft}
+        disabled={!canMoveLeft}
+        title="Move panel left"
+        aria-label="Move panel left"
+      >
+        <ChevronLeft size={15} strokeWidth={1.5} />
+      </button>
+      <button
+        type="button"
+        className={styles.action}
+        onClick={onMoveRight}
+        disabled={!canMoveRight}
+        title="Move panel right"
+        aria-label="Move panel right"
+      >
+        <ChevronRight size={15} strokeWidth={1.5} />
+      </button>
+      <button
+        type="button"
+        className={styles.action}
+        onClick={onClose}
+        title="Close panel"
+        aria-label="Close panel"
+      >
+        <X size={15} strokeWidth={1.5} />
+      </button>
+    </>
+  );
+  return (
+    <PanelColumn
+      color={color}
+      groupStart={groupStart}
+      title={title}
+      actions={actions}
+    >
+      {/* Body filled by #39 (diff) / #41 (markdown); placeholder until then. */}
+      <div className={styles.placeholder}>
+        {panel.kind === "diff"
+          ? "Diff panel — added in #39."
+          : "Markdown panel — added in #41."}
+      </div>
+    </PanelColumn>
+  );
+}
+
+type ColumnItem =
+  | { kind: "agent"; session: SessionView }
+  | { kind: "panel"; panel: OverviewPanel; index: number; count: number };
+
 /**
- * The Overview "agent wall": every active session as an equal-width terminal
- * column. Columns fill the area and scroll horizontally once they hit their
- * min-width. Cards are uniform — no status pills/glow in v1.
+ * The Overview "agent wall" (#38): a customizable arrangement of equal-width
+ * columns grouped by repo — each repo's live agent terminals (auto) followed by
+ * its user-managed extra panels (diff/markdown). Columns scroll horizontally
+ * past capacity; the sidebar repo filter (#34/#36) narrows it to one repo.
  */
 function Overview() {
   const sessions = useStore((s) => s.sessions);
@@ -107,6 +251,9 @@ function Overview() {
   const filter = useStore((s) => s.overviewRepoFilter);
   const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
   const repoColors = useStore((s) => s.repoColors);
+  const overviewPanels = useStore((s) => s.overviewPanels);
+  const removeOverviewPanel = useStore((s) => s.removeOverviewPanel);
+  const moveOverviewPanel = useStore((s) => s.moveOverviewPanel);
 
   if (sessions.length === 0) {
     return <EmptyState onNewSession={() => openNewSession()} />;
@@ -125,8 +272,7 @@ function Overview() {
     : sessions;
 
   // Always group by repo: sidebar's alphabetical order (#20), agents contiguous
-  // within a repo (stable by createdAt). Stable keys mean React reorders rather
-  // than remounts, so the terminal pool (#18) + selection (#23) are untouched.
+  // within a repo (stable by createdAt).
   const ordered = [...shown].sort((a, b) => {
     const byName = repoName(a.repoPath)
       .toLowerCase()
@@ -136,6 +282,29 @@ function Overview() {
     if (byPath !== 0) return byPath;
     return a.createdAt - b.createdAt;
   });
+
+  // Distinct repos with agents, in display order.
+  const repoList: string[] = [];
+  for (const s of ordered) {
+    if (!repoList.includes(s.repoPath)) repoList.push(s.repoPath);
+  }
+
+  // Flatten to columns: per repo, [agent panels…] then [extra panels…] (#38).
+  const columns: { repoPath: string; item: ColumnItem }[] = [];
+  for (const repo of repoList) {
+    for (const s of ordered) {
+      if (s.repoPath === repo) {
+        columns.push({ repoPath: repo, item: { kind: "agent", session: s } });
+      }
+    }
+    const extras = overviewPanels[repo] ?? [];
+    extras.forEach((panel, index) =>
+      columns.push({
+        repoPath: repo,
+        item: { kind: "panel", panel, index, count: extras.length },
+      }),
+    );
+  }
 
   return (
     <div className={styles.overview}>
@@ -157,22 +326,47 @@ function Overview() {
         <div className={styles.filterEmpty}>No agents in this repo.</div>
       ) : (
         <div className={styles.wall}>
-          {ordered.map((session, i) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              branch={branches[session.repoPath] ?? ""}
-              color={repoColor(session.repoPath, repoColors)}
-              groupStart={
-                i > 0 && ordered[i - 1]?.repoPath !== session.repoPath
-              }
-              selected={session.id === selectedId}
-              onSelect={() => select(session.id)}
-              onExpand={() => expand(session.id)}
-              onOpenInZed={() => void openInZed(session.repoPath)}
-              onRemove={() => void removeSession(session.id)}
-            />
-          ))}
+          {columns.map((col, i) => {
+            const groupStart =
+              i > 0 && columns[i - 1]?.repoPath !== col.repoPath;
+            const color = repoColor(col.repoPath, repoColors);
+            if (col.item.kind === "agent") {
+              const session = col.item.session;
+              return (
+                <SessionCard
+                  key={session.id}
+                  session={session}
+                  branch={branches[session.repoPath] ?? ""}
+                  color={color}
+                  groupStart={groupStart}
+                  selected={session.id === selectedId}
+                  onSelect={() => select(session.id)}
+                  onExpand={() => expand(session.id)}
+                  onOpenInZed={() => void openInZed(session.repoPath)}
+                  onRemove={() => void removeSession(session.id)}
+                />
+              );
+            }
+            const { panel, index, count } = col.item;
+            return (
+              <ExtraPanel
+                key={panel.id}
+                panel={panel}
+                repoPath={col.repoPath}
+                color={color}
+                groupStart={groupStart}
+                canMoveLeft={index > 0}
+                canMoveRight={index < count - 1}
+                onMoveLeft={() =>
+                  void moveOverviewPanel(col.repoPath, panel.id, -1)
+                }
+                onMoveRight={() =>
+                  void moveOverviewPanel(col.repoPath, panel.id, 1)
+                }
+                onClose={() => void removeOverviewPanel(col.repoPath, panel.id)}
+              />
+            );
+          })}
         </div>
       )}
     </div>

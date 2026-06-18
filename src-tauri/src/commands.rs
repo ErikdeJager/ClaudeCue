@@ -8,7 +8,7 @@ use tauri::State;
 
 use crate::git::{self, BranchList, WorkingDiff};
 use crate::pty::{self, SessionError, SessionManager};
-use crate::store::{PersistedSession, Store};
+use crate::store::{OverviewPanel, PersistedSession, Store};
 
 /// Payload for the `session://output` event.
 #[derive(Clone, Serialize)]
@@ -142,6 +142,25 @@ pub fn set_repo_color(
     }
     store
         .set_repo_color(&path, &color)
+        .map_err(|e| SessionError::Io(e.to_string()))
+}
+
+#[tauri::command]
+pub fn list_overview_panels(
+    store: State<'_, Store>,
+) -> std::collections::HashMap<String, Vec<OverviewPanel>> {
+    store.overview_panels()
+}
+
+/// Replace a repo's Overview panel layout (#38) and persist.
+#[tauri::command]
+pub fn set_overview_panels(
+    store: State<'_, Store>,
+    path: String,
+    panels: Vec<OverviewPanel>,
+) -> Result<(), SessionError> {
+    store
+        .set_overview_panels(&path, panels)
         .map_err(|e| SessionError::Io(e.to_string()))
 }
 

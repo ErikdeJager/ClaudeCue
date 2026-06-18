@@ -171,13 +171,31 @@
     background var(--dur-fast) var(--ease-out);
 }
 
-.action:hover {
+.action:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.action:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .body {
   display: flex;
   flex: 1;
   min-height: 0;
+}
+
+/* Placeholder body for extra panels until #39 (diff) / #41 (markdown) fill them. */
+.placeholder {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16);
+  background: var(--terminal-bg);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  text-align: center;
 }

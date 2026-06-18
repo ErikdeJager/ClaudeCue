@@ -10,6 +10,7 @@ import type {
   BranchList,
   ExitPayload,
   OutputPayload,
+  OverviewPanel,
   SessionRecord,
   WorkingDiff,
 } from "./types";
@@ -56,6 +57,14 @@ export const listRepoColors = () =>
 /** Assign a repo's color identity (#35). */
 export const setRepoColor = (path: string, color: string) =>
   invoke<void>("set_repo_color", { path, color });
+
+/** Per-repo Overview panel layouts, path → panels (#38). */
+export const listOverviewPanels = () =>
+  invoke<Record<string, OverviewPanel[]>>("list_overview_panels");
+
+/** Replace a repo's Overview panel layout (#38). */
+export const setOverviewPanels = (path: string, panels: OverviewPanel[]) =>
+  invoke<void>("set_overview_panels", { path, panels });
 
 export const openInEditor = (cwd: string) =>
   invoke<void>("open_in_editor", { cwd });

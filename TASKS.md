@@ -2489,9 +2489,9 @@ identity is consistent across views. Add a colored repo badge to the Focus toolb
 
 ---
 
-### 38. [ ] Customizable Overview: mixed panels (agent / diff / markdown columns)
+### 38. [x] Customizable Overview: mixed panels (agent / diff / markdown columns)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #36
 **Created:** 2026-06-19
 
@@ -2521,28 +2521,28 @@ task** — it must be planned carefully; the diff and markdown panel *types* are
 
 **Subtasks**
 
-1. [ ] Define the panel model + store state (`overviewPanels` per repo) and a backend
+1. [x] Define the panel model + store state (`overviewPanels` per repo) and a backend
    persisted layout (extend `store.rs`); load on init. Actions: add/remove/reorder
    extra panels.
-2. [ ] Refactor `Overview.tsx` to render the grouped agent panels (from #36) **plus**
+2. [x] Refactor `Overview.tsx` to render the grouped agent panels (from #36) **plus**
    the repo's extra panels as additional columns, with a shared column/card chrome
    (header with title + close + move controls). Extract a `PanelColumn` wrapper.
-3. [ ] **Agent panel type:** wrap the existing terminal `SessionCard` as the `agent`
+3. [x] **Agent panel type:** wrap the existing terminal `SessionCard` as the `agent`
    panel; it must keep using the persistent terminal pool (#18) — reflowing columns
    (add/remove/reorder) must **never dispose/recreate** a terminal.
-4. [ ] Define clean extension points so #39 (diff) and #41 (markdown) only implement
+4. [x] Define clean extension points so #39 (diff) and #41 (markdown) only implement
    their panel body + a context-menu "open" action, without re-touching layout.
-5. [ ] Respect the repo filter (#34/#36): a filtered view shows that repo's agent +
+5. [x] Respect the repo filter (#34/#36): a filtered view shows that repo's agent +
    extra panels only.
 
 **Acceptance criteria**
 
-- [ ] Overview renders mixed columns: agent terminals and (once #39/#41 land) diff /
+- [x] Overview renders mixed columns: agent terminals and (once #39/#41 land) diff /
   markdown panels, grouped by repo.
-- [ ] Extra panels can be added, closed, and reordered; the layout persists across
+- [x] Extra panels can be added, closed, and reordered; the layout persists across
   restart.
-- [ ] Reflowing columns never garbles or remounts terminals (pool intact).
-- [ ] Build/lint/tests green.
+- [x] Reflowing columns never garbles or remounts terminals (pool intact).
+- [x] Build/lint/tests green.
 
 **Notes**
 
@@ -2552,6 +2552,33 @@ task** — it must be planned carefully; the diff and markdown panel *types* are
   keeping the terminal pool's reparenting correct as columns are added/removed/reordered
   — model panels as stable keyed entries so React/the pool don't tear terminals down.
   This is the base for #39 and #41.
+- **Done 2026-06-19.** **Model + persistence:** `store.rs` gained
+  `OverviewPanel { id, kind, file? }` and `#[serde(default)] overview_panels:
+  HashMap<repo → Vec<OverviewPanel>>` (default keeps old files loading) +
+  `overview_panels()` / `set_overview_panels(path, panels)` (atomic; an empty list
+  drops the repo entry). Commands `list_overview_panels` / `set_overview_panels`
+  registered. **+1 store test** → 29 Rust. **Store (frontend):** `overviewPanels` +
+  **optimistic** `addOverviewPanel(repoPath, kind, file?)` (id via `crypto.randomUUID`)
+  / `removeOverviewPanel` / `moveOverviewPanel(repoPath, id, delta)` (bounded swap), each
+  recomputing the repo's ordered list and persisting it; loaded in `refresh` alongside
+  colors. **+2 tests** (remove-then-empty-drops, bounded move) → 43 frontend. **Layout:**
+  extracted a **`PanelColumn`** wrapper (the shared card chrome — repo-color top band,
+  header `title`+`actions`, body) used by **both** the agent `SessionCard` (now wrapping
+  it, terminal as the body) and the new `ExtraPanel` (placeholder body + move-left/right
+  + close, buttons disabled at the ends). `Overview` flattens to columns per repo —
+  `[agent terminals…][extra panels…]` — grouped/ordered per #36, with `groupStart`
+  dividers, respecting the #34/#36 filter. **Pool intact:** columns keep stable keys
+  (`session.id` / `panel.id`), so add/remove/reorder **reorders** the DOM (React moves
+  nodes) and the #18 pool keeps every xterm alive — never dispose/recreate; #23 selection
+  unaffected. **Extension points (subtask 4):** #39/#41 only need to (a) add a repo
+  context-menu item calling `addOverviewPanel(repo, "diff"|"markdown", file?)` and (b)
+  replace `ExtraPanel`'s placeholder body with a `kind`-case — no layout/plumbing change.
+  (Per the task, the *add-trigger* menu items are intentionally #39/#41's; #38 ships the
+  model/persistence/layout/close/reorder. The placeholder columns render once a panel
+  exists.) **Hard gate green:** Rust `fmt`/`clippy`/`test` (29) + frontend `build`/`lint`/
+  `format:check`/`test` (43). Persistence + add/remove/move logic is unit-tested; the
+  mixed-column layout is runtime-visual, not launched headlessly; the no-remount
+  guarantee is by construction (stable keys + #18 pool).
 
 ---
 

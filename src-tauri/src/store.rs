@@ -30,6 +30,18 @@ pub struct PersistedSession {
     pub created_at: u64,
 }
 
+/// A user-added Overview panel (a non-agent column), persisted per repo (#38).
+/// Agent panels are derived from live sessions and are not stored here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OverviewPanel {
+    pub id: String,
+    /// `"diff"` (#39) or `"markdown"` (#41).
+    pub kind: String,
+    /// Panel parameter, e.g. the markdown file path; `None` for a diff panel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+}
+
 /// The on-disk shape of the persistence file.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersistedState {
@@ -41,6 +53,9 @@ pub struct PersistedState {
     /// older files (without this field) loading cleanly.
     #[serde(default)]
     pub repo_colors: HashMap<String, String>,
+    /// Per-repo ordered list of extra Overview panels (#38).
+    #[serde(default)]
+    pub overview_panels: HashMap<String, Vec<OverviewPanel>>,
 }
 
 /// Thread-safe persistent store backed by a JSON file.
@@ -122,6 +137,23 @@ impl Store {
             state
                 .repo_colors
                 .insert(path.to_string(), color.to_string());
+        })
+    }
+
+    /// All per-repo Overview panel layouts (#38).
+    pub fn overview_panels(&self) -> HashMap<String, Vec<OverviewPanel>> {
+        self.with(|state| state.overview_panels.clone())
+    }
+
+    /// Replace a repo's Overview panel list and persist (#38); an empty list
+    /// drops the entry so the map stays tidy.
+    pub fn set_overview_panels(&self, path: &str, panels: Vec<OverviewPanel>) -> io::Result<()> {
+        self.update(|state| {
+            if panels.is_empty() {
+                state.overview_panels.remove(path);
+            } else {
+                state.overview_panels.insert(path.to_string(), panels);
+            }
         })
     }
 
@@ -209,6 +241,35 @@ mod tests {
         let colors = reloaded.repo_colors();
         assert_eq!(colors.get("/repo/a").map(String::as_str), Some("#a6e3a1"));
         assert_eq!(colors.get("/repo/b").map(String::as_str), Some("#fab387"));
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn overview_panels_set_and_persist() {
+        let path = temp_path("panels");
+        let store = Store::load(&path);
+        let panels = vec![
+            OverviewPanel {
+                id: "p1".into(),
+                kind: "diff".into(),
+                file: None,
+            },
+            OverviewPanel {
+                id: "p2".into(),
+                kind: "markdown".into(),
+                file: Some("README.md".into()),
+            },
+        ];
+        store
+            .set_overview_panels("/repo/a", panels.clone())
+            .unwrap();
+
+        let reloaded = Store::load(&path);
+        assert_eq!(reloaded.overview_panels().get("/repo/a"), Some(&panels));
+
+        // An empty list drops the repo's entry.
+        store.set_overview_panels("/repo/a", vec![]).unwrap();
+        assert!(!Store::load(&path).overview_panels().contains_key("/repo/a"));
         let _ = fs::remove_file(&path);
     }
 

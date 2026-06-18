@@ -31,6 +31,7 @@ beforeEach(() => {
     recents: [],
     branches: {},
     repoColors: {},
+    overviewPanels: {},
     claudeMissing: false,
     toasts: [],
     newSessionOpen: false,
@@ -269,6 +270,37 @@ describe("dedupeBranchLabels", () => {
 
   it("returns an empty array for no sessions", () => {
     expect(dedupeBranchLabels([])).toEqual([]);
+  });
+});
+
+describe("overview panels (#38)", () => {
+  const panels = [
+    { id: "p1", kind: "diff" as const },
+    { id: "p2", kind: "markdown" as const, file: "a.md" },
+    { id: "p3", kind: "markdown" as const, file: "b.md" },
+  ];
+
+  it("removes a panel and drops the repo entry when empty", async () => {
+    useStore.setState({ overviewPanels: { "/repo/a": [...panels] } });
+    await useStore.getState().removeOverviewPanel("/repo/a", "p2");
+    expect(
+      useStore.getState().overviewPanels["/repo/a"]?.map((p) => p.id),
+    ).toEqual(["p1", "p3"]);
+    await useStore.getState().removeOverviewPanel("/repo/a", "p1");
+    await useStore.getState().removeOverviewPanel("/repo/a", "p3");
+    expect(useStore.getState().overviewPanels["/repo/a"]).toBeUndefined();
+  });
+
+  it("moves a panel within the repo, bounded (no-op past the ends)", async () => {
+    useStore.setState({ overviewPanels: { "/repo/a": [...panels] } });
+    await useStore.getState().moveOverviewPanel("/repo/a", "p1", 1);
+    expect(
+      useStore.getState().overviewPanels["/repo/a"]?.map((p) => p.id),
+    ).toEqual(["p2", "p1", "p3"]);
+    await useStore.getState().moveOverviewPanel("/repo/a", "p2", -1); // already first
+    expect(
+      useStore.getState().overviewPanels["/repo/a"]?.map((p) => p.id),
+    ).toEqual(["p2", "p1", "p3"]);
   });
 });
 

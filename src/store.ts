@@ -9,6 +9,7 @@ import { emitSessionOutput } from "./outputBus";
 import { repoName } from "./paths";
 import * as updater from "./updater";
 import type {
+  OverviewPanel,
   SessionRecord,
   SessionView,
   Toast,
@@ -169,6 +170,8 @@ export interface AppState {
   branches: Record<string, string>;
   /** Assigned per-repo colors, path → hex (#35); unassigned repos derive a default. */
   repoColors: Record<string, string>;
+  /** Per-repo ordered list of extra (non-agent) Overview panels (#38). */
+  overviewPanels: Record<string, OverviewPanel[]>;
   claudeMissing: boolean;
   toasts: Toast[];
   /** New session modal (rendered by #10); `newSessionRepo` optionally prefills it. */
@@ -213,6 +216,18 @@ export interface AppState {
   refreshBranches: () => Promise<void>;
   /** Assign a repo's color (optimistic + persisted) (#35). */
   setRepoColor: (path: string, color: string) => Promise<void>;
+  /** Add / close / reorder a repo's extra Overview panels (optimistic + persisted, #38). */
+  addOverviewPanel: (
+    repoPath: string,
+    kind: OverviewPanel["kind"],
+    file?: string,
+  ) => Promise<void>;
+  removeOverviewPanel: (repoPath: string, id: string) => Promise<void>;
+  moveOverviewPanel: (
+    repoPath: string,
+    id: string,
+    delta: number,
+  ) => Promise<void>;
   checkForUpdate: () => Promise<void>;
   installUpdate: () => Promise<void>;
   /** Optionally `git checkout <branch>` first (#27); resolves true on success. */
@@ -238,6 +253,7 @@ export const useStore = create<AppState>()((set, get) => ({
   recents: [],
   branches: {},
   repoColors: {},
+  overviewPanels: {},
   claudeMissing: false,
   toasts: [],
   newSessionOpen: false,
@@ -404,11 +420,16 @@ export const useStore = create<AppState>()((set, get) => ({
     } catch {
       // Backend unreachable (e.g. running outside Tauri).
     }
-    // Repo colors load independently so a failure here doesn't block sessions.
+    // Repo colors + Overview panel layouts load independently so a failure here
+    // doesn't block sessions.
     try {
-      set({ repoColors: await ipc.listRepoColors() });
+      const [colors, panels] = await Promise.all([
+        ipc.listRepoColors(),
+        ipc.listOverviewPanels(),
+      ]);
+      set({ repoColors: colors, overviewPanels: panels });
     } catch {
-      // Backend unreachable; leave colors as-is.
+      // Backend unreachable; leave colors/panels as-is.
     }
   },
 
@@ -431,6 +452,58 @@ export const useStore = create<AppState>()((set, get) => ({
       await ipc.setRepoColor(path, color);
     } catch {
       // Persist failed (e.g. outside Tauri); the local color stays for the session.
+    }
+  },
+
+  // Extra Overview panels (#38) — each action recomputes the repo's ordered list,
+  // updates optimistically, and persists the whole list for that repo.
+  addOverviewPanel: async (repoPath, kind, file) => {
+    const panel: OverviewPanel = {
+      id: crypto.randomUUID(),
+      kind,
+      ...(file ? { file } : {}),
+    };
+    const next = [...(get().overviewPanels[repoPath] ?? []), panel];
+    set((s) => ({
+      overviewPanels: { ...s.overviewPanels, [repoPath]: next },
+    }));
+    try {
+      await ipc.setOverviewPanels(repoPath, next);
+    } catch {
+      // Persist failed (e.g. outside Tauri); keep the local layout for the session.
+    }
+  },
+
+  removeOverviewPanel: async (repoPath, id) => {
+    const next = (get().overviewPanels[repoPath] ?? []).filter(
+      (p) => p.id !== id,
+    );
+    set((s) => {
+      const map = { ...s.overviewPanels };
+      if (next.length) map[repoPath] = next;
+      else delete map[repoPath];
+      return { overviewPanels: map };
+    });
+    try {
+      await ipc.setOverviewPanels(repoPath, next);
+    } catch {
+      // ignore
+    }
+  },
+
+  moveOverviewPanel: async (repoPath, id, delta) => {
+    const list = [...(get().overviewPanels[repoPath] ?? [])];
+    const i = list.findIndex((p) => p.id === id);
+    const a = list[i];
+    const b = list[i + delta];
+    if (!a || !b) return; // not found / out of bounds — no-op
+    list[i] = b;
+    list[i + delta] = a;
+    set((s) => ({ overviewPanels: { ...s.overviewPanels, [repoPath]: list } }));
+    try {
+      await ipc.setOverviewPanels(repoPath, list);
+    } catch {
+      // ignore
     }
   },
 

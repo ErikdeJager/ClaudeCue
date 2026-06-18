@@ -27,6 +27,14 @@ export interface BranchList {
   all: string[];
 }
 
+/** A user-added Overview panel — a non-agent column (mirrors `store::OverviewPanel`, #38). */
+export interface OverviewPanel {
+  id: string;
+  kind: "diff" | "markdown";
+  /** Panel parameter, e.g. the markdown file path; absent for a diff panel. */
+  file?: string;
+}
+
 export type FileStatusCode = "M" | "A" | "D";
 export type HunkLineKind = "hunk" | "context" | "add" | "del";
 
