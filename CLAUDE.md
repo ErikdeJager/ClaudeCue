@@ -127,10 +127,15 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   to avoid re-render storms.
 - **Sessions & resume:** each session is a `claude` PTY. New sessions are spawned
   as `claude --session-id <uuid>` (we own the id); on boot they resume via
-  `claude --resume <uuid>`. Session metadata + recent dirs persist to
-  `sessions.json` in the app-data dir (`store.rs`). `Remove` = kill + delete the
-  record. If a future `claude` version changes these flags, update `pty.rs`
-  (`spawn_session` / `resume_session`) and note it here.
+  `claude --resume <uuid>`. **These flags are verified** against the real CLI
+  (claude 2.1.x, #30): the id round-trips, and `--resume` of an unknown id exits 1
+  ("No conversation found"). On boot, persisted sessions show a neutral
+  **"reconnecting"** state (not an error) until their first output / a real exit;
+  a failed resume shows that one terminal's exit overlay + Restart, not a toast
+  wall. Session metadata + recent dirs persist to `sessions.json` in the app-data
+  dir (`store.rs`). `Remove` = kill + delete the record. If a future `claude`
+  version changes these flags, update `pty.rs` (`spawn_session` /
+  `resume_session`) and note it here.
 - **Window chrome:** the **standard native macOS title bar** (#19) — native
   traffic lights, native title (`title: "ClaudeCue"`), native drag, no custom
   positioning. The window config carries no `titleBarStyle`/`hiddenTitle`/

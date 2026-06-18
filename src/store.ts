@@ -17,7 +17,16 @@ import type {
 } from "./types";
 
 const TOAST_TTL_MS = 3500;
+// Boot resume window (#30): clear any lingering "reconnecting" flag after this in
+// case a resumed session's first output raced the event listener (its scrollback
+// still replays the conversation; no live output then arrives to clear the flag).
+const RECONNECT_BACKSTOP_MS = 4000;
 let toastSeq = 0;
+// True during the boot resume window. A boot-resume failure prints its error
+// (e.g. "No conversation found") then exits — both arrive here — so exit toasts
+// are suppressed during this window to avoid a wall of them (#30). Module-local
+// (no component reacts to it), like `toastSeq`.
+let booting = false;
 
 function toSessionView(record: SessionRecord): SessionView {
   return {
@@ -131,6 +140,8 @@ export interface AppState {
   dropSession: (id: string) => void;
   markExited: (id: string, code: number | null) => void;
   markRunning: (id: string) => void;
+  /** Clear the boot "reconnecting" flag once a session proves it's live (#30). */
+  markConnected: (id: string) => void;
   setClaudeMissing: (missing: boolean) => void;
   pushToast: (message: string, tone?: ToastTone) => string;
   dismissToast: (id: string) => void;
@@ -212,14 +223,21 @@ export const useStore = create<AppState>()((set, get) => ({
   markExited: (id, code) =>
     set((s) => ({
       sessions: s.sessions.map((x) =>
-        x.id === id ? { ...x, exitedCode: code } : x,
+        x.id === id ? { ...x, exitedCode: code, reconnecting: false } : x,
       ),
     })),
 
   markRunning: (id) =>
     set((s) => ({
       sessions: s.sessions.map((x) =>
-        x.id === id ? { ...x, exitedCode: undefined } : x,
+        x.id === id ? { ...x, exitedCode: undefined, reconnecting: false } : x,
+      ),
+    })),
+
+  markConnected: (id) =>
+    set((s) => ({
+      sessions: s.sessions.map((x) =>
+        x.id === id ? { ...x, reconnecting: false } : x,
       ),
     })),
 
@@ -245,13 +263,25 @@ export const useStore = create<AppState>()((set, get) => ({
   init: async () => {
     try {
       await ipc.subscribeSessionEvents({
-        onOutput: ({ id, bytes }) =>
-          emitSessionOutput(id, Uint8Array.from(bytes)),
+        onOutput: ({ id, bytes }) => {
+          emitSessionOutput(id, Uint8Array.from(bytes));
+          // First live output proves a reconnecting session is alive — clear the
+          // flag. A plain read keeps output off the re-render path; the setter
+          // only runs on the one transition (#30).
+          if (get().sessions.find((x) => x.id === id)?.reconnecting) {
+            get().markConnected(id);
+          }
+        },
         onExited: ({ id, code }) => {
+          // A boot-resume that fails (e.g. no saved conversation) shows its state
+          // in the terminal + a Restart — don't pile onto a toast wall during the
+          // boot window. Genuine runtime exits (after boot) still toast.
           get().markExited(id, code);
-          get().pushToast(
-            code != null ? `Session exited (code ${code})` : "Session exited",
-          );
+          if (!booting) {
+            get().pushToast(
+              code != null ? `Session exited (code ${code})` : "Session exited",
+            );
+          }
         },
       });
     } catch {
@@ -267,8 +297,30 @@ export const useStore = create<AppState>()((set, get) => ({
         ipc.listSessions(),
         ipc.listRecents(),
       ]);
-      set({ sessions: records.map(toSessionView), recents });
-      // Branch labels are refreshed by the sidebar when the repo set changes.
+      // Persisted sessions are resumed on boot (claude --resume) — show them as
+      // "reconnecting" (neutral) until their first output / a real exit, never as
+      // a wall of errors (#30). Branch labels refresh from the sidebar.
+      booting = records.length > 0;
+      set({
+        sessions: records.map((r) => ({
+          ...toSessionView(r),
+          reconnecting: true,
+        })),
+        recents,
+      });
+      // End the boot window: stop suppressing exit toasts, and clear any flag
+      // still set (e.g. a resumed session whose first output raced the listener —
+      // its scrollback still replays the conversation).
+      setTimeout(() => {
+        booting = false;
+        if (get().sessions.some((x) => x.reconnecting)) {
+          set((s) => ({
+            sessions: s.sessions.map((x) =>
+              x.reconnecting ? { ...x, reconnecting: false } : x,
+            ),
+          }));
+        }
+      }, RECONNECT_BACKSTOP_MS);
     } catch {
       // Backend unreachable (e.g. running outside Tauri).
     }

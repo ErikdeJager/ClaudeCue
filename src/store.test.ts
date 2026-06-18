@@ -84,6 +84,19 @@ describe("app store", () => {
     expect(useStore.getState().view).toBe("overview");
   });
 
+  it("markConnected clears the boot reconnecting flag (#30)", () => {
+    useStore.setState({ sessions: [{ ...session("s1"), reconnecting: true }] });
+    useStore.getState().markConnected("s1");
+    expect(useStore.getState().sessions[0]?.reconnecting).toBe(false);
+  });
+
+  it("markExited clears reconnecting and records the exit code", () => {
+    useStore.setState({ sessions: [{ ...session("s1"), reconnecting: true }] });
+    useStore.getState().markExited("s1", 1);
+    expect(useStore.getState().sessions[0]?.reconnecting).toBe(false);
+    expect(useStore.getState().sessions[0]?.exitedCode).toBe(1);
+  });
+
   it("toggles the inspector", () => {
     expect(useStore.getState().inspectorOpen).toBe(false);
     useStore.getState().toggleInspector();

@@ -91,4 +91,6 @@ export interface SessionView {
   createdAt: number;
   /** Set once the underlying process has exited. */
   exitedCode?: number | null;
+  /** True while a persisted session is being resumed on boot (#30). */
+  reconnecting?: boolean;
 }

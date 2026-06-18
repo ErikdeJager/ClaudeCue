@@ -19,9 +19,9 @@ interface TerminalProps {
  */
 function Terminal({ sessionId }: TerminalProps) {
   const slotRef = useRef<HTMLDivElement>(null);
-  const exitedCode = useStore(
-    (s) => s.sessions.find((x) => x.id === sessionId)?.exitedCode,
-  );
+  const session = useStore((s) => s.sessions.find((x) => x.id === sessionId));
+  const exitedCode = session?.exitedCode;
+  const reconnecting = session?.reconnecting;
   const restartSession = useStore((s) => s.restartSession);
 
   useEffect(() => {
@@ -34,6 +34,11 @@ function Terminal({ sessionId }: TerminalProps) {
   return (
     <div className={styles.wrapper}>
       <div ref={slotRef} className={styles.slot} />
+      {exitedCode === undefined && reconnecting && (
+        <div className={styles.exitOverlay}>
+          <p className={styles.exitText}>Reconnecting…</p>
+        </div>
+      )}
       {exitedCode !== undefined && (
         <div className={styles.exitOverlay}>
           <p className={styles.exitText}>

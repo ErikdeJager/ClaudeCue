@@ -153,7 +153,10 @@ impl SessionManager {
     }
 
     /// Resume a previously-persisted `claude` session by id (used on boot) via
-    /// `claude --resume <claude_session_id>`.
+    /// `claude --resume <claude_session_id>`. Verified against the real CLI
+    /// (claude 2.1.x, #30): `--session-id` / `--resume` round-trip; resuming an
+    /// unknown id exits 1 ("No conversation found"), which the UI surfaces as a
+    /// per-session Restart rather than a fatal error.
     pub fn resume_session(
         &self,
         claude_session_id: &str,
