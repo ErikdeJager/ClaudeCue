@@ -207,9 +207,9 @@ must be draggable to move the window.
 
 ---
 
-### 4. [ ] Rust session/PTY core
+### 4. [x] Rust session/PTY core
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #1
 **Created:** 2026-06-18
 
@@ -222,31 +222,43 @@ terminal pipe.
 
 **Subtasks**
 
-1. [ ] Add `portable-pty`; implement a session manager holding a registry of
+1. [x] Add `portable-pty`; implement a session manager holding a registry of
    sessions keyed by an internal session id.
-2. [ ] `spawn_session(cwd, name?)`: open a PTY and launch `claude` in `cwd`; capture
+2. [x] `spawn_session(cwd, name?)`: open a PTY and launch `claude` in `cwd`; capture
    a stable session id for resume (task #5). Run `claude` directly (interactive).
-3. [ ] Stream PTY stdout/stderr to the frontend via a Tauri event per session
+3. [x] Stream PTY stdout/stderr to the frontend via a Tauri event per session
    (e.g. `session://output` with `{ id, bytes }`); keep a bounded scrollback buffer
    server-side for late subscribers.
-4. [ ] Commands: `write_stdin(id, data)`, `resize_pty(id, cols, rows)`,
+4. [x] Commands: `write_stdin(id, data)`, `resize_pty(id, cols, rows)`,
    `kill_session(id)`, plus `open_in_editor(cwd)` that shells out to `zed <cwd>`.
-5. [ ] Detect a missing/unrunnable `claude` binary on `PATH` and return a typed
+5. [x] Detect a missing/unrunnable `claude` binary on `PATH` and return a typed
    error the frontend can surface; detect child exit and emit an `exited` event with
    the exit code.
-6. [ ] Unit-test the manager: spawn lifecycle, stdin→stdout round-trip (using a
+6. [x] Unit-test the manager: spawn lifecycle, stdin→stdout round-trip (using a
    simple shell/echo in tests), resize, kill, and the missing-binary error path.
 
 **Acceptance criteria**
 
-- [ ] A spawned process streams output to the frontend and receives stdin.
-- [ ] Killing a session terminates its child and frees the slot.
-- [ ] Missing `claude` yields a clear, typed error (no panic/crash).
-- [ ] Manager unit tests pass.
+- [x] A spawned process streams output to the frontend and receives stdin.
+- [x] Killing a session terminates its child and frees the slot.
+- [x] Missing `claude` yields a clear, typed error (no panic/crash).
+- [x] Manager unit tests pass.
 
 **Notes**
 
 - Resume needs a known session id — see #5 for capturing/persisting it.
+- **Done 2026-06-18.** Core in `src-tauri/src/pty.rs` (`SessionManager`,
+  `Scrollback` ring buffer, typed `SessionError` serialized as `{ kind, message }`),
+  decoupled from Tauri via an `mpsc` channel of `SessionEvent` (Output/Exited).
+  `src/commands.rs` wraps it as Tauri commands; `src/lib.rs` builds the manager in
+  `setup` and forwards the channel to `session://output` / `session://exited`.
+  Deps: `portable-pty 0.9`, `uuid` (v4 internal id), `thiserror`. **7 unit tests
+  pass** (bounded scrollback, missing-binary error, output streaming + exit code,
+  stdin round-trip via `cat`, resize ok/unknown-id, kill frees slot, scrollback
+  replay), exercising the manager with `sh`/`cat` — no `claude` needed. Verified
+  `cargo test` + `cargo clippy -D warnings` + `cargo fmt --check`. The internal id
+  is a stable UUID; wiring it to `claude --session-id`/`--resume` is **#5**. The
+  Tauri event emission + commands compile but were not launched in a live window.
 
 ---
 
