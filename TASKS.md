@@ -406,3 +406,93 @@ toggle between indicator styles (no settings screen in v1); the Canvas panel hea
 - Implementer latitude: exact sheen geometry/timing is yours to tune. If a literal sweep is too
   subtle at 12px, a soft **traveling glint/glow** is an acceptable realization — the bar is "not a
   spinner, reads as a shimmer, idle↔busy cohere, no layout shift."
+
+---
+
+### 89. [ ] New-session branch step: drop the acknowledgement checkbox + fix the clipped action buttons
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Two fixes to the new-session panel's **branch step** (`NewSessionModal`, #66), seen when checking
+out a **non-current branch while an agent is running in the folder** (the destructive-checkout
+case, #27):
+
+1. **Drop the acknowledgement checkbox.** Today the warning embeds a `Checkbox` (#52) that **gates**
+   the primary button (`canCreate = … && (!isDestructive || acknowledged)`), so the user must tick
+   it to proceed. Remove the checkbox **and the gate** — the **warning becomes informational only**
+   (the warning-triangle icon + the same message text), still shown in the destructive case, and the
+   primary button is always enabled (subject only to the usual `cwd` / `busy` checks).
+
+2. **Fix the clipped action buttons.** The panel is a fixed **300px** (`.popover`); the branch-step
+   action row has **three** buttons — `Cancel` / `Worktree` / primary — in a **non-wrapping** flex
+   row, and the long **"Checkout & start"** label overflows the panel so the last button is clipped
+   outside it. Fix by **(a)** renaming the branch-step primary button to just **"Start"** — always,
+   even when a checkout will happen (the checkout still occurs; the warning covers the running-agents
+   case) — and **(b)** hardening the `.actions` layout so it can **never** overflow regardless of
+   label/locale (e.g. allow it to wrap to a second line and/or compact the buttons), keeping the
+   right alignment.
+
+**Scope:** the `NewSessionModal` component + its CSS only. The reusable **`Checkbox` component (#52)
+is kept** — it just becomes unused (this modal is currently its only caller).
+
+**Decisions (requester):**
+- Primary button: **always "Start"** in the branch step.
+- Layout: **rename + harden** the action row so it never clips.
+- Checkbox: **remove the usage + the gate**, keep the warning text, **keep** the Checkbox component.
+
+**Concrete changes (grounding):**
+- `NewSessionModal.tsx`: remove the `acknowledged` state and all `setAcknowledged(...)` calls;
+  `canCreate` → `!!cwd && !busy` (drop the `(!isDestructive || acknowledged)` gate); replace the
+  `<Checkbox …>` inside the `.warning` block with a plain text span (icon + the existing message),
+  and remove the `Checkbox` import; branch-step primary label → `"Start"` (was
+  `willCheckout ? "Checkout & start" : "Start"`), keeping the `⏎` hint. `willCheckout` is still used
+  to pass the branch to `spawnSession`, and `isDestructive` still decides whether the warning shows.
+- `NewSessionModal.module.css`: make `.actions` robust (e.g. `flex-wrap: wrap` and/or compact
+  padding) so three buttons never overflow 300px; remove the now-unused `.warnCheckbox` rule and
+  update the `.warning` comment ("the checkbox gates Start" → informational).
+
+**Out of scope:** widening the 300px panel as the primary fix (allowed only if the implementer
+finds wrapping insufficient); changing the folder-step buttons; deleting the `Checkbox` component;
+the worktree (⌘⏎) behaviour itself.
+
+**Subtasks**
+
+1. [ ] Remove the acknowledgement checkbox + gate: delete `acknowledged` state + `setAcknowledged`
+   calls; `canCreate = !!cwd && !busy`; render the warning as icon + text (no `Checkbox`); drop the
+   `Checkbox` import.
+2. [ ] Branch-step primary button → always **"Start"** (keep the `⏎` hint); `willCheckout` still
+   drives the actual checkout passed to `spawnSession`.
+3. [ ] Harden `.actions` so `Cancel` / `Worktree` / `Start` never clip in the 300px panel (wrap
+   and/or compact, right-aligned); remove the unused `.warnCheckbox` CSS and fix the `.warning`
+   comment.
+4. [ ] Keep the reusable `Checkbox` component (#52) in place (now unused).
+5. [ ] `npm run build`, `npm run lint`, `npm test` pass; manually verify the destructive scenario
+   (non-current branch + a running agent in the folder): warning shows with **no checkbox**, "Start"
+   enabled, and **all buttons fully visible** (no clipping).
+
+**Acceptance criteria**
+
+- [ ] In the branch step, selecting a non-current branch with a running agent in the folder shows the
+  warning as **informational text (no checkbox)**, and the primary button is **enabled without any
+  acknowledgement**.
+- [ ] The branch-step primary button always reads **"Start"** (with the `⏎` hint); choosing a
+  non-current branch still checks it out before starting.
+- [ ] All action buttons (`Cancel` / `Worktree` / `Start`) are **fully visible within the 300px
+  panel** — nothing clipped — including when the row wraps.
+- [ ] The reusable `Checkbox` component still exists; `npm run build`, `npm run lint`, and `npm test`
+  all pass.
+
+**Notes**
+
+- Reported via screenshot: branch step for folder "standings", branch "temporary" (non-current) with
+  1 running agent → a warning with a checkbox, and "Checkout & start" clipped outside the panel.
+- Root cause of clipping: `.popover` `width: 300px` + a non-wrapping `.actions` row of three buttons;
+  the long "Checkout & start" label overflows (renaming to "Start" helps but isn't guaranteed
+  sufficient on its own — hence hardening the layout).
+- Touches `NewSessionModal` only (#66/#27/#52/#74); independent of the open tasks (#84, #88).
+- Trade-off accepted by the requester: "always Start" drops the explicit "a checkout will happen"
+  cue in the **non-destructive** checkout case (non-current branch, no running agents → no warning).
