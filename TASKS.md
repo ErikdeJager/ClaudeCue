@@ -2582,9 +2582,9 @@ task** — it must be planned carefully; the diff and markdown panel *types* are
 
 ---
 
-### 39. [ ] Diff-viewer column in Overview (from the repo context menu)
+### 39. [x] Diff-viewer column in Overview (from the repo context menu)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #38, #31
 **Created:** 2026-06-19
 
@@ -2598,23 +2598,23 @@ the branch it's working on.
 
 **Subtasks**
 
-1. [ ] **Extract a reusable diff component** from `src/components/DiffInspector/
+1. [x] **Extract a reusable diff component** from `src/components/DiffInspector/
    DiffInspector.tsx` (summary + file list + unified/split body) so it can render both
    in the Focus inspector and as an Overview column (avoid duplication).
-2. [ ] Implement the `diff` panel body using that component, bound to the panel's
+2. [x] Implement the `diff` panel body using that component, bound to the panel's
    `repoPath`; auto-refresh using the #29 polling approach (poll while visible/window
    focused; manual refresh kept).
-3. [ ] Wire the repo context-menu item "Open diff viewer" (#31 menu) → add a `diff`
+3. [x] Wire the repo context-menu item "Open diff viewer" (#31 menu) → add a `diff`
    extra panel for that repo (#38 add action).
-4. [ ] Panel header shows repo name + branch + the repo color badge (#35); closeable
+4. [x] Panel header shows repo name + branch + the repo color badge (#35); closeable
    and reorderable via the #38 chrome.
 
 **Acceptance criteria**
 
-- [ ] "Open diff viewer" on a repo adds a diff column in Overview for that repo.
-- [ ] The column shows the live working diff (auto-refresh), titled with repo/branch +
+- [x] "Open diff viewer" on a repo adds a diff column in Overview for that repo.
+- [x] The column shows the live working diff (auto-refresh), titled with repo/branch +
   color; close/reorder work.
-- [ ] Diff rendering is shared with the Focus inspector (no duplicated logic).
+- [x] Diff rendering is shared with the Focus inspector (no duplicated logic).
 
 **Notes**
 
@@ -2623,6 +2623,26 @@ the branch it's working on.
   (context-menu item), `src/store.ts`, reuse `working_diff` (`git.rs`) + #29 polling.
   Branch is the repo's current branch (per-folder); the diff reflects whatever is
   checked out (see #27).
+- **Done 2026-06-19.** **Subtask 1 — no extraction needed:** `DiffInspector` is already
+  parameterized by `{ repoPath, active }` and fully self-contained (summary + file list
+  + unified/split body + #29 polling + manual Refresh), i.e. it *is* the reusable diff
+  component — so the Overview diff panel **reuses it directly** (`import DiffInspector`),
+  zero duplication. **Subtask 2:** `ExtraPanel`'s `kind === "diff"` body renders
+  `<DiffInspector repoPath={repoPath} active />` — `active` drives the #29 auto-poll, and
+  because the panel is keyed by `panel.id`, a reorder *moves* the DOM node (no remount →
+  no diff refetch). **Subtask 3:** the #31 repo context menu gained an **"Open diff
+  viewer"** item → `addOverviewPanel(repo, "diff")` (deduped — only if the repo has no
+  diff panel yet) then `setView("overview")` so the new column is visible. **Subtask 4:**
+  the panel header shows `Diff` + the repo badge **`repoName · branch`** + the #35 color
+  dot/top-band; close + move-left/right come from the #38 chrome. **Overview made
+  panel-aware:** the column model now includes repos that have **extra panels even with
+  no agent** (so "Open diff viewer" on an agent-less recents repo still shows the column),
+  and `EmptyState` only shows when there are truly no agents *and* no panels. **Hard gate
+  green:** frontend `build`/`lint`/`format:check`/`test` (43). Pure frontend change — no
+  Rust (reuses #38's `overview_panels` commands + `working_diff`), no new tests (reuses
+  the already-tested `DiffInspector` + #38 store actions; the menu dedupe/render are
+  visual). Runtime-visual (live diff column) not launched headlessly; the no-remount-on-
+  reorder is by construction (stable keys + #18 pool). Base for #41 (markdown column).
 
 ---
 

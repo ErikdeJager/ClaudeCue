@@ -10,6 +10,9 @@ import {
 import { repoName } from "../../paths";
 import { repoColor, useStore } from "../../store";
 import type { OverviewPanel, SessionView } from "../../types";
+// The Focus inspector's diff component is already parameterized by { repoPath,
+// active }, so the Overview diff panel (#39) reuses it directly — one source.
+import DiffInspector from "../DiffInspector/DiffInspector";
 import EmptyState from "../EmptyState/EmptyState";
 import Terminal from "../Terminal/Terminal";
 import styles from "./Overview.module.css";
@@ -150,6 +153,7 @@ function panelLabel(panel: OverviewPanel): string {
 interface ExtraPanelProps {
   panel: OverviewPanel;
   repoPath: string;
+  branch: string;
   color: string;
   groupStart: boolean;
   canMoveLeft: boolean;
@@ -162,6 +166,7 @@ interface ExtraPanelProps {
 function ExtraPanel({
   panel,
   repoPath,
+  branch,
   color,
   groupStart,
   canMoveLeft,
@@ -175,7 +180,10 @@ function ExtraPanel({
       <span className={styles.name}>{panelLabel(panel)}</span>
       <span className={styles.meta}>
         <span className={styles.metaDot} style={{ background: color }} />
-        <span className={styles.metaText}>{repoName(repoPath)}</span>
+        <span className={styles.metaText}>
+          {repoName(repoPath)}
+          {branch && ` · ${branch}`}
+        </span>
       </span>
     </>
   );
@@ -219,12 +227,14 @@ function ExtraPanel({
       title={title}
       actions={actions}
     >
-      {/* Body filled by #39 (diff) / #41 (markdown); placeholder until then. */}
-      <div className={styles.placeholder}>
-        {panel.kind === "diff"
-          ? "Diff panel — added in #39."
-          : "Markdown panel — added in #41."}
-      </div>
+      {panel.kind === "diff" ? (
+        // Reuse the Focus inspector's diff component (#39), bound to this repo
+        // and always active so it polls (#29) while the column is shown.
+        <DiffInspector repoPath={repoPath} active />
+      ) : (
+        // Markdown body filled by #41.
+        <div className={styles.placeholder}>Markdown panel — added in #41.</div>
+      )}
     </PanelColumn>
   );
 }
@@ -255,7 +265,12 @@ function Overview() {
   const removeOverviewPanel = useStore((s) => s.removeOverviewPanel);
   const moveOverviewPanel = useStore((s) => s.moveOverviewPanel);
 
-  if (sessions.length === 0) {
+  // The welcome empty state only when there's truly nothing — no agents and no
+  // extra panels (a repo can have a diff/markdown panel without an agent, #39/#41).
+  const anyPanels = Object.values(overviewPanels).some(
+    (list) => list.length > 0,
+  );
+  if (sessions.length === 0 && !anyPanels) {
     return <EmptyState onNewSession={() => openNewSession()} />;
   }
 
@@ -283,11 +298,24 @@ function Overview() {
     return a.createdAt - b.createdAt;
   });
 
-  // Distinct repos with agents, in display order.
-  const repoList: string[] = [];
-  for (const s of ordered) {
-    if (!repoList.includes(s.repoPath)) repoList.push(s.repoPath);
+  // Repos to render: those with agents, plus those with extra panels (respecting
+  // the filter) — so a diff/markdown panel shows even with no agent in the repo.
+  const repoSet = new Set<string>();
+  for (const s of ordered) repoSet.add(s.repoPath);
+  for (const repo of Object.keys(overviewPanels)) {
+    if (
+      (overviewPanels[repo]?.length ?? 0) > 0 &&
+      (!filter || repo === filter)
+    ) {
+      repoSet.add(repo);
+    }
   }
+  const repoList = [...repoSet].sort((a, b) => {
+    const byName = repoName(a)
+      .toLowerCase()
+      .localeCompare(repoName(b).toLowerCase());
+    return byName !== 0 ? byName : a.localeCompare(b);
+  });
 
   // Flatten to columns: per repo, [agent panels…] then [extra panels…] (#38).
   const columns: { repoPath: string; item: ColumnItem }[] = [];
@@ -322,8 +350,10 @@ function Overview() {
           </button>
         </div>
       )}
-      {shown.length === 0 ? (
-        <div className={styles.filterEmpty}>No agents in this repo.</div>
+      {columns.length === 0 ? (
+        <div className={styles.filterEmpty}>
+          {filter ? "Nothing to show for this repo." : "No agents yet."}
+        </div>
       ) : (
         <div className={styles.wall}>
           {columns.map((col, i) => {
@@ -353,6 +383,7 @@ function Overview() {
                 key={panel.id}
                 panel={panel}
                 repoPath={col.repoPath}
+                branch={branches[col.repoPath] ?? ""}
                 color={color}
                 groupStart={groupStart}
                 canMoveLeft={index > 0}

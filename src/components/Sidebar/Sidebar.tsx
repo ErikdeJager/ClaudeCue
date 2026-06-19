@@ -71,6 +71,8 @@ function Sidebar() {
   const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
   const repoColors = useStore((s) => s.repoColors);
   const setRepoColor = useStore((s) => s.setRepoColor);
+  const overviewPanels = useStore((s) => s.overviewPanels);
+  const addOverviewPanel = useStore((s) => s.addOverviewPanel);
 
   // Right-click repo context menu (#31/#35), anchored at the cursor. `menuMode`
   // switches between the item list, the destructive Forget confirm, and the
@@ -266,6 +268,24 @@ function Sidebar() {
               </button>
             ) : (
               <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    // Add a diff column for this repo (#39), avoiding duplicates;
+                    // switch to Overview so the new column is visible.
+                    if (
+                      !overviewPanels[menu.repo]?.some((p) => p.kind === "diff")
+                    ) {
+                      void addOverviewPanel(menu.repo, "diff");
+                    }
+                    setView("overview");
+                    closeMenu();
+                  }}
+                >
+                  Open diff viewer
+                </button>
                 <button
                   type="button"
                   role="menuitem"
