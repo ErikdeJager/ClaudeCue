@@ -175,7 +175,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 Tasks #1–#63 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. New work goes here as a fresh `### N.` entry
-in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#69**), with its
+in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#70**), with its
 `Depends on:` prerequisites.
 
 ---
@@ -464,3 +464,44 @@ Out of scope: changing what the title or "+" *do*; the session-row labels (#67).
   header vs `SessionRow`); independent.
 - Key code: `src/components/Sidebar/Sidebar.tsx` (`.repoHeader`, `.repoTitle`/`.repoActive`,
   `.plus`/`.plusCoral`), `src/components/Sidebar/Sidebar.module.css` (lines ~63–158).
+
+---
+
+### 69. [ ] File picker — remove the focus-ring border around the search input
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+In the searchable file picker (`FilePicker`, #56 — the "Search files…" popover), a thick
+accent (Peach) border wraps the search input and looks ugly (see screenshot). It is **not**
+an input border — `.search` already has `border: 0` — it's the **global `:focus-visible`
+ring** (`global.css`: `outline: 2px solid var(--accent); outline-offset: 2px`), which shows
+because the picker **auto-focuses** the search field on open.
+
+Remove that ring **for this input only**: scope an override to the picker's search field
+(e.g. `.search:focus-visible { outline: none; }` in `FilePicker.module.css`). Do **not**
+touch the global focus ring — every other control keeps it.
+
+a11y note: acceptable here because the field is the sole, auto-focused input of a dedicated
+search popover (the magnifier icon + `.searchRow` bottom border already mark it as the
+active field), so dropping the ring on this one input doesn't hurt discoverability.
+
+Out of scope: the global `:focus-visible` style and any other input's focus ring.
+
+**Acceptance criteria**
+
+- [ ] The "Search files…" input no longer shows the accent outline/border when focused
+  (including on open, when it auto-focuses).
+- [ ] The global focus-visible ring is unchanged for every other focusable control (other
+  inputs, buttons, list rows).
+- [ ] The change is scoped to `FilePicker`'s search input only.
+
+**Notes**
+
+- Key code: `src/components/FilePicker/FilePicker.module.css` (`.search`, `.searchRow`),
+  `src/styles/global.css` (lines ~60–62, the global `:focus-visible` outline — leave as is).
+- The picker is reused wherever the "Open file viewer" file search appears (#56); scoping to
+  `.search` covers all of them (the intent of "only this input field").
