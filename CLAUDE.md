@@ -41,16 +41,19 @@ clear error if it is missing).
   subscription routes output **bytes** to `outputBus.ts` (a pub/sub the xterm
   `Terminal` consumes — deliberately *not* React state) and lifecycle +
   busy/idle to the Zustand `store.ts`.
-- **Busy indicator (#42/#55/#71):** a backend monitor thread (`pty.rs`) derives each
+- **Busy indicator (#42/#55/#71/#88):** a backend monitor thread (`pty.rs`) derives each
   session's **busy/idle** from output activity (within a ~700ms window) and emits
   `session://state { id, busy }` on transitions only. So **keystroke echo doesn't
   read as busy** (#55), `write_stdin` stamps a per-session `last_input` time and the
   monitor marks busy only when output arrived ≥300ms *after* the last keystroke. The
-  store keeps `sessionBusy`; the `BusyIndicator` is a **small spinner arc** (#71) — a
-  Blue (`--status-running`) ring whose top edge rotates while busy, settling into a calm
-  static dot (`--status-idle`) when idle, **always rendered** (a full static ring under
-  reduced-motion) and placed **before the agent's name** — in the sidebar rows and
-  Overview card headers.
+  store keeps `sessionBusy`; the `BusyIndicator` is a **Claude-style shimmer** (#88,
+  supersedes #71's spinner arc) — a calm `--status-idle` dot that, while busy, turns
+  `--status-running` (Blue) with a soft sheen **sweeping across it** (animated
+  `background-position` on a `::after` sheen, the dot via `::before` — no extra DOM),
+  **always rendered** (idle dot visible) in a fixed ~12px slot so the footprint never
+  shifts, and placed **before the agent's name** — in the sidebar rows and Overview card
+  headers. Under reduced-motion the sweep is dropped, leaving a solid glowing blue dot
+  distinct from idle.
 - **Input / resize:** the `Terminal` sends keystrokes to `write_stdin` and a
   `ResizeObserver` drives `resize_pty`.
 - **Persistence / resume:** records + recents survive restarts; on boot the

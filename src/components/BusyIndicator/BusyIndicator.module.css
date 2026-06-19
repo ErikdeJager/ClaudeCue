@@ -1,49 +1,74 @@
-/* Activity indicator (#71, supersedes #55's pulsing ball): a small rotating
-   spinner arc in --status-running while the session is working, settling into a
-   calm static dot in --status-idle when idle. The ring's border space is always
-   reserved (box-sizing: border-box) so the footprint never shifts between
-   states. The global reduced-motion killswitch (global.css) stops the rotation;
-   under it the busy state shows a full static ring (see the media query). */
+/* Activity indicator (#88, supersedes the #71 spinner arc): a calm dot that gains
+   a soft Claude-style shimmer — a sheen sweeping across it — while the session is
+   working. Idle and busy share one 8px dot in a fixed 12px slot (box-sizing:
+   border-box, set globally) so the footprint never shifts between states. Only the
+   sheen's background-position animates, so the loop stays compositor-cheap with no
+   layout/paint churn. The global reduced-motion killswitch (global.css) neutralizes
+   the sweep; the media query below then hides the sheen so the busy state is a solid,
+   softly glowing --status-running dot — still clearly distinct from the calm
+   --status-idle dot. */
 .ball {
+  position: relative;
   display: inline-flex;
   width: 12px;
   height: 12px;
   flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border: 1.5px solid transparent;
-  border-radius: var(--radius-dot);
 }
 
-/* Idle: a small calm dot centered in the reserved ring footprint. */
+/* The dot: idle = a calm --status-idle dot, centered in the 12px slot. */
 .ball::before {
   content: "";
-  width: 6px;
-  height: 6px;
+  position: absolute;
+  inset: 2px;
   border-radius: var(--radius-dot);
   background: var(--status-idle);
 }
 
-/* Busy: hide the dot and spin a single-arc ring (only the top edge is colored). */
-.busy {
-  border-top-color: var(--status-running);
-  animation: busy-spin 0.7s linear infinite;
-}
-
+/* Busy: the dot turns --status-running (blue) with a soft glow so it reads as
+   active even between sheen passes. */
 .busy::before {
-  display: none;
+  background: var(--status-running);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--status-running) 60%, transparent);
 }
 
-@keyframes busy-spin {
+/* The sheen overlay, clipped to the dot. Idle: invisible. */
+.ball::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: var(--radius-dot);
+  opacity: 0;
+}
+
+/* Busy: a bright band sweeps across the dot via an animated background-position
+   (compositor-cheap, no repaint). Geometry/timing is tunable. */
+.busy::after {
+  opacity: 1;
+  background-image: linear-gradient(
+    110deg,
+    transparent 35%,
+    color-mix(in srgb, var(--text-primary) 80%, transparent) 50%,
+    transparent 65%
+  );
+  background-repeat: no-repeat;
+  background-size: 250% 100%;
+  animation: busy-shimmer 1.4s ease-in-out infinite;
+}
+
+/* The band travels off both edges so each pass reads as a glint with a brief rest. */
+@keyframes busy-shimmer {
+  from {
+    background-position: 200% 0;
+  }
   to {
-    transform: rotate(360deg);
+    background-position: -80% 0;
   }
 }
 
-/* Reduced motion: no rotation — show a full static ring so the working state
-   still reads as distinct from the idle dot. */
+/* Reduced motion: the global killswitch already stops the sweep; hide the sheen so
+   the busy state is an unambiguous solid (glowing) blue dot, distinct from idle. */
 @media (prefers-reduced-motion: reduce) {
-  .busy {
-    border-color: var(--status-running);
+  .busy::after {
+    opacity: 0;
   }
 }

@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> Tasks #1–#87 have shipped; newer open tasks (#88+) are in **## Tasks** below.
+> Tasks #1–#88 have shipped; newer open tasks (#89+) are in **## Tasks** below.
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -181,6 +181,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #84 Open a canvas in its own window (multi-monitor) — pop-out button on the tab + drag tear-off; a canvas-only `?canvas=<id>` window (`CanvasWindow` over the shared `CanvasSurface`) with its own terminal pool over the shared backend PTYs; pure `computeSessionOwners` keeps one PTY in one window (the other shows a `DetachedNote`); cross-window sync via `canvas://changed` / `canvas://windows`; ⌘1–9 + a detached-tab click raise the window (`focus_canvas_window`); re-dock on close; per-session (not restored on relaunch). Reverses the v1 single-window rule.
 
+**Busy-indicator shimmer (#88).** The agent activity dot reads as a shimmer, not a spinner.
+
+- #88 Replaced the #71 spinner arc with a Claude-style **shimmer** — a calm `--status-idle` dot that, while busy, turns `--status-running` with a soft sheen sweeping across it (animated `background-position` on a `::after`; the dot via `::before`, no extra DOM); fixed ~12px slot (no layout shift); reduced-motion → a solid glowing blue dot.
+
 ---
 
 ## Design reference (dark theme only)
@@ -217,8 +221,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#87 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. The open tasks (#88+) follow. New work goes
+Tasks #1–#88 are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. The open tasks (#89+) follow. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -230,90 +234,6 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 88. [ ] Replace the busy-indicator spinner with a Claude-style shimmer (dot-only)
-
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
-**Depends on:** none
-**Created:** 2026-06-19
-
-**Description**
-
-The agent activity indicator (`BusyIndicator`, currently #71) animates its busy state as a
-**rotating arc** — i.e. it reads as a generic loading spinner. Replace that with a **shimmer**: a
-soft sheen/glint that **sweeps across the dot** while an agent is working, evoking Claude's own
-"thinking" shimmer rather than a spinner. **Both states are redesigned to cohere** as one visual
-language (idle = a calm dot; busy = that dot gaining a traveling sheen), staying within the
-**existing tight ~12px slot** with **no layout shift** between states.
-
-`BusyIndicator` is a single shared component rendered in **two places** — sidebar session rows
-(`Sidebar.tsx`, `styles.rowBusy`) and **Overview** card headers (`Overview.tsx`, the `leading`
-slot). Canvas panels don't show a busy state, so they're out of scope. The component's public API
-(`{ busy, label }`, `role="status"`) stays the same — this is a CSS/visual redesign of one
-component.
-
-**Decisions (from the requester, after research):**
-- Animation: **shimmer** (Claude-style), applied to the **indicator dot only** (not the agent name).
-- Footprint: **keep the tight ~12px slot** — no header reflow in the sidebar or Overview.
-- **Redesign both** idle and busy so they read as a single coherent design.
-- Colors: keep the status tokens — **busy = `--status-running`** (blue), **idle = `--status-idle`**.
-
-**Researched alternatives considered (for reference):** typing dots (SpinKit "Bounce Delay"/Flow),
-equalizer bars (SpinKit "Wave"/Stretchdelay), breathing pulse + sonar ping (SpinKit "Scale Out").
-Shimmer was chosen as the most on-brand for a Claude app.
-
-**Out of scope:** shimmering the agent name text; widening the indicator slot; adding a settings
-toggle between indicator styles (no settings screen in v1); the Canvas panel headers.
-
-**Subtasks**
-
-1. [ ] Rewrite `src/components/BusyIndicator/BusyIndicator.module.css`: remove the `busy-spin`
-   rotation keyframes and arc; implement the **busy = shimmer** (a sheen sweeping across a
-   `--status-running` dot via an animated gradient / pseudo-element, transform/opacity/
-   background-position only — 60fps, no repaint), and **redesign the idle** `--status-idle` dot so
-   the two states cohere. Keep a fixed ~12px `box-sizing: border-box` footprint so the slot never
-   shifts between states.
-2. [ ] Keep `BusyIndicator.tsx` API/markup essentially unchanged (`busy`/`label`, `role="status"`,
-   `aria-label`/`title`); add a pseudo-element only if the shimmer needs one — prefer no new DOM.
-3. [ ] **Reduced motion:** under the global `prefers-reduced-motion` killswitch (`global.css`),
-   disable the sweep and show a **static busy state that's still clearly distinct from idle**
-   (e.g. a solid/brighter blue dot).
-4. [ ] Verify both call sites render correctly — sidebar rows and Overview card headers — with **no
-   layout shift** toggling busy↔idle, and the dot still sits cleanly before the name.
-5. [ ] Update docs to match: the `BusyIndicator` doc-comments (they describe the #71 spinner arc)
-   and the busy-indicator description in **CLAUDE.md** (#42/#55/#71 — "small spinner arc"/"rotating
-   spinner arc") → describe the shimmer.
-6. [ ] `npm run build`, `npm run lint`, `npm test` all pass.
-
-**Acceptance criteria**
-
-- [ ] The busy state is a **shimmer sweeping across the dot** — **no rotation/spin** animation
-  remains anywhere in the component.
-- [ ] Idle and busy are a **coherent redesigned pair** (idle = calm dot; busy = shimmer), using
-  **`--status-running`** (busy) and **`--status-idle`** (idle).
-- [ ] The indicator stays within the **~12px slot** with **no layout shift** between states, in
-  both the **sidebar** and **Overview** headers.
-- [ ] Under **reduced motion**, the sweep is disabled and the busy state remains **visually
-  distinct** from idle.
-- [ ] `role="status"` + accessible label preserved; the app **builds, lints, and tests pass**;
-  CLAUDE.md no longer describes the indicator as a spinner.
-
-**Notes**
-
-- Proposed best + sources (research): **shimmer** chosen as most on-brand — _"ChatGPT uses a
-  pulsing effect, Claude uses a shimmer animation"_
-  ([Claude UI research](https://hassantayyab.com/blogs/claude-better-ui-research-first),
-  [Agentic Design patterns](https://agentic-design.ai/patterns/ui-ux-patterns)). CSS technique
-  references: **SpinKit** (Tobias Ahlin, https://tobiasahlin.com/spinkit/,
-  https://github.com/tobiasahlin/SpinKit) and **css-loaders.com** (Temani Afif,
-  https://css-loaders.com/, 600+ single-element loaders).
-- Lineage: this supersedes #71 (spinner arc), which superseded #55 (pulsing ball) / #42 (original
-  busy indicator).
-- Implementer latitude: exact sheen geometry/timing is yours to tune. If a literal sweep is too
-  subtle at 12px, a soft **traveling glint/glow** is an acceptable realization — the bar is "not a
-  spinner, reads as a shimmer, idle↔busy cohere, no layout shift."
 
 ---
 
