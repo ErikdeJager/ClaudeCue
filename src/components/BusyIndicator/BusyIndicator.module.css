@@ -1,30 +1,49 @@
-/* Status ball (#55, supersedes #42's bouncing dots): a small dot that pulses
-   Blue while the session is working and sits dimmed (gray) when idle. Always
-   rendered so the idle state is visible. The global reduced-motion killswitch
-   (global.css) stops the pulse, leaving a static colored dot. */
+/* Activity indicator (#71, supersedes #55's pulsing ball): a small rotating
+   spinner arc in --status-running while the session is working, settling into a
+   calm static dot in --status-idle when idle. The ring's border space is always
+   reserved (box-sizing: border-box) so the footprint never shifts between
+   states. The global reduced-motion killswitch (global.css) stops the rotation;
+   under it the busy state shows a full static ring (see the media query). */
 .ball {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-dot);
+}
+
+/* Idle: a small calm dot centered in the reserved ring footprint. */
+.ball::before {
+  content: "";
+  width: 6px;
+  height: 6px;
   border-radius: var(--radius-dot);
   background: var(--status-idle);
-  transition: background var(--dur-fast) var(--ease-out);
 }
 
+/* Busy: hide the dot and spin a single-arc ring (only the top edge is colored). */
 .busy {
-  background: var(--status-running);
-  animation: busy-pulse 1.4s var(--ease-out) infinite;
+  border-top-color: var(--status-running);
+  animation: busy-spin 0.7s linear infinite;
 }
 
-@keyframes busy-pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
+.busy::before {
+  display: none;
+}
+
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
   }
-  50% {
-    opacity: 0.45;
-    transform: scale(0.7);
+}
+
+/* Reduced motion: no rotation — show a full static ring so the working state
+   still reads as distinct from the idle dot. */
+@media (prefers-reduced-motion: reduce) {
+  .busy {
+    border-color: var(--status-running);
   }
 }

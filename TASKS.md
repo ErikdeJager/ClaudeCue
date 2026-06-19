@@ -578,9 +578,9 @@ any button does.
 
 ---
 
-### 71. [ ] Activity indicator — move it before the agent title (all surfaces) + reinvent it as a spinner arc
+### 71. [x] Activity indicator — move it before the agent title (all surfaces) + reinvent it as a spinner arc
 
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Status:** Done · _(Not started | In progress | Blocked | Done)_
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -611,24 +611,27 @@ Out of scope: the busy/idle detection (#55 backend heuristic stays); non-agent p
 
 **Subtasks**
 
-1. [ ] Redesign `BusyIndicator` (`.tsx` + `.module.css`): busy = rotating spinner arc
+1. [x] Redesign `BusyIndicator` (`.tsx` + `.module.css`): busy = rotating spinner arc
    (`--status-running`); idle = static dot (`--status-idle`); reduced-motion = static. Keep
-   compact + `role="status"` label.
-2. [ ] Sidebar `SessionRow`: move `<BusyIndicator>` to before the label (`.rowMain`) instead
+   compact + `role="status"` label. _(Fixed 12px footprint: a reserved transparent ring
+   border + a centered `::before` dot; busy colors `border-top` and spins; reduced-motion
+   shows a full static ring.)_
+2. [x] Sidebar `SessionRow`: move `<BusyIndicator>` to before the label (`.rowMain`) instead
    of after it.
-3. [ ] Overview `SessionCard`: move the indicator out of `actions` (`.headerBusy`) to the
-   start of the header, before the title (`.titleBlock`).
-4. [ ] Focus toolbar: move the indicator before the title text.
+3. [x] Overview `SessionCard`: move the indicator out of `actions` (`.headerBusy`) to the
+   start of the header, before the title (`.titleBlock`). _(New `leading` slot on
+   `PanelColumn`, after the drag grip; `.headerBusy` removed.)_
+4. [x] Focus toolbar: move the indicator before the title text.
 
 **Acceptance criteria**
 
-- [ ] On all three surfaces (sidebar rows, Overview card header, Focus toolbar) the activity
+- [x] On all three surfaces (sidebar rows, Overview card header, Focus toolbar) the activity
   indicator sits to the **left of the agent's name/title**, not on the right.
-- [ ] While an agent is working it's a rotating spinner arc; when idle it's a calm static
+- [x] While an agent is working it's a rotating spinner arc; when idle it's a calm static
   dot; under reduced-motion it's static (no rotation).
-- [ ] The indicator stays compact and aligned in every placement; `role="status"` +
+- [x] The indicator stays compact and aligned in every placement; `role="status"` +
   Working…/Idle label preserved.
-- [ ] No change to when busy/idle is detected.
+- [x] No change to when busy/idle is detected.
 
 **Notes**
 

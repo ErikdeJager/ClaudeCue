@@ -180,6 +180,8 @@ function Focus() {
       <div className={styles.toolbar}>
         {session && (
           <>
+            {/* Activity indicator (#71) — before the title, far left. */}
+            <BusyIndicator busy={busy} />
             {/* Colored repo badge (#37) — matches the Overview/sidebar color. */}
             <span className={styles.badge}>
               <span className={styles.badgeDot} style={{ background: color }} />
@@ -205,7 +207,6 @@ function Focus() {
               </span>
               <Copy size={13} strokeWidth={1.5} />
             </button>
-            <BusyIndicator busy={busy} />
             <div className={styles.spacer} />
             <button
               type="button"

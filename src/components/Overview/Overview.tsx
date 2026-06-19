@@ -44,6 +44,8 @@ interface PanelColumnProps {
   groupStart: boolean;
   selected?: boolean;
   title: ReactNode;
+  /** Optional slot before the title (e.g. the agent activity indicator, #71). */
+  leading?: ReactNode;
   actions: ReactNode;
   onClickBody?: () => void;
   children: ReactNode;
@@ -55,6 +57,7 @@ function PanelColumn({
   groupStart,
   selected = false,
   title,
+  leading,
   actions,
   onClickBody,
   children,
@@ -89,6 +92,7 @@ function PanelColumn({
         <span className={styles.dragHandle} title="Drag to reorder" aria-hidden>
           <GripVertical size={14} strokeWidth={1.5} />
         </span>
+        {leading}
         <div className={styles.titleBlock}>{title}</div>
         <div
           className={styles.actions}
@@ -147,10 +151,6 @@ function SessionCard({
   );
   const actions = (
     <>
-      {/* Status ball (#55), left of the card actions; dimmed when idle. */}
-      <span className={styles.headerBusy}>
-        <BusyIndicator busy={busy} />
-      </span>
       <button
         type="button"
         className={styles.action}
@@ -189,6 +189,7 @@ function SessionCard({
       groupStart={groupStart}
       selected={selected}
       title={title}
+      leading={<BusyIndicator busy={busy} />}
       actions={actions}
       onClickBody={onSelect}
     >

@@ -1,18 +1,19 @@
 import styles from "./BusyIndicator.module.css";
 
 interface BusyIndicatorProps {
-  /** Pulses Blue while true; sits dimmed/grayed when false (#55). */
+  /** Spins a Blue arc while true; a calm dimmed dot when false (#71). */
   busy: boolean;
   /** Accessible label + hover tooltip; defaults to the busy/idle state. */
   label?: string;
 }
 
 /**
- * A single small status ball (#55, supersedes #42's bouncing dots): a Catppuccin
- * Blue dot that **pulses while the session is working** and sits **dimmed**
- * (`--status-idle`) when idle. Always rendered so the grayed idle state is
- * visible. Motion respects the global `prefers-reduced-motion` killswitch
- * (`src/styles/global.css`), which settles the pulse into a static colored dot.
+ * The agent activity indicator (#71, supersedes #55's pulsing ball): a small
+ * rotating spinner arc (`--status-running`) while the session is working,
+ * settling into a calm static dot (`--status-idle`) when idle. Always rendered
+ * so the idle state is visible; the footprint is fixed so the slot never shifts.
+ * Motion respects the global `prefers-reduced-motion` killswitch
+ * (`src/styles/global.css`), which stops the rotation and shows a static ring.
  */
 function BusyIndicator({ busy, label }: BusyIndicatorProps) {
   const text = label ?? (busy ? "Working…" : "Idle");

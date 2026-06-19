@@ -269,12 +269,12 @@
   color: var(--text-primary);
 }
 
-/* Busy indicator slot (#42): sits just left of the hover-reveal Remove button. */
+/* Activity indicator slot (#71): the row's far left, before the label. */
 .rowBusy {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  padding-left: var(--space-4);
+  padding-left: var(--space-8);
 }
 
 /* --- Opened-file tree rows (#45) — children of a repo, below its sessions --- */

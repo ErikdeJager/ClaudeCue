@@ -108,6 +108,11 @@ function SessionRow({
         });
       }}
     >
+      {/* Activity indicator (#71): far left of the row, before the label. Always
+          shown — a calm dot when idle, a spinner when working. */}
+      <span className={styles.rowBusy}>
+        <BusyIndicator busy={busy} />
+      </span>
       {editing ? (
         <input
           className={styles.renameInput}
@@ -139,11 +144,6 @@ function SessionRow({
           {subtitle && <span className={styles.rowSecondary}>{subtitle}</span>}
         </button>
       )}
-      {/* Status ball (#55): always shown (dimmed when idle); the Remove ghost
-          shows on hover to its right. */}
-      <span className={styles.rowBusy}>
-        <BusyIndicator busy={busy} />
-      </span>
       <button
         type="button"
         className={styles.remove}
