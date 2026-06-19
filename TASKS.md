@@ -175,7 +175,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 Tasks #1–#63 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. New work goes here as a fresh `### N.` entry
-in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#70**), with its
+in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#71**), with its
 `Depends on:` prerequisites.
 
 ---
@@ -505,3 +505,67 @@ Out of scope: the global `:focus-visible` style and any other input's focus ring
   `src/styles/global.css` (lines ~60–62, the global `:focus-visible` outline — leave as is).
 - The picker is reused wherever the "Open file viewer" file search appears (#56); scoping to
   `.search` covers all of them (the intent of "only this input field").
+
+---
+
+### 70. [ ] Overview: make the whole column title bar a drag handle (not just the corner grip)
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+In Overview mode, every column — agent terminals **and** the file / diff / markdown viewer
+panels — can be drag-reordered within its repo cluster (#43, dnd-kit). Today the **only**
+drag affordance is the small grip in the top-left corner (`.dragHandle`); the rest of the
+title bar (`.titleBlock`: name + "repo · branch") isn't draggable. Make the **whole title
+bar** the drag handle: click-and-drag from anywhere on the header reorders the column.
+
+Both column types share one wrapper — `PanelColumn` in `Overview.tsx` (used by `SessionCard`
+for agents and `ExtraPanel` for file/diff/markdown) — so the change lands in one place and
+covers all of them.
+
+Keep the action buttons fully clickable and **not** drag triggers: the **×** still closes
+(kill + forget the agent / close the panel), and an agent card's **Expand to Focus** and
+**Open in Zed** buttons still fire. (dnd-kit's pointer sensor has an activation distance, but
+a press on a button inside the draggable header can still begin a drag — guard the buttons,
+e.g. `onPointerDown` stopPropagation, so their clicks always win.)
+
+Move the dnd-kit `listeners` onto the header/title region instead of only the grip; give the
+bar a `grab` / `grabbing` cursor so the whole strip reads as draggable. Preserve keyboard +
+screen-reader drag (dnd-kit `attributes` need a focusable element — keep a focusable handle,
+or set them on the header). The corner grip icon may stay as a visual hint or be dropped.
+
+Out of scope: Canvas panels (different drag model); the terminal/body content; changing what
+any button does.
+
+**Subtasks**
+
+1. [ ] In `PanelColumn` (`Overview.tsx`), attach the sortable `listeners` to the whole
+   header (title bar) rather than only the grip; keep `attributes` / keyboard drag working.
+2. [ ] Guard the `.actions` buttons (×, Expand, Zed) so pressing them doesn't start a drag
+   and their onClick still fires.
+3. [ ] Add `cursor: grab` / `:active` `grabbing` to the header in `Overview.module.css`;
+   keep or remove the grip as a visual hint.
+
+**Acceptance criteria**
+
+- [ ] In Overview, pressing and dragging anywhere on a column's title bar (over the
+  name/subtitle, not just the corner grip) reorders the column — for agent terminals and for
+  file/diff/markdown panels.
+- [ ] The × still closes the agent/panel; Expand to Focus and Open in Zed still work; none of
+  them start a drag.
+- [ ] The title bar shows a grab/grabbing cursor; keyboard reorder + screen-reader drag still
+  work.
+- [ ] No regression to selecting a card or to the terminal/body interactions.
+
+**Notes**
+
+- Decision (from the requester): the whole title bar drags; the × (and the other header
+  buttons) stay as click targets.
+- Shares `Overview.tsx` (`SessionCard`/`ExtraPanel` title area) with #67 (label rule) —
+  different concern (drag wiring vs title text); coordinate/rebase.
+- Key code: `src/components/Overview/Overview.tsx` (`PanelColumn` header: `.dragHandle`,
+  `.titleBlock`, `.actions`; `useSortable`), `src/components/Overview/Overview.module.css`
+  (`.header` ~112, `.dragHandle` ~125).
