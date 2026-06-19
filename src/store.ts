@@ -415,7 +415,58 @@ export interface AppState {
   renameSession: (id: string, name: string) => Promise<void>;
   /** Forget a folder: kill+forget all its sessions and drop it from recents (#31). */
   forgetRepo: (repoPath: string) => Promise<void>;
+  /** Kill + forget every running agent in a folder — incl. its worktree agents
+   * (#74) — keeping the folder + its non-agent items (#91). */
+  killAllAgents: (repoPath: string) => Promise<void>;
+  /** Clear a folder's workspace — kill all its agents AND remove all its non-agent
+   * items (each terminal's shell killed) — but keep the folder in recents (#91). */
+  closeAllItems: (repoPath: string) => Promise<void>;
   copyToClipboard: (text: string, label?: string) => Promise<void>;
+}
+
+/**
+ * Kill + forget every **running** agent in `repoPath` — including its worktree
+ * agents (#74) — with ref-counted worktree cleanup (a dirty worktree is kept).
+ * Shared by the #91 bulk repo actions; returns how many agents were killed. It
+ * adds **no** toast — each caller emits its own single summary (#83). Kills are
+ * marked intentional so the backend `Exited` events are swallowed (#32).
+ */
+async function killAgentsInRepo(repoPath: string): Promise<number> {
+  const running = useStore
+    .getState()
+    .sessions.filter(
+      (s) =>
+        (s.repoPath === repoPath || s.worktreeParent === repoPath) &&
+        s.exitedCode === undefined,
+    );
+  const ids = running.map((s) => s.id);
+  if (ids.length === 0) return 0;
+  const idSet = new Set(ids);
+  const worktreeDests = [
+    ...new Set(
+      running
+        .filter((s) => s.worktreeParent === repoPath)
+        .map((s) => s.repoPath),
+    ),
+  ];
+  ids.forEach((id) => intentionalKills.add(id));
+  await Promise.all(ids.map((id) => ipc.killSession(id).catch(() => {})));
+  useStore.setState((s) => {
+    const clearSelection = s.selectedId != null && idSet.has(s.selectedId);
+    return {
+      sessions: s.sessions.filter((x) => !idSet.has(x.id)),
+      selectedId: clearSelection ? null : s.selectedId,
+      view: clearSelection ? "overview" : s.view,
+      sessionBusy: Object.fromEntries(
+        Object.entries(s.sessionBusy).filter(([id]) => !idSet.has(id)),
+      ),
+    };
+  });
+  // Ref-counted worktree cleanup (#74): keep a dirty worktree rather than force it.
+  for (const dest of worktreeDests) {
+    await useStore.getState().cleanupWorktreeIfEmpty(repoPath, dest);
+  }
+  return ids.length;
 }
 
 export const useStore = create<AppState>()((set, get) => ({
@@ -1293,6 +1344,50 @@ export const useStore = create<AppState>()((set, get) => ({
       ids.length > 0
         ? `Forgot folder + ${ids.length} agent${ids.length === 1 ? "" : "s"}`
         : "Forgot folder",
+    );
+  },
+
+  killAllAgents: async (repoPath) => {
+    const killed = await killAgentsInRepo(repoPath);
+    if (killed > 0) {
+      get().pushToast(`Killed ${killed} agent${killed === 1 ? "" : "s"}`);
+    }
+  },
+
+  closeAllItems: async (repoPath) => {
+    // Kill the agents (shared mechanics; no toast), then clear the non-agent items.
+    const killed = await killAgentsInRepo(repoPath);
+    const panels = get().overviewPanels[repoPath] ?? [];
+    const panelCount = panels.length;
+    // Each terminal item owns a shell PTY (#72) — kill it (intentional, so no
+    // Restart overlay). File/diff panels are pure UI.
+    for (const p of panels) {
+      if (p.kind === "terminal") {
+        intentionalKills.add(p.id);
+        await ipc.killSession(p.id).catch(() => {});
+      }
+    }
+    if (panelCount > 0) {
+      const removed = new Set(panels.map((p) => p.id));
+      set((s) => {
+        const map = { ...s.overviewPanels };
+        delete map[repoPath]; // keep the folder in recents; just drop its items
+        return {
+          overviewPanels: map,
+          terminalExits: Object.fromEntries(
+            Object.entries(s.terminalExits).filter(([id]) => !removed.has(id)),
+          ),
+        };
+      });
+      void ipc.setOverviewPanels(repoPath, []).catch(() => {});
+    }
+    // One summary toast (#83) — no per-item spam.
+    const parts: string[] = [];
+    if (killed > 0) parts.push(`${killed} agent${killed === 1 ? "" : "s"}`);
+    if (panelCount > 0)
+      parts.push(`${panelCount} view${panelCount === 1 ? "" : "s"}`);
+    get().pushToast(
+      parts.length > 0 ? `Closed ${parts.join(" + ")}` : "Nothing to close",
     );
   },
 

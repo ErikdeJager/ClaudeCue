@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> Tasks #1–#90 have shipped; newer open tasks (#91+) are in **## Tasks** below.
+> Tasks #1–#91 have shipped; newer open tasks (#92+) are in **## Tasks** below.
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -193,6 +193,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #90 File viewer: the header filename is now a **switcher** — clicking it opens a searchable `FilePicker` (#56) popover of the repo's files (shared `FileSwitcher` component) and picking one swaps the viewer **in place**, in both Overview file columns and Canvas file panels; persisted (store `setOverviewPanelFile` / `setLeafFile` via the pure `updateLeafContent`). Same-repo only; `FileViewer` itself unchanged.
 
+**Folder bulk actions (#91).** Kill all agents / close all items, from the repo menu.
+
+- #91 Sidebar repo menu: two destructive bulk actions above "Forget folder" — **Kill all agents** (kill + forget every running agent in the folder, incl. its worktree agents #74; shown only with ≥1 running) and **Close all items** (also removes every non-agent view — each terminal's shell killed — while keeping the folder in recents). Both confirm first when agents are running and emit a single summary toast (store `killAllAgents` / `closeAllItems`, mirroring `forgetRepo`).
+
 ---
 
 ## Design reference (dark theme only)
@@ -229,8 +233,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#90 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. The open tasks (#91+) follow. New work goes
+Tasks #1–#91 are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. The open tasks (#92+) follow. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -242,78 +246,6 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 91. [ ] Folder context menu: "Kill all agents" + "Close all items"
-
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
-**Depends on:** none
-**Created:** 2026-06-19
-
-**Description**
-
-Add two **bulk actions** to the sidebar repo (folder) context menu (#31/#54/#82, `Sidebar.tsx`):
-
-1. **Kill all agents** — kill + forget **every running agent** in the folder (including its worktree
-   agents, #74), leaving the folder and its **non-agent items** (file / diff / terminal panels) in
-   place. (Per-session this is `removeSession` = kill + forget.)
-2. **Close all items** — clear the **entire folder workspace**: kill + forget all agents **and**
-   remove all non-agent items (file viewers, diff viewers, terminals — each terminal's shell PTY is
-   killed), but **keep the folder in recents** so its (now empty) repo header stays, with its coral
-   `+`. This differs from the existing **Forget folder** (#31), which *additionally* drops the folder
-   from recents.
-
-Both are destructive → red/danger styling (#54), placed in the destructive area of the menu (above
-"Forget folder"). Confirm before killing when agents are running (reuse the menu's existing confirm
-pattern, `menuMode`). Show each only when applicable: **Kill all agents** when ≥1 running agent;
-**Close all items** when the folder has any agent or any panel. Use the bulk-toast pattern (#83): a
-single summary toast and **no per-item spam** (the `forgetRepo` mechanics — `intentionalKills` +
-suppressed per-exit/per-panel toasts).
-
-**Concrete changes (grounding):**
-- **store** — add `killAllAgents(repoPath)` (remove all sessions where `repoPath === repo` **or**
-  `worktreeParent === repo` that are running; `intentionalKills.add` + `ipc.killSession`; keep
-  `overviewPanels` and `recents`; one summary toast) and `closeAllItems(repoPath)` (do the
-  kill-all, then remove every `overviewPanels[repo]` entry incl. terminal-PTY kills, persist via
-  `ipc.setOverviewPanels(repoPath, [])`; keep the folder in `recents`; one summary toast). Mirror
-  `forgetRepo` (`store.ts`) for the kill mechanics and selection/filter cleanup; reuse
-  `removeOverviewPanel`'s terminal-kill handling.
-- **Sidebar** (`Sidebar.tsx`) — add the two danger menu items; gate **Kill all agents** /
-  **Close all items** behind the confirm step when `menuRunning > 0` (extend the existing
-  `confirm` mode, or add parallel confirm modes).
-
-**Out of scope:** changing **Forget folder** (#31) behaviour; a global "kill everything" across all
-repos; killing agents without forgetting (we remove them, matching `removeSession`).
-
-**Subtasks**
-
-1. [ ] store: `killAllAgents(repoPath)` — remove all running agents (repo + its worktrees), one
-   summary toast, no per-exit spam; keep panels + recents.
-2. [ ] store: `closeAllItems(repoPath)` — kill all agents **and** remove all `overviewPanels[repo]`
-   (terminal PTYs killed), persist the empty list, keep the folder in recents; one summary toast.
-3. [ ] Sidebar repo menu: two danger items above "Forget folder", each shown only when applicable
-   and confirmed when agents are running.
-4. [ ] `npm run build`, `npm run lint`, `npm test` pass.
-
-**Acceptance criteria**
-
-- [ ] The repo context menu offers **Kill all agents** (shown only with ≥1 running agent) and
-  **Close all items** (shown only when the folder has any agent or panel), styled as destructive.
-- [ ] **Kill all agents** removes every running agent in the folder (and its worktrees) but leaves
-  the folder listed and its file/diff/terminal panels intact.
-- [ ] **Close all items** removes every agent **and** every panel (terminals' shells killed) while
-  **keeping the folder in recents** (empty header with `+` remains).
-- [ ] A single summary toast per action (no per-item spam); running-agent actions confirm first;
-  `npm run build` / `lint` / `test` pass.
-
-**Notes**
-
-- Requester intent: a quick "kill all agents here" and a stronger "clear this folder's workspace"
-  without forgetting the folder.
-- Reference: `forgetRepo` (`store.ts`) — kill mechanics, `intentionalKills`, selection/filter
-  cleanup, worktree handling (#74); `removeOverviewPanel` — terminal-PTY kill + persist.
-- Independent of the other open tasks (#84, #88–#90).
 
 ---
 

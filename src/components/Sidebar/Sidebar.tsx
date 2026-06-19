@@ -406,6 +406,8 @@ function Sidebar() {
   const openNewSession = useStore((s) => s.openNewSession);
   const refreshBranches = useStore((s) => s.refreshBranches);
   const forgetRepo = useStore((s) => s.forgetRepo);
+  const killAllAgents = useStore((s) => s.killAllAgents);
+  const closeAllItems = useStore((s) => s.closeAllItems);
   const setView = useStore((s) => s.setView);
   const overviewRepoFilter = useStore((s) => s.overviewRepoFilter);
   const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
@@ -425,7 +427,7 @@ function Sidebar() {
     y: number;
   } | null>(null);
   const [menuMode, setMenuMode] = useState<
-    "menu" | "confirm" | "color" | "files"
+    "menu" | "confirm" | "confirm-kill" | "confirm-close" | "color" | "files"
   >("menu");
   // The repo's files while the menu is in "files" mode (#44); null = loading.
   const [fileList, setFileList] = useState<string[] | null>(null);
@@ -528,6 +530,20 @@ function Sidebar() {
         (s) => s.repoPath === menu.repo && s.exitedCode === undefined,
       ).length
     : 0;
+  // Bulk repo actions (#91): counts that include worktree agents (#74).
+  const menuRunningAll = menu
+    ? sessions.filter(
+        (s) =>
+          (s.repoPath === menu.repo || s.worktreeParent === menu.repo) &&
+          s.exitedCode === undefined,
+      ).length
+    : 0;
+  const menuAgentCount = menu
+    ? sessions.filter(
+        (s) => s.repoPath === menu.repo || s.worktreeParent === menu.repo,
+      ).length
+    : 0;
+  const menuPanelCount = menu ? (overviewPanels[menu.repo]?.length ?? 0) : 0;
 
   return (
     <aside className={styles.sidebar} aria-label="Sessions">
@@ -817,6 +833,34 @@ function Sidebar() {
               >
                 Kill {menuRunning} agent{menuRunning === 1 ? "" : "s"} & forget?
               </button>
+            ) : menuMode === "confirm-kill" ? (
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuDanger}
+                onClick={() => {
+                  void killAllAgents(menu.repo);
+                  closeMenu();
+                }}
+              >
+                Kill {menuRunningAll} agent{menuRunningAll === 1 ? "" : "s"}?
+              </button>
+            ) : menuMode === "confirm-close" ? (
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuDanger}
+                onClick={() => {
+                  void closeAllItems(menu.repo);
+                  closeMenu();
+                }}
+              >
+                Close all items
+                {menuRunningAll > 0
+                  ? ` (kill ${menuRunningAll} agent${menuRunningAll === 1 ? "" : "s"})`
+                  : ""}
+                ?
+              </button>
             ) : (
               <>
                 {/* New session (#54): first item; mirrors the inline + button. */}
@@ -868,6 +912,35 @@ function Sidebar() {
                 </button>
                 {/* Destructive actions (#54): set apart and styled red. */}
                 <div className={styles.menuSeparator} role="separator" />
+                {/* Bulk actions (#91): kill the folder's running agents, or clear
+                    its whole workspace (agents + views) while keeping the folder. */}
+                {menuRunningAll > 0 && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuItemDanger}
+                    onClick={() => setMenuMode("confirm-kill")}
+                  >
+                    Kill all agents
+                  </button>
+                )}
+                {(menuAgentCount > 0 || menuPanelCount > 0) && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuItemDanger}
+                    onClick={() => {
+                      // Confirm only when agents are running; else clear directly.
+                      if (menuRunningAll > 0) setMenuMode("confirm-close");
+                      else {
+                        void closeAllItems(menu.repo);
+                        closeMenu();
+                      }
+                    }}
+                  >
+                    Close all items
+                  </button>
+                )}
                 <button
                   type="button"
                   role="menuitem"
