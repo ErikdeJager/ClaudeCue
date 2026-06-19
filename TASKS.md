@@ -4167,7 +4167,7 @@ through a mix of drags and a special context-menu item. Two changes:
 ### 60. [ ] Final pass: clean up the documentation with /update-docs
 
 **Status:** Not started
-**Depends on:** #48, #49, #55, #56, #57, #58, #59, #61
+**Depends on:** #48, #49, #55, #56, #57, #58, #59, #61, #62
 **Created:** 2026-06-19
 
 **Description**
@@ -4183,7 +4183,7 @@ run **last**.
 
 **Subtasks**
 
-1. [ ] Confirm all depended-on tasks (#48, #49, #55, #56, #57, #58, #59, #61) are Done.
+1. [ ] Confirm all depended-on tasks (#48, #49, #55, #56, #57, #58, #59, #61, #62) are Done.
 2. [ ] Run the **`/update-docs`** skill and let it sync `CLAUDE.md`, `README.md`, and any
    other docs to the code, plus the `TASKS.md` completed-task cleanup. (`PROMPT.md` is
    never modified.)
@@ -4200,8 +4200,9 @@ run **last**.
 
 - This is a **documentation-only** pass via the `update-docs` skill — no feature work.
 - Depends on every other open task so it runs **last**: #48/#49 are the code-improvement
-  passes the user asked to include; #55–#59 and #61 are the new features. If further tasks
-  are added later, re-confirm this remains the final one.
+  passes the user asked to include; #55–#59 and #61 are the new features; #62 removes the
+  in-app auto-update mechanism (so the docs no longer describe it). If further tasks are added
+  later, re-confirm this remains the final one.
 
 ---
 
@@ -4296,3 +4297,95 @@ on its current branch — the zero-input common case); show inline kbd hints thr
   subtask may refine it. Hotkey/typing conflicts are resolved via modifiers or empty-field
   context. The native folder dialog stays for new folders unless research favors typed-path
   entry.
+
+---
+
+### 62. [ ] Remove the in-app auto-update mechanism + the updater secret baked into the app (repo now private)
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+The repo has been made **private** and we won't release ClaudeCue to users yet, so the
+entire in-app auto-update path added in **#15** is now dead weight — and it bakes a minisign
+**public key** + a GitHub release endpoint into the shipped app. Rip out the Tauri
+**updater** + **process** plugins, the frontend update UI/state, the build-time updater
+artifacts, the baked-in updater config, and the now-pointless release workflow. The CI
+pipeline is **already disabled**; this task removes the *mechanism itself*. (This reverses
+**#15**, which is complete.)
+
+**Scope — in:**
+
+- **Frontend UI/state:** delete `src/updater.ts` and `src/components/UpdatePopup/`; remove the
+  `UpdatePopup` import + `<UpdatePopup />` mount in `App.tsx`; strip the `update` state slice,
+  the `checkForUpdate` / `installUpdate` / `dismissUpdate` actions, and the boot
+  `checkForUpdate()` call from `store.ts`; drop the `update`-coupling (`popupVisible` /
+  `.raised`) in `Toaster.tsx` + `Toaster.module.css`; remove the `dismissUpdate` test in
+  `store.test.ts`.
+- **Dependencies:** remove `@tauri-apps/plugin-updater` + `@tauri-apps/plugin-process` from
+  `package.json` (refresh `package-lock.json`); remove `tauri-plugin-updater` +
+  `tauri-plugin-process` from `src-tauri/Cargo.toml` (refresh `Cargo.lock`).
+- **Backend + capabilities:** remove both `.plugin(...)` registrations in `lib.rs`; remove
+  `updater:default` + `process:allow-restart` from `capabilities/default.json`.
+- **Config / baked-in secret:** remove the `plugins.updater` block (endpoints + **pubkey**) and
+  `bundle.createUpdaterArtifacts` from `tauri.conf.json`.
+- **Pipeline:** delete `.github/workflows/release.yml` entirely.
+- **Docs:** update `CLAUDE.md` + `README.md` to drop the auto-update / release-pipeline /
+  signing-secrets descriptions (keep the unsigned-`.dmg` + Gatekeeper notes).
+
+**Scope — out:**
+
+- The GitHub Actions signing secrets (`TAURI_SIGNING_PRIVATE_KEY` / `…_PASSWORD`) are not in
+  the repo and can't be removed from here — left in place (inert without the updater).
+- No version change (stays `0.0.1`); `tauri-plugin-opener` and the unsigned-`.dmg` build path
+  are untouched.
+
+**Subtasks**
+
+1. [ ] **Frontend UI/state:** delete `src/updater.ts` + `src/components/UpdatePopup/`; unwire
+   `App.tsx`; strip the `update` slice + 3 actions + boot call from `store.ts`; simplify
+   `Toaster.tsx` / `Toaster.module.css`; remove the store test.
+2. [ ] **Dependencies:** pull both JS plugins (`package.json` + lockfile) and both Rust plugins
+   (`Cargo.toml` + `Cargo.lock`).
+3. [ ] **Backend + capabilities:** remove the two `.plugin(...)` lines in `lib.rs` and the two
+   permissions in `capabilities/default.json`.
+4. [ ] **Config + baked-in secret:** remove `plugins.updater` (endpoints + pubkey) and
+   `createUpdaterArtifacts` from `tauri.conf.json`.
+5. [ ] **Pipeline:** delete `.github/workflows/release.yml`.
+6. [ ] **Docs:** remove the auto-update / release-pipeline / required-secrets sections from
+   `CLAUDE.md` + `README.md`.
+7. [ ] **Verify:** clean build + tests (below).
+
+**Acceptance criteria**
+
+- [ ] No references to `updater`, `tauri_plugin_updater`, `tauri_plugin_process`,
+  `plugin-updater`, `plugin-process`, `UpdatePopup`, `relaunch`, `checkForUpdate`, or
+  `createUpdaterArtifacts` remain in `src/`, `src-tauri/`, `package.json`, or `tauri.conf.json`.
+- [ ] `tauri.conf.json` has no `plugins.updater` block and no baked-in minisign pubkey/endpoint;
+  `capabilities/default.json` lists only `core:default` + `dialog:default`.
+- [ ] `.github/workflows/release.yml` is deleted.
+- [ ] `npm run build`, `npm test`, `npm run lint`, and `cargo test` / `clippy` / `fmt` all pass;
+  `npm run tauri build` still emits an unsigned `.dmg` (now with no updater artifacts).
+- [ ] `CLAUDE.md` + `README.md` no longer describe an auto-update mechanism, release pipeline,
+  or required signing secrets.
+
+**Notes**
+
+- Reverses **#15** (Done). Verified updater-only before removal: `tauri-plugin-process` /
+  `relaunch` is used **solely** by `updater.ts`'s post-install relaunch (no other caller), so
+  it's safe to drop.
+- Touchpoints (verified 2026-06-19): `src/updater.ts`; `src/components/UpdatePopup/`;
+  `src/App.tsx` (import + `<UpdatePopup />`); `src/store.ts` (`import * as updater`, `update`
+  state ≈L221 + initial ≈L315, the 3 actions, boot `checkForUpdate()` in `init`);
+  `src/store.test.ts` ("dismisses an available update"); `src/components/Toaster/Toaster.tsx`
+  + `Toaster.module.css`; `src-tauri/src/lib.rs` (L26–27); `src-tauri/capabilities/default.json`
+  (L9–10); `src-tauri/Cargo.toml` (L28–29) + `Cargo.lock`; `package.json` (L27–28) +
+  `package-lock.json`; `src-tauri/tauri.conf.json` (`createUpdaterArtifacts` L29,
+  `plugins.updater` L42–49).
+- The GitHub Actions secrets `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+  live only in repo settings (never committed); left as-is per decision — delete them manually
+  later if desired.
+- **#60** (final `/update-docs` pass) is updated to depend on this task so the final doc sweep
+  runs after this removal.
