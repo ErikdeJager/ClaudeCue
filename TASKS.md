@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> Tasks #1–#91 have shipped; newer open tasks (#92+) are in **## Tasks** below.
+> Tasks #1–#92 have shipped; newer open tasks (#93+) are in **## Tasks** below.
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -197,6 +197,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #91 Sidebar repo menu: two destructive bulk actions above "Forget folder" — **Kill all agents** (kill + forget every running agent in the folder, incl. its worktree agents #74; shown only with ≥1 running) and **Close all items** (also removes every non-agent view — each terminal's shell killed — while keeping the folder in recents). Both confirm first when agents are running and emit a single summary toast (store `killAllAgents` / `closeAllItems`, mirroring `forgetRepo`).
 
+**Restart-button stacking fix (#92).** The exit-overlay button is clickable again.
+
+- #92 Fixed the unclickable **Restart** button on the exited-process overlay: the pooled xterm's internal positive-z-index layers were out-stacking the overlay for hit-testing. `.slot` now forms its own stacking context (`z-index: 0`) so those layers stay contained, and `.exitOverlay` sits explicitly above (`z-index: 1`) — so Restart (and the "Reconnecting…" overlay) receive pointer events again.
+
 ---
 
 ## Design reference (dark theme only)
@@ -233,8 +237,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#91 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. The open tasks (#92+) follow. New work goes
+Tasks #1–#92 are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. The open tasks (#93+) follow. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -246,60 +250,6 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 92. [ ] Fix the unclickable "Restart" button on the exited-process overlay
-
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
-**Depends on:** none
-**Created:** 2026-06-19
-
-**Description**
-
-The **Restart** button on the "Process exited (code N)" overlay (`Terminal.tsx` `.exitOverlay`) is
-**visible but unclickable** — clicks never reach `handleRestart`, so an exited/crashed agent (#63) or
-shell terminal (#72) can't be relaunched from the overlay.
-
-**Root cause (confirmed).** In `Terminal.module.css`, `.wrapper` (`position: relative`), `.slot`
-(the pooled-xterm reparent target, `position: absolute; inset: 0`), the pooled `.terminal` container
-(`position: absolute; inset: 0`), and `.exitOverlay` (`position: absolute; inset: 0`) **all have
-`z-index: auto`**, so **none establishes a stacking context**. xterm's own stylesheet
-(`@xterm/xterm/css/xterm.css`) puts **positive z-indexes** on its internal layers (helpers/canvases/
-decorations — up to ~11). Positive-z-index descendants paint in a higher stacking group than the
-`z-index: auto` `.exitOverlay`, so xterm's layers (some transparent) sit **above** the overlay in
-hit-testing: the button paints (it's a later sibling) but pointer events resolve to the xterm layer,
-not the button.
-
-**Fix.** Make the overlay reliably top-most **and** interactive:
-- Give `.exitOverlay` an explicit `z-index` above xterm's layers (xterm tops out ~11 → e.g.
-  `z-index: 20`), and/or **contain** xterm's stacking by isolating the wrapper
-  (`.wrapper { isolation: isolate }` or `.slot { z-index: 0 }`), so xterm's internal z-indexes no
-  longer escape above the overlay.
-- Confirm the **"Reconnecting…"** overlay (same element) is unaffected/also correct.
-
-**Subtasks**
-
-1. [ ] `Terminal.module.css`: raise/contain stacking so `.exitOverlay` (and its button) sit above the
-   pooled xterm layers and receive pointer events (explicit `z-index` and/or `isolation: isolate`).
-2. [ ] Verify clicking **Restart** fires `handleRestart` → resume (agent, #63) / respawn (terminal
-   item, #72) and `resetTerminal`, in **both** Overview and Canvas.
-3. [ ] `npm run build`, `npm run lint` pass.
-
-**Acceptance criteria**
-
-- [ ] The **Restart** button on the exit overlay is clickable and actually relaunches the session
-  (agent resume / terminal respawn), with the pooled terminal reset so it repaints cleanly (#63).
-- [ ] Works wherever a terminal renders (Overview card, Canvas panel); the "Reconnecting…" overlay
-  still behaves correctly.
-- [ ] `npm run build` and `npm run lint` pass.
-
-**Notes**
-
-- Reported via screenshot: "Process exited (code 0)" with a **Restart** button that can't be clicked.
-- The overlay is a later DOM sibling of `.slot`, so it *paints* on top — but xterm's positive
-  z-indexes out-stack it for hit-testing because nothing between them isolates the stacking context.
-- Touches `Terminal.module.css` (and possibly `Terminal.tsx`) only; independent of other open tasks.
 
 ---
 

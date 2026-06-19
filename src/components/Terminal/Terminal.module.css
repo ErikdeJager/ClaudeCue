@@ -8,10 +8,15 @@
   overflow: hidden;
 }
 
-/* Reparent target: the pool moves the live terminal node in/out of this box. */
+/* Reparent target: the pool moves the live terminal node in/out of this box.
+   z-index:0 makes it its own stacking context so xterm's internal positive-z-index
+   layers (helpers/canvases/decorations, up to ~11) stay contained and don't
+   out-stack the exit overlay for hit-testing — the cause of the dead Restart
+   button (#92). */
 .slot {
   position: absolute;
   inset: 0;
+  z-index: 0;
 }
 
 .terminal {
@@ -23,6 +28,10 @@
 .exitOverlay {
   position: absolute;
   inset: 0;
+  /* Above the (now stacking-context) .slot so the overlay and its Restart button
+     receive pointer events instead of xterm's layers underneath (#92). Used by
+     both the "Process exited" and "Reconnecting…" overlays. */
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
