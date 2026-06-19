@@ -794,3 +794,111 @@ rendering itself.
   ways, so this is primarily a clarity/discoverability fix (confirm there's no runtime bug).
 - Key code: `src/components/FileViewer/FileViewer.tsx` (`showRaw`, toolbar toggle),
   `src/components/FileViewer/FileViewer.module.css` (`.toolbar`, `.toggle`).
+
+---
+
+### 74. [ ] Isolated worktree agents — ⌘⏎ in the new-session modal; nested under the parent repo
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** #65, #66, #67
+**Created:** 2026-06-19
+
+**Description**
+
+Add a **git worktree** workflow to the new-session modal: from the branch step, **⌘⏎ starts
+an agent in an isolated worktree** — its own folder containing a separate checkout of the repo
+on a chosen branch — instead of running in the repo's main folder. Worktree agents appear in
+the sidebar **indented under their parent repository**, with slightly different titling so
+it's clear they're isolated instances.
+
+This is the "folder-per-branch" worktree feature on the roadmap. It introduces **new git
+writes** (`git worktree add`/`remove`/`list`), expanding the current "git is read-only except
+`checkout_branch`" rule (#27) — update CLAUDE.md accordingly.
+
+**Creating a worktree (⌘⏎).** In the #66 branch step, **Enter** starts normally (in the repo
+folder); **⌘⏎** starts in an **isolated worktree** for the selected branch. For now the branch
+must be an **existing** local branch (branch *creation* options come as a later task). The
+worktree folder is **app-managed** — created under an app-data location, e.g.
+`…/worktrees/<repo-id>/<branch>/` (stable repo-id from the repo path + sanitized branch) — so
+the user's repo dir stays clean. Backend: `git -C <repo> worktree add <app-path> <branch>`
+(validate the branch exists, mirroring `checkout_branch`'s validation; surface git's error if
+the branch is already checked out in the main repo or another worktree).
+
+**Multiple agents per worktree.** A worktree is a shared isolated folder: **support more than
+one agent in the same worktree**. ⌘⏎ for a (repo, branch) whose worktree already exists
+**reuses** that folder (spawns another agent there) rather than failing. Track agents per
+worktree (an agent's `repo_path`/cwd = the worktree path; the parent repo is resolvable via
+`git -C <wt> rev-parse --git-common-dir` or `git worktree list`).
+
+**Sidebar — nested under the parent repo.** A worktree (and its agents) shows **indented as a
+child** of the original repository's group, not as a separate top-level repo. Render each
+worktree as an **indented sub-group** under its parent repo (label = the worktree's branch +
+an "isolated"/worktree marker — icon/badge/wording, building on the #67 label rule), with that
+worktree's agent(s) nested under it. Multiple worktrees per repo and multiple agents per
+worktree both render cleanly.
+
+**Removal & cleanup (ref-counted).** Removing a worktree agent kills + forgets that agent.
+**Only when the last active agent in a worktree is removed** does the app delete the worktree
+(`git worktree remove`, with a **guard/confirm if it has uncommitted changes** → needs
+`--force`); **never delete a worktree while one or more agents are still active in it**.
+Forgetting a repo (#31) should also clean up its now-empty worktrees.
+
+**Persistence / boot.** Worktree agents persist like normal sessions (record `repo_path` = the
+worktree path, which survives on disk) and resume via `claude --resume` on boot; the
+parent-repo nesting is re-derived from git. (Optionally store the parent-repo/worktree link on
+the record for robustness.)
+
+Out of scope (later tasks): creating a *new* branch for a worktree, choosing a custom worktree
+location, and any worktree management UI beyond create/remove.
+
+**Subtasks**
+
+1. [ ] Backend `git.rs`: add `worktree_add(repo, branch, dest)`, `worktree_remove(repo, dest,
+   force)`, `worktree_list(repo)` (+ resolve a worktree's parent repo); validate the branch
+   exists; return git's stderr on failure. New writes — note the rule change.
+2. [ ] App-managed location + IPC: compute the worktree path (`…/worktrees/<repo-id>/<branch>`);
+   a command to create-or-reuse a worktree and spawn an agent in it (existing-branch only).
+3. [ ] Modal (#66): add **⌘⏎** in the branch step = start in an isolated worktree for the
+   selected branch (Enter = normal start, unchanged); reuse an existing worktree for that
+   (repo, branch).
+4. [ ] Sidebar: nest worktrees as indented sub-groups under the parent repo, each with isolated
+   titling and its agent(s); support multiple worktrees/repo and multiple agents/worktree.
+5. [ ] Removal: ref-count active agents per worktree — remove the agent always; `git worktree
+   remove` only when its last active agent goes (guard/confirm if dirty); extend Forget-repo
+   (#31) to clean up its worktrees.
+6. [ ] Persistence/boot: worktree agents persist + resume in their worktree path; re-derive the
+   parent-repo nesting on boot.
+7. [ ] Docs: update CLAUDE.md (git is no longer read-only-except-checkout — worktree
+   add/remove are new writes).
+
+**Acceptance criteria**
+
+- [ ] In the modal's branch step, ⌘⏎ starts an agent in an isolated worktree on the selected
+  existing branch (its own folder, separate checkout); plain Enter still starts in the repo
+  folder.
+- [ ] The worktree agent appears indented under its parent repo in the sidebar, titled as an
+  isolated instance (not as a separate top-level repo).
+- [ ] Starting a second agent on the same (repo, branch) reuses the same worktree folder;
+  multiple agents can run in one worktree.
+- [ ] Removing an agent never deletes a worktree that still has another active agent; the
+  worktree folder is removed only when its last active agent is removed (guard/confirm if it
+  has uncommitted changes).
+- [ ] Worktree agents survive an app restart (resume in their worktree folder) and re-nest
+  under the parent repo.
+
+**Notes**
+
+- **Dependency rule (from the requester):** this task depends on **all** tasks about the
+  starting-session modal **and** worktrees. Currently: #65 (panel overlay), #66 (modal flow —
+  hosts the ⌘⏎ keybind), #67 (session label rule — the worktree titling builds on it). **When
+  any future task touches the starting-session modal or worktrees, add it to this task's
+  `Depends on`.**
+- Decisions (from the requester): app-managed worktree location; existing-branch-only for now
+  (branch creation is a later task); ⌘⏎ trigger; remove the worktree on last-agent removal but
+  never while agents are active; multiple agents per worktree fully supported.
+- Coordinates with #68 (repo header) and #70 (Overview rendering) — not hard deps.
+- Key code: `src-tauri/src/git.rs` (worktree ops next to `checkout_branch`),
+  `src-tauri/src/commands.rs` + `pty.rs`/`store.rs` (create-worktree + spawn-in-worktree;
+  ref-counted removal), `src/components/NewSessionModal/NewSessionModal.tsx` (⌘⏎ in the branch
+  step), `src/components/Sidebar/Sidebar.tsx` (nested worktree sub-groups), `src/store.ts`
+  (worktree-aware spawn + removal), `src/types/index.ts`, `CLAUDE.md` (git-writes rule).
