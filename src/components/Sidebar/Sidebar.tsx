@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 
-import { listMarkdownFiles } from "../../ipc";
+import { listFiles } from "../../ipc";
 import { repoName } from "../../paths";
 import {
   dedupeBranchLabels,
@@ -96,10 +96,10 @@ function Sidebar() {
     y: number;
   } | null>(null);
   const [menuMode, setMenuMode] = useState<
-    "menu" | "confirm" | "color" | "markdown"
+    "menu" | "confirm" | "color" | "files"
   >("menu");
-  // The repo's *.md files while the menu is in "markdown" mode (#41); null = loading.
-  const [mdFiles, setMdFiles] = useState<string[] | null>(null);
+  // The repo's files while the menu is in "files" mode (#44); null = loading.
+  const [fileList, setFileList] = useState<string[] | null>(null);
   const closeMenu = () => {
     setMenu(null);
     setMenuMode("menu");
@@ -127,18 +127,18 @@ function Sidebar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [menu]);
 
-  // Load the repo's markdown files when the menu enters "markdown" mode (#41) —
-  // the same repo-relative `*.md` list the Focus markdown tab uses (#40).
+  // Load the repo's files when the menu enters "files" mode (#44) — the same
+  // repo-relative list the Focus Files tab uses.
   useEffect(() => {
-    if (!menu || menuMode !== "markdown") return;
+    if (!menu || menuMode !== "files") return;
     let cancelled = false;
-    setMdFiles(null);
-    void listMarkdownFiles(menu.repo)
+    setFileList(null);
+    void listFiles(menu.repo)
       .then((list) => {
-        if (!cancelled) setMdFiles(list);
+        if (!cancelled) setFileList(list);
       })
       .catch(() => {
-        if (!cancelled) setMdFiles([]);
+        if (!cancelled) setFileList([]);
       });
     return () => {
       cancelled = true;
@@ -288,19 +288,17 @@ function Sidebar() {
                   />
                 </label>
               </div>
-            ) : menuMode === "markdown" ? (
-              // Pick a repo *.md to open as an Overview markdown column (#41).
+            ) : menuMode === "files" ? (
+              // Pick a repo file to open as an Overview file-viewer column (#44).
               <div className={styles.mdPicker}>
-                <p className={styles.mdPickerHead}>Open markdown viewer</p>
-                {mdFiles === null ? (
+                <p className={styles.mdPickerHead}>Open file viewer</p>
+                {fileList === null ? (
                   <p className={styles.mdPickerHint}>Loading…</p>
-                ) : mdFiles.length === 0 ? (
-                  <p className={styles.mdPickerHint}>
-                    No markdown files in this repo.
-                  </p>
+                ) : fileList.length === 0 ? (
+                  <p className={styles.mdPickerHint}>No files in this repo.</p>
                 ) : (
                   <div className={styles.mdPickerList}>
-                    {mdFiles.map((f) => (
+                    {fileList.map((f) => (
                       <button
                         key={f}
                         type="button"
@@ -362,9 +360,9 @@ function Sidebar() {
                   type="button"
                   role="menuitem"
                   className={styles.menuItem}
-                  onClick={() => setMenuMode("markdown")}
+                  onClick={() => setMenuMode("files")}
                 >
-                  Open markdown viewer…
+                  Open file viewer…
                 </button>
                 <button
                   type="button"

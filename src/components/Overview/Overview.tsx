@@ -26,7 +26,7 @@ import type { OverviewPanel, SessionView } from "../../types";
 import BusyIndicator from "../BusyIndicator/BusyIndicator";
 import DiffInspector from "../DiffInspector/DiffInspector";
 import EmptyState from "../EmptyState/EmptyState";
-import MarkdownViewer from "../MarkdownViewer/MarkdownViewer";
+import FileViewer from "../FileViewer/FileViewer";
 import Terminal from "../Terminal/Terminal";
 import styles from "./Overview.module.css";
 
@@ -197,8 +197,7 @@ function SessionCard({
 
 function panelLabel(panel: OverviewPanel): string {
   if (panel.kind === "diff") return "Diff";
-  if (panel.file) return panel.file.split("/").pop() || "Markdown";
-  return "Markdown";
+  return panel.file?.split("/").pop() || "File";
 }
 
 interface ExtraPanelProps {
@@ -254,11 +253,11 @@ function ExtraPanel({
         // and always active so it polls (#29) while the column is shown.
         <DiffInspector repoPath={repoPath} active />
       ) : panel.file ? (
-        // Markdown panel (#41): the shared MarkdownViewer (#40) bound to this
-        // panel's saved file, always active so it hot-reloads while shown.
-        <MarkdownViewer repoPath={repoPath} file={panel.file} active />
+        // File panel (#41/#44): the shared FileViewer renders the panel's saved
+        // file by type (markdown/code/text), always active so it hot-reloads.
+        <FileViewer repoPath={repoPath} file={panel.file} active />
       ) : (
-        // A markdown panel is always created with a file; this is a guard.
+        // A file panel is always created with a file; this is a guard.
         <div className={styles.placeholder}>No file selected.</div>
       )}
     </PanelColumn>

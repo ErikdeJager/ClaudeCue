@@ -2948,9 +2948,9 @@ The per-cluster order must **persist**.
 
 ---
 
-### 44. [ ] Universal read-only file viewer (markdown rendered/raw toggle + light code highlighting)
+### 44. [x] Universal read-only file viewer (markdown rendered/raw toggle + light code highlighting)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #40
 **Created:** 2026-06-19
 
@@ -2972,28 +2972,28 @@ user explicitly does not want a full editor / LSP.
 
 **Subtasks**
 
-1. [ ] Build a `FileViewer` component taking a file path: it fetches content
+1. [x] Build a `FileViewer` component taking a file path: it fetches content
    (`read_text_file` from #40), detects type by extension, and renders the right mode.
-2. [ ] **Markdown mode:** reuse #40's `react-markdown` + `remark-gfm` rendering (no raw
+2. [x] **Markdown mode:** reuse #40's `react-markdown` + `remark-gfm` rendering (no raw
    HTML) for the rendered view; add the **eye/code toggle** to switch rendered ↔ raw.
-3. [ ] **Code mode:** add **Prism.js** (via `react-syntax-highlighter`'s Prism build, or
+3. [x] **Code mode:** add **Prism.js** (via `react-syntax-highlighter`'s Prism build, or
    `prismjs` directly) for read-only highlighting — import only a **curated language set**
    (ts/tsx/js/jsx, rust, python, json, css, html, bash, toml, yaml, md…) and lazy-load
    others to keep the bundle small. Use a **Catppuccin Prism theme** to match #33.
-4. [ ] **Plain/unknown:** render raw mono text. Guard large files (cap size / virtualize
+4. [x] **Plain/unknown:** render raw mono text. Guard large files (cap size / virtualize
    or show a "file too large" notice) so a huge file can't jank.
-5. [ ] Keep hot-reload (poll while visible; preserve scroll on unchanged) from #40.
-6. [ ] Backend: generalize #40's `read_text_file` / file listing to **any file** (not
+5. [x] Keep hot-reload (poll while visible; preserve scroll on unchanged) from #40.
+6. [x] Backend: generalize #40's `read_text_file` / file listing to **any file** (not
    just `*.md`); still **validate the path is inside the repo** and treat content as
    untrusted.
 
 **Acceptance criteria**
 
-- [ ] Opening a markdown file shows the rendered view with a working eye/code toggle to
+- [x] Opening a markdown file shows the rendered view with a working eye/code toggle to
   raw; opening a code file shows lightweight syntax highlighting; other files show raw.
-- [ ] Highlighting is read-only and lightweight (no editor/LSP); bundle impact is small
+- [x] Highlighting is read-only and lightweight (no editor/LSP); bundle impact is small
   (curated/lazy languages).
-- [ ] Hot-reload + repo-scoped path validation still hold; large files don't jank.
+- [x] Hot-reload + repo-scoped path validation still hold; large files don't jank.
 
 **Notes**
 
@@ -3005,6 +3005,32 @@ user explicitly does not want a full editor / LSP.
   is the lightweight client-side pick (~20KB core + per-language, ~5ms for 10 blocks,
   modular) vs Shiki (accurate but ~MB + WASM, SSR-oriented) and highlight.js (zero-config
   but larger/slower). Read-only display only — do not pull in CodeMirror/Monaco.
+- **Done 2026-06-19.** Built **`src/components/FileViewer/*`** — the single content
+  component now reused everywhere. **`fileType.ts`** (pure, unit-tested): `detectMode`
+  (markdown / code / text) + `prismLang` from a curated extension→language map.
+  **`prism.ts`:** **prismjs** chosen over react-syntax-highlighter for the smallest
+  bundle + full Catppuccin control; a **curated language set** is imported statically
+  (ts/tsx/js/jsx, rust, python, json, css, markup, bash, toml, yaml, markdown), uncurated
+  ones fall back to escaped plain text (no async flashes). `highlightToHtml` relies on
+  Prism's source-escaping, so the injected markup is **only Prism token spans — no raw
+  file HTML**. **`FileViewer.tsx`:** markdown → `react-markdown`+`remark-gfm` (no
+  `rehype-raw`) with an **eye/code toggle** to raw; code → Prism `<pre>`; else → raw mono;
+  **hot-reload** via the #40 poll-while-visible + content-as-signature scroll preservation;
+  **large-file guard** (> 256 KB → raw text + notice; backend still caps reads at 5 MB).
+  CSS ports #40's markdown styles + a **Catppuccin Mocha** token palette (scoped via
+  `:global(.token…)`). **Backend (subtask 6):** `files.rs` `list_markdown_files` →
+  **`list_files`** (any text file; binary extensions + heavy/hidden dirs excluded, capped,
+  path-validated); `read_text_file` was already generic. **Integration:** **deleted
+  `MarkdownViewer`**; Focus's "Markdown" tab → **"Files"** tab (lists all files, renders
+  `FileViewer`); Overview's file panel + the sidebar context-menu "Open markdown viewer…"
+  → **"Open file viewer…"** (lists all files) both render `FileViewer` (panel `kind`
+  stays `"markdown"` internally — no migration; it just means "a file panel"). **Tests:**
+  Rust `list_files` (text incl. extensionless, excludes binaries/heavy dirs) + frontend
+  `fileType` ×4. **Hard gate green:** Rust `fmt`/`clippy`/`test` (34) + frontend
+  `build`/`lint`/`format:check`/`test` (53). Bundle +~32 KB gzip (curated Prism langs).
+  The reused `FileViewer` is the base for the Canvas file panels (#47). Prism runtime
+  highlighting + hot-reload are runtime-visual (not launched headlessly); a registration
+  failure degrades gracefully to escaped plain text (no crash).
 
 ---
 

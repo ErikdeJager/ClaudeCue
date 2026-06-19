@@ -1,7 +1,8 @@
-//! Read-only file access for the markdown viewer (#40): list a repo's markdown
-//! files and read a text file, with strict path validation (reject `..`/symlink
-//! escapes out of the repo). Content is returned verbatim and treated as
-//! untrusted by the frontend (rendered as sanitized markdown, no raw HTML).
+//! Read-only file access for the universal file viewer (#40/#44): list a repo's
+//! viewable (text-ish) files and read a text file, with strict path validation
+//! (reject `..`/symlink escapes out of the repo). Content is returned verbatim
+//! and treated as untrusted by the frontend (markdown rendered sanitized with no
+//! raw HTML; code highlighted from escaped source).
 
 use std::fs;
 use std::path::Path;
@@ -16,13 +17,22 @@ const SKIP_DIRS: &[&str] = &[
     "out",
     ".next",
 ];
+/// File extensions skipped while listing — binary / non-text formats the viewer
+/// can't render (#44). Everything else (incl. extensionless files like `LICENSE`,
+/// `Dockerfile`) is listed and shown as text/code.
+const SKIP_EXTS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "icns", "tiff", "pdf", "woff", "woff2",
+    "ttf", "otf", "eot", "zip", "gz", "tgz", "bz2", "xz", "7z", "rar", "tar", "mp4", "mov", "avi",
+    "webm", "mkv", "mp3", "wav", "ogg", "flac", "exe", "dll", "so", "dylib", "bin", "wasm", "node",
+    "class", "o", "a", "lib", "obj", "dmg", "iso", "jar",
+];
 const LIST_CAP: usize = 500;
 const MAX_DEPTH: usize = 8;
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 
-/// Repo `*.md`/`*.markdown` files as repo-relative paths (sorted), excluding
-/// hidden + heavy dirs, capped. A non-readable dir yields an empty list.
-pub fn list_markdown_files(repo: impl AsRef<Path>) -> Vec<String> {
+/// Repo viewable files as repo-relative paths (sorted), excluding hidden + heavy
+/// dirs and binary extensions, capped. A non-readable dir yields an empty list.
+pub fn list_files(repo: impl AsRef<Path>) -> Vec<String> {
     let repo = repo.as_ref();
     let mut out = Vec::new();
     collect(repo, repo, &mut out, 0);
@@ -50,7 +60,7 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<String>, depth: usize) {
                 continue;
             }
             collect(root, &path, out, depth + 1);
-        } else if is_markdown(&path) {
+        } else if is_listable(&path) {
             if let Ok(rel) = path.strip_prefix(root) {
                 out.push(rel.to_string_lossy().replace('\\', "/"));
             }
@@ -58,11 +68,12 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<String>, depth: usize) {
     }
 }
 
-fn is_markdown(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
-        .unwrap_or(false)
+/// A file worth listing in the viewer: not an obvious binary by extension.
+fn is_listable(path: &Path) -> bool {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some(ext) => !SKIP_EXTS.iter().any(|s| ext.eq_ignore_ascii_case(s)),
+        None => true, // extensionless (LICENSE, Dockerfile, Makefile, …) is text
+    }
 }
 
 /// Read a repo-relative text file, validating it stays inside `repo` — the
@@ -98,23 +109,29 @@ mod tests {
     }
 
     #[test]
-    fn lists_markdown_excluding_heavy_and_hidden_dirs() {
+    fn lists_text_files_excluding_heavy_dirs_and_binaries() {
         let dir = tmp("list");
         fs::write(dir.join("README.md"), "# hi").unwrap();
-        fs::create_dir_all(dir.join("docs")).unwrap();
-        fs::write(dir.join("docs/guide.md"), "g").unwrap();
+        fs::write(dir.join("main.rs"), "fn main() {}").unwrap();
+        fs::write(dir.join("notes.txt"), "ok").unwrap();
+        fs::write(dir.join("LICENSE"), "MIT").unwrap(); // extensionless → text
+        fs::write(dir.join("logo.png"), "binary").unwrap(); // binary ext → skipped
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(dir.join("src/lib.ts"), "export {}").unwrap();
         fs::create_dir_all(dir.join("node_modules/pkg")).unwrap();
-        fs::write(dir.join("node_modules/pkg/x.md"), "skip").unwrap();
+        fs::write(dir.join("node_modules/pkg/x.js"), "skip").unwrap();
         fs::create_dir_all(dir.join(".git")).unwrap();
-        fs::write(dir.join(".git/notes.md"), "skip").unwrap();
-        fs::write(dir.join("notes.txt"), "nope").unwrap();
+        fs::write(dir.join(".git/config"), "skip").unwrap();
 
-        let files = list_markdown_files(&dir);
+        let files = list_files(&dir);
         assert!(files.contains(&"README.md".to_string()));
-        assert!(files.contains(&"docs/guide.md".to_string()));
+        assert!(files.contains(&"main.rs".to_string()));
+        assert!(files.contains(&"notes.txt".to_string()));
+        assert!(files.contains(&"LICENSE".to_string()));
+        assert!(files.contains(&"src/lib.ts".to_string()));
+        assert!(!files.iter().any(|f| f.ends_with(".png")));
         assert!(!files.iter().any(|f| f.contains("node_modules")));
         assert!(!files.iter().any(|f| f.contains(".git")));
-        assert!(!files.iter().any(|f| f.ends_with(".txt")));
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -1,39 +1,34 @@
 import { useEffect, useState } from "react";
 import { Copy, ExternalLink, PanelRight } from "lucide-react";
 
-import { listMarkdownFiles } from "../../ipc";
+import { listFiles } from "../../ipc";
 import { repoName } from "../../paths";
 import { repoColor, useStore } from "../../store";
 import BusyIndicator from "../BusyIndicator/BusyIndicator";
 import DiffInspector from "../DiffInspector/DiffInspector";
-import MarkdownViewer from "../MarkdownViewer/MarkdownViewer";
+import FileViewer from "../FileViewer/FileViewer";
 import Terminal from "../Terminal/Terminal";
 import styles from "./Focus.module.css";
 
 // Extensible tab strip — more inspector tabs can be added here later.
 const TABS = [
   { id: "diff", label: "Diff" },
-  { id: "markdown", label: "Markdown" },
+  { id: "files", label: "Files" },
 ];
 
 /**
- * Markdown tab content (#40): pick a repo `*.md` file and view it formatted
- * (hot-reloading). The file list is fetched per repo; defaults to a README.
+ * Files tab content (#44, generalizing #40): pick any repo file and view it with
+ * the shared `FileViewer` (markdown rendered, code highlighted, else raw). The
+ * file list is fetched per repo; defaults to a README.
  */
-function MarkdownTab({
-  repoPath,
-  active,
-}: {
-  repoPath: string;
-  active: boolean;
-}) {
+function FileTab({ repoPath, active }: { repoPath: string; active: boolean }) {
   const [files, setFiles] = useState<string[]>([]);
   const [file, setFile] = useState<string | null>(null);
 
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
-    void listMarkdownFiles(repoPath)
+    void listFiles(repoPath)
       .then((list) => {
         if (cancelled) return;
         setFiles(list);
@@ -52,9 +47,7 @@ function MarkdownTab({
   }, [repoPath, active]);
 
   if (files.length === 0) {
-    return (
-      <div className={styles.mdEmpty}>No markdown files in this repo.</div>
-    );
+    return <div className={styles.mdEmpty}>No files in this repo.</div>;
   }
   return (
     <div className={styles.mdTab}>
@@ -62,7 +55,7 @@ function MarkdownTab({
         className={styles.fileSelect}
         value={file ?? ""}
         onChange={(event) => setFile(event.currentTarget.value)}
-        aria-label="Markdown file"
+        aria-label="File"
       >
         {files.map((f) => (
           <option key={f} value={f}>
@@ -70,9 +63,7 @@ function MarkdownTab({
           </option>
         ))}
       </select>
-      {file && (
-        <MarkdownViewer repoPath={repoPath} file={file} active={active} />
-      )}
+      {file && <FileViewer repoPath={repoPath} file={file} active={active} />}
     </div>
   );
 }
@@ -196,8 +187,8 @@ function Focus() {
                       active={inspectorOpen}
                     />
                   )}
-                  {activeTab === "markdown" && (
-                    <MarkdownTab
+                  {activeTab === "files" && (
+                    <FileTab
                       key={session.repoPath}
                       repoPath={session.repoPath}
                       active={inspectorOpen}

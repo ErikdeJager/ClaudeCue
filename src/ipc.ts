@@ -75,11 +75,11 @@ export const listOverviewOrder = () =>
 export const setOverviewOrder = (path: string, order: string[]) =>
   invoke<void>("set_overview_order", { path, order });
 
-/** Repo-relative `*.md` files in a repo (markdown viewer, #40). */
-export const listMarkdownFiles = (repo: string) =>
-  invoke<string[]>("list_markdown_files", { repo });
+/** Repo-relative viewable (text-ish) files in a repo (file viewer, #44). */
+export const listFiles = (repo: string) =>
+  invoke<string[]>("list_files", { repo });
 
-/** Read a repo-relative text file (validated inside the repo, #40). */
+/** Read a repo-relative text file (validated inside the repo, #40/#44). */
 export const readTextFile = (repo: string, file: string) =>
   invoke<string>("read_text_file", { repo, file });
 

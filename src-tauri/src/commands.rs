@@ -153,11 +153,11 @@ pub fn set_repo_color(
 }
 
 #[tauri::command]
-pub fn list_markdown_files(repo: String) -> Vec<String> {
-    crate::files::list_markdown_files(repo)
+pub fn list_files(repo: String) -> Vec<String> {
+    crate::files::list_files(repo)
 }
 
-/// Read a repo-relative text file for the markdown viewer (#40); the path is
+/// Read a repo-relative text file for the file viewer (#40/#44); the path is
 /// validated to stay inside `repo` (rejects traversal).
 #[tauri::command]
 pub fn read_text_file(repo: String, file: String) -> Result<String, SessionError> {

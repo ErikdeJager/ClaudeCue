@@ -19,8 +19,9 @@ clear error if it is missing).
 - **Frontend:** React + TypeScript + Vite, **Zustand** for state, plain CSS with
   CSS-variable design tokens (CSS Modules), **xterm.js** terminals, **Lucide**
   icons, **JetBrains Mono** (bundled, offline), **react-markdown + remark-gfm**
-  (markdown viewer #40 — GFM, no raw HTML), **dnd-kit** (`@dnd-kit/core` +
-  `/sortable` — the app's one drag-and-drop system, #43)
+  (GFM markdown, no raw HTML) + **Prism.js** (curated-language read-only code
+  highlighting) — both in the universal **`FileViewer`** (#40/#44), **dnd-kit**
+  (`@dnd-kit/core` + `/sortable` — the app's one drag-and-drop system, #43)
 - **Backend (Rust, `src-tauri/`):** **`portable-pty`** for terminals, JSON
   persistence in the app-data dir, read-only git (shells out to `git`), and the
   Tauri **dialog** (folder picker), **opener**, **updater**, and **process** plugins
@@ -78,9 +79,10 @@ clear error if it is missing).
 │   ├── paths.ts            # Shared path helpers (repoName)
 │   ├── updater.ts          # In-app auto-update (Tauri updater/process plugins)
 │   ├── components/         # React components (CSS Module alongside each):
-│   │                       #   Sidebar, Overview, Focus, Terminal,
-│   │                       #   DiffInspector, NewSessionModal, Toaster, ViewSwitch,
-│   │                       #   ClaudeMissing, EmptyState, UpdatePopup
+│   │                       #   Sidebar, Overview, Focus, Terminal, FileViewer,
+│   │                       #   DiffInspector, BusyIndicator, NewSessionModal,
+│   │                       #   Toaster, ViewSwitch, ClaudeMissing, EmptyState,
+│   │                       #   UpdatePopup
 │   ├── styles/             # tokens.css (design tokens) + global.css (reset/base)
 │   └── types/              # Shared TS types (backend-mirrored models)
 ├── src-tauri/              # Rust backend (Tauri)
@@ -90,7 +92,7 @@ clear error if it is missing).
 │   ├── src/commands.rs     # Tauri command surface + event payloads
 │   ├── src/store.rs        # JSON persistence (sessions + recents)
 │   ├── src/git.rs          # Read-only git: branch + diff + branch list/checkout
-│   ├── src/files.rs        # Read-only file access (markdown list/read, path-validated)
+│   ├── src/files.rs        # Read-only file access (list text files/read, path-validated)
 │   ├── tauri.conf.json     # Window, bundle, build config
 │   ├── capabilities/       # Tauri permission capabilities
 │   └── Cargo.toml          # Crate `claudecue` / lib `claudecue_lib`
