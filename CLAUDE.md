@@ -39,11 +39,15 @@ clear error if it is missing).
   subscription routes output **bytes** to `outputBus.ts` (a pub/sub the xterm
   `Terminal` consumes — deliberately *not* React state) and lifecycle +
   busy/idle to the Zustand `store.ts`.
-- **Busy indicator (#42):** a backend monitor thread (`pty.rs`) derives each
-  session's **busy/idle** from output activity (busy while bytes flowed within a
-  ~700ms window) and emits `session://state { id, busy }` on transitions only.
-  The store keeps `sessionBusy`; the `BusyIndicator` (animated dots, static under
-  reduced-motion) shows in the sidebar, Overview cards, and Focus toolbar.
+- **Busy indicator (#42/#55):** a backend monitor thread (`pty.rs`) derives each
+  session's **busy/idle** from output activity (within a ~700ms window) and emits
+  `session://state { id, busy }` on transitions only. So **keystroke echo doesn't
+  read as busy** (#55), `write_stdin` stamps a per-session `last_input` time and the
+  monitor marks busy only when output arrived ≥300ms *after* the last keystroke. The
+  store keeps `sessionBusy`; the `BusyIndicator` is a **single pulsing ball** — Blue
+  (`--status-running`) pulsing when busy, dimmed (`--status-idle`) when idle,
+  **always rendered** (static dot under reduced-motion) — in the sidebar, Overview
+  cards, and Focus toolbar.
 - **Input / resize:** the `Terminal` sends keystrokes to `write_stdin` and a
   `ResizeObserver` drives `resize_pty`.
 - **Persistence / resume:** records + recents survive restarts; on boot the
@@ -51,7 +55,8 @@ clear error if it is missing).
 - **Git:** `working_diff(cwd)` / `current_branch(cwd)` shell out to `git`; the
   `DiffInspector` and sidebar render the structured result.
 - **Views:** the store holds `sessions / selectedId / view / inspectorOpen /
-  inspectorWidth / recents / branches / claudeMissing / toasts`; the app mounts one
+  inspectorWidth / recents / branches / canvases / activeCanvasId / claudeMissing /
+  toasts`; the app mounts one
   of **Overview, Focus, or Canvas** (#46). The Focus inspector is **drag-resizable**
   from its left edge (#51): the width drives a `--inspector-width` CSS var (set
   imperatively during a drag so heavy content doesn't re-render), bounded + persisted
@@ -68,22 +73,30 @@ clear error if it is missing).
   reparents DOM nodes and never remounts a terminal (pool intact). Persisted per
   repo: `overview_panels` (panel defs) + `overview_order` (the unified item
   order, merged with live items so spawn/exit don't scramble it).
-- **Sidebar tree (#45):** each repo lists its sessions **and** its opened files
-  (`open_files`, persisted per repo). Opening a file in a viewer registers it
-  (Focus Files-tab pick or an Overview file column); the tree row re-opens it as
-  an Overview column on click and forgets it on the hover ×. File rows are
-  dnd-kit **draggable sources** (drop targets land in Canvas, #47).
-- **Canvas (#46/#47):** a third view — a recursive **BSP split-panel** workspace.
-  The layout is a binary tree (`split{dir,a,b,sizes}` / `leaf{id,content}`)
-  persisted as `canvas_layout`; pure ops in `Canvas/canvasTree.ts`. Panels host
-  **real content** (#47): agent terminals (#18 pool), file viewers (#44), diff
-  viewers (#39) — a `content` descriptor `{kind, ...refs}` resolved at render.
-  **Drag-in:** one **app-level dnd-kit context** (`App.tsx`) spans the sidebar
-  (drag sources: sessions + opened files, #45) and Canvas (center + edge drop
-  zones); `Canvas/canvasDrop.ts` maps payloads → content and applies the
-  split/append. Dropping on an edge splits recursively, borders resize via
-  **react-resizable-panels**, panels close. The Overview wall keeps its own nested
-  sortable context (#43) — only one view mounts at a time, so targets never clash.
+- **Sidebar tree (#45/#59):** each repo lists its sessions **and** its non-agent
+  items — the **same `overview_panels` Overview shows, 1:1**: file viewers and diff
+  viewers. #59 folded the old per-repo `open_files` into `overview_panels`, so a
+  file/diff opened anywhere (Focus Files-tab pick, the searchable file picker #56,
+  or the repo menu) appears in both places. A tree row click opens Overview; the
+  hover × removes the item (and its Overview column); every row (session / file /
+  diff) is a dnd-kit **draggable source** that drops into the active Canvas (#47/#59
+  — agents → terminal, files → file viewer, diffs → diff panel; new item types are
+  draggable by default via a `payloadToContent` case).
+- **Canvas (#46/#47/#58):** a third view — **multiple named tabs** (#58), each its
+  own recursive **BSP split-panel** layout (a binary tree `split{dir,a,b,sizes}` /
+  `leaf{id,content}`; pure ops in `Canvas/canvasTree.ts`). The tabs (`canvases` =
+  `{id,name,layout}[]` + `activeCanvasId`) persist as one opaque `canvases` JSON blob
+  (migrated once from the old single `canvas_layout`); the `CanvasTabs` strip adds
+  (+), closes (always keeps ≥1), inline-renames, and drag-reorders tabs via a nested
+  dnd-kit context. Panels host **real content** (#47): agent terminals (#18 pool),
+  file viewers (#44), diff viewers (#39) — a `content` descriptor `{kind, ...refs}`
+  resolved at render. **Drag-in:** one **app-level dnd-kit context** (`App.tsx`)
+  spans the sidebar (drag sources: sessions, files, diffs #59) and Canvas (center +
+  edge drop zones); `Canvas/canvasDrop.ts` maps payloads → content and applies the
+  split/append **to the active tab**. Dropping on an edge splits recursively, borders
+  resize via **react-resizable-panels**, panels close. The Overview wall and the tab
+  strip keep their own nested sortable contexts (#43/#58) — only one view mounts at a
+  time, so targets never clash.
 
 ## Layout
 
@@ -99,9 +112,9 @@ clear error if it is missing).
 │   ├── paths.ts            # Shared path helpers (repoName)
 │   ├── components/         # React components (CSS Module alongside each):
 │   │                       #   Sidebar, Overview, Focus, Canvas, Terminal,
-│   │                       #   FileViewer, DiffInspector, BusyIndicator, Checkbox,
-│   │                       #   NewSessionModal, Toaster, ViewSwitch,
-│   │                       #   ClaudeMissing, EmptyState
+│   │                       #   FileViewer, FilePicker, DiffInspector,
+│   │                       #   BusyIndicator, Checkbox, NewSessionModal, Toaster,
+│   │                       #   ViewSwitch, ClaudeMissing, EmptyState
 │   ├── styles/             # tokens.css (design tokens) + global.css (reset/base)
 │   └── types/              # Shared TS types (backend-mirrored models)
 ├── src-tauri/              # Rust backend (Tauri)
@@ -141,8 +154,8 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
 - **Git is read-only, with one deliberate exception** — ClaudeCue reads git
   (current branch + working-tree diff vs `HEAD`) and never creates branches or
   commits. The lone write is **`git checkout <existing branch>`** from the
-  new-session popover (#27): picking a branch checks it out (in the chosen folder)
-  before the agent starts. It only switches to a branch that already exists
+  new-session panel (#27/#53/#61): picking a branch checks it out (in the chosen
+  folder) before the agent starts. It only switches to a branch that already exists
   locally (validated backend-side) and warns before disrupting another agent
   already running in that folder. No branch creation, commits, or other writes.
 - No app-rendered approval UI — users answer prompts directly in the terminal.
@@ -200,6 +213,9 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
 
 ## Tasks
 
-Work is tracked in `TASKS.md` (numbered, dependency-ordered). Each task lists its
-`Depends on:` prerequisites and an implementation-notes block. **The v1 plan
-(#1–#14) is complete**; `TASKS.md` remains the reference for what was built and why.
+Work is tracked in `TASKS.md`. **The full backlog (#1–#62) has shipped** — completed
+tasks are condensed into an **Implemented (completed tasks)** summary at the top (one
+line each, grouped by theme); per-task detail for completed work lives in git history.
+New tasks, when added, go in the `## Tasks` section in `TASKS-TEMPLATE.md` format with
+`Depends on:` prerequisites. The `(#N)` provenance markers throughout this doc index
+back to that summary + git history.

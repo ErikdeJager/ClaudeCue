@@ -10,16 +10,27 @@ chrome, navigation, persistence, and read-only git reading; the terminals come f
 
 ## Features
 
-- **Overview wall** — every active session as an equal-width live terminal column,
-  scrolling horizontally past capacity.
-- **Focus view** — one large terminal plus a toolbar (view switch, copy-able
-  `repo · branch · id` chip, Open in Zed) and a collapsible **Diff inspector**
-  showing the working-tree diff vs `HEAD` (unified or split).
-- **Sidebar** — sessions grouped by repository (with branch labels), sourced from
-  persisted recents so repos stay listed even with no active session.
-- **Persistence + resume** — sessions and recent folders survive restarts; sessions
-  resume their `claude` conversation by id on launch.
-- **Remove = kill + forget**, bundled **JetBrains Mono** (offline), dark theme only.
+- **Overview wall** — active sessions as equal-width live terminal columns, **grouped
+  by repo** with colored badges and a per-repo filter; columns are
+  **drag-reorderable**, and a repo can add **diff** and **file-viewer** columns.
+- **Focus view** — one large terminal plus a toolbar (view switch, a copy-able session
+  chip that copies a `claude --resume` command, Open in Zed) and a **resizable,
+  collapsible Diff inspector** (working-tree diff vs `HEAD`, unified or split,
+  auto-refreshing) with a Files tab for any repo file.
+- **Canvas** — a split-panel workspace with **multiple named tabs**; drag any sidebar
+  item (agent, file, or diff) in to tile it, split panels on their edges, resize borders.
+- **Sidebar** — sessions and their file/diff viewers grouped by repository (branch
+  labels + optional custom names), from persisted recents so repos stay listed with no
+  active session. Right-click a repo (new session, change color, open viewers, forget)
+  or an agent (**rename**, remove).
+- **Keyboard-first** — ⌘N opens a fast new-session launcher (type-ahead recents, ⌘1–9
+  quick-select, branch pick, Enter to start); Shift+arrows move between agents and views.
+- **Busy indicator** — a per-session pulsing ball shows when `claude` is genuinely
+  working (and stays dim while you type).
+- **Persistence + resume** — sessions, layouts, and recent folders survive restarts;
+  sessions resume their `claude` conversation by id on launch.
+- **Remove = kill + forget**, **Catppuccin Mocha** theme, bundled **JetBrains Mono**
+  (offline), dark theme only.
 
 ## Prerequisites
 
@@ -47,11 +58,9 @@ npm run tauri build    # produces an unsigned macOS .app and .dmg
 Artifacts land in `src-tauri/target/release/bundle/` (`macos/ClaudeCue.app` and
 `dmg/ClaudeCue_<version>_<arch>.dmg`).
 
-> No code signing or notarization in v1 — Gatekeeper will warn on first open
-> (right-click → **Open**, or allow it under **System Settings → Privacy & Security**).
-
-> The build is a **local, unsigned** artifact — there is no in-app auto-update and
-> no release pipeline (the repo is private; the earlier updater was removed).
+> No code signing or notarization — Gatekeeper warns on first open (right-click →
+> **Open**, or allow it under **System Settings → Privacy & Security**). The build is a
+> **local, unsigned** artifact: there is no in-app auto-update and no release pipeline.
 
 ## Develop scripts
 
@@ -59,11 +68,12 @@ Artifacts land in `src-tauri/target/release/bundle/` (`macos/ClaudeCue.app` and
 npm run build          # type-check + build the frontend only
 npm run lint           # ESLint (frontend)
 npm run format         # Prettier write (frontend)
+npm run format:check   # Prettier check (frontend)
 npm test               # Vitest (store / pure-logic unit tests)
 npm run lint:rust      # cargo clippy (backend)
 npm run format:rust    # cargo fmt (backend)
 cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
 ```
 
-See [`CLAUDE.md`](CLAUDE.md) for architecture and [`TASKS.md`](TASKS.md) for the v1
-plan and per-task implementation notes.
+See [`CLAUDE.md`](CLAUDE.md) for architecture and [`TASKS.md`](TASKS.md) for the
+record of what's been built.
