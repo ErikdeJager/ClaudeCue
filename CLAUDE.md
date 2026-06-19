@@ -100,7 +100,7 @@ clear error if it is missing).
 │   ├── updater.ts          # In-app auto-update (Tauri updater/process plugins)
 │   ├── components/         # React components (CSS Module alongside each):
 │   │                       #   Sidebar, Overview, Focus, Canvas, Terminal,
-│   │                       #   FileViewer, DiffInspector, BusyIndicator,
+│   │                       #   FileViewer, DiffInspector, BusyIndicator, Checkbox,
 │   │                       #   NewSessionModal, Toaster, ViewSwitch,
 │   │                       #   ClaudeMissing, EmptyState, UpdatePopup
 │   ├── styles/             # tokens.css (design tokens) + global.css (reset/base)

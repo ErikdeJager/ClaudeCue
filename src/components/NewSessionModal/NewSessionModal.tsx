@@ -5,6 +5,7 @@ import { listBranches, pickDirectory } from "../../ipc";
 import { repoName } from "../../paths";
 import { useStore } from "../../store";
 import type { BranchList } from "../../types";
+import Checkbox from "../Checkbox/Checkbox";
 import styles from "./NewSessionModal.module.css";
 
 /**
@@ -197,25 +198,25 @@ function NewSessionModal() {
         />
 
         {isDestructive && (
-          <label className={styles.warning}>
+          <div className={styles.warning}>
             <AlertTriangle
               size={14}
               strokeWidth={1.5}
               className={styles.warnIcon}
             />
-            <span className={styles.warnText}>
-              Checking out <strong>{selectedBranch}</strong> changes the working
-              tree under {runningInFolder} running agent
-              {runningInFolder > 1 ? "s" : ""} in this folder.
-            </span>
-            <input
-              type="checkbox"
-              className={styles.warnCheck}
+            <Checkbox
+              className={styles.warnCheckbox}
               checked={acknowledged}
-              onChange={(event) => setAcknowledged(event.currentTarget.checked)}
-              aria-label="Acknowledge that this may disrupt running agents"
+              onChange={setAcknowledged}
+              label={
+                <>
+                  Checking out <strong>{selectedBranch}</strong> changes the
+                  working tree under {runningInFolder} running agent
+                  {runningInFolder > 1 ? "s" : ""} in this folder.
+                </>
+              }
             />
-          </label>
+          </div>
         )}
 
         <div className={styles.actions}>

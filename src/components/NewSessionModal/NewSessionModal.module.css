@@ -189,39 +189,23 @@
    color); the checkbox gates Create. */
 .warning {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-6);
+  align-items: center;
+  gap: var(--space-8);
   margin-bottom: var(--space-12);
   padding: var(--space-8);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   background: var(--bg-base);
-  cursor: pointer;
 }
 
 .warnIcon {
   flex-shrink: 0;
-  margin-top: 1px;
   color: var(--text-secondary);
 }
 
-.warnText {
+/* The acknowledgement Checkbox (#52) fills the row so its label wraps. */
+.warnCheckbox {
   flex: 1;
-  color: var(--text-secondary);
-  font-size: var(--fs-meta-sm);
-  line-height: 1.4;
-}
-
-.warnText strong {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.warnCheck {
-  flex-shrink: 0;
-  margin-top: 1px;
-  accent-color: var(--accent);
-  cursor: pointer;
 }
 
 .actions {

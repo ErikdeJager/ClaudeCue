@@ -3555,9 +3555,9 @@ reflow mid-slide*. That trade-off must be replaced with a fluid, resizable panel
 
 ---
 
-### 52. [ ] Custom checkbox component (replace native checkboxes app-wide)
+### 52. [x] Custom checkbox component (replace native checkboxes app-wide)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -3572,25 +3572,25 @@ focus-visible / disabled states.
 
 **Subtasks**
 
-1. [ ] Build a reusable `Checkbox` (e.g. `src/components/Checkbox/*`): a styled,
+1. [x] Build a reusable `Checkbox` (e.g. `src/components/Checkbox/*`): a styled,
    **accessible** control — proper labeling, keyboard toggle (Space), visible
    `:focus-visible`, checked/disabled (and indeterminate if useful) states — built on a
    visually-hidden native input (for a11y) with a custom box, or a full ARIA checkbox.
    On-system tokens only. Simple API (`checked`, `onChange`, `label`, `disabled`).
-2. [ ] Replace the native checkbox in `NewSessionModal.tsx` (the #27 branch-switch confirm)
+2. [x] Replace the native checkbox in `NewSessionModal.tsx` (the #27 branch-switch confirm)
    with the new component.
-3. [ ] **Audit for any other native checkboxes** (grep `type="checkbox"`) and replace them.
-4. [ ] **Markdown task-list checkboxes** (`MarkdownViewer.module.css` styles
+3. [x] **Audit for any other native checkboxes** (grep `type="checkbox"`) and replace them.
+4. [x] **Markdown task-list checkboxes** (`MarkdownViewer.module.css` styles
    `.markdown input[type="checkbox"]` — GFM `- [ ]` items from react-markdown) are
    **read-only rendered file content**, not app controls: leave them non-interactive, but
    optionally restyle to visually match the custom checkbox (don't make them edit the file).
 
 **Acceptance criteria**
 
-- [ ] A reusable, accessible, on-system `Checkbox` exists and is used for the branch-switch
+- [x] A reusable, accessible, on-system `Checkbox` exists and is used for the branch-switch
   confirmation (and any other app checkboxes).
-- [ ] No interactive native `type="checkbox"` controls remain in the app UI.
-- [ ] Markdown task-list checkboxes still render (read-only), visually consistent.
+- [x] No interactive native `type="checkbox"` controls remain in the app UI.
+- [x] Markdown task-list checkboxes still render (read-only), visually consistent.
 
 **Notes**
 
@@ -3598,6 +3598,26 @@ focus-visible / disabled states.
   `src/components/MarkdownViewer/MarkdownViewer.module.css` (task-list styling). Keep a real
   input under the hood or full ARIA — the #49 accessibility pass will check this. Reuse this
   component for every future checkbox.
+- **Done 2026-06-19.** New **`src/components/Checkbox`** — a **visually-hidden real
+  `<input type="checkbox">`** (keeps native semantics: Space toggle, `:focus-visible`,
+  screen-reader checked state, implicit label association) + a custom Catppuccin box driven
+  by adjacent-sibling selectors (`:checked`→accent fill + `Check` glyph; `:focus-visible`→
+  accent ring; `:disabled`/hover states). On-system tokens only (`--accent`/`--accent-fg`/
+  borders). Simple API `{ checked, onChange(checked), label?, disabled?, ariaLabel?,
+  className? }`; `label` is `ReactNode` (rich labels + `strong` styled). **Subtask 2:** the
+  `NewSessionModal` branch-switch acknowledgement (#27) now uses it — the warn block became
+  a `<div>` (was a `<label>`, which can't nest the Checkbox's own `<label>`), the warning
+  text is the Checkbox's `label` (so it's the accessible name; dropped the divergent
+  `aria-label`), centered with the alert icon. **Subtask 3 — audit:** `grep type="checkbox"`
+  found only that one interactive control (replaced) + the markdown task-list. **Subtask 4:**
+  the GFM task-list checkboxes (now in `FileViewer.module.css` — `MarkdownViewer` was
+  removed in #44; react-markdown renders them **`disabled`** = read-only) were restyled
+  `appearance:none` to **match** the Checkbox (accent box + CSS-`::after` checkmark; the
+  filled box is the fallback if the pseudo isn't supported) — still non-editable. **Hard
+  gate green:** frontend `build`/`lint`/`format:check`/`test` (63); Rust unchanged (37, no
+  backend touched). No component-render test infra exists (tests are pure-logic/store), so
+  the toggle is build-typed + runtime-visual; a11y semantics are by-construction (real
+  input). CLAUDE.md component list updated. Reuse `Checkbox` for every future checkbox.
 
 ---
 

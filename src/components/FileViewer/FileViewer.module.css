@@ -253,7 +253,36 @@
   max-width: 100%;
 }
 
+/* GFM task-list checkboxes (#52): read-only rendered file content (react-markdown
+   renders them `disabled`), restyled to match the app Checkbox — never editable.
+   The accent fill + CSS checkmark mirror `Checkbox`; if `::after` isn't supported
+   the filled accent box still reads as checked. */
 .markdown input[type="checkbox"] {
-  margin-right: var(--space-6);
-  accent-color: var(--accent);
+  appearance: none;
+  position: relative;
+  width: 14px;
+  height: 14px;
+  margin: 0 var(--space-6) 0 0;
+  vertical-align: -2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-chip);
+  background: var(--bg-base);
+  cursor: default;
+}
+
+.markdown input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.markdown input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 3px;
+  height: 7px;
+  border: solid var(--accent-fg);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
