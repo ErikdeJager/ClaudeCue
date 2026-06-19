@@ -4132,13 +4132,13 @@ through a mix of drags and a special context-menu item. Two changes:
 ### 60. [ ] Final pass: clean up the documentation with /update-docs
 
 **Status:** Not started
-**Depends on:** #48, #49, #55, #56, #57, #58, #59
+**Depends on:** #48, #49, #55, #56, #57, #58, #59, #61
 **Created:** 2026-06-19
 
 **Description**
 
 After **all** other tasks are complete — including the code-improvement iteration passes
-(#48, #49) and the feature tasks (#55–#59; #54 is already done) — bring every project
+(#48, #49) and the feature tasks (#55–#59 and #61; #54 is already done) — bring every project
 document back in sync with the shipped code in one pass. The agent running this task must
 use the **`update-docs` skill** (`/update-docs`), which refreshes `CLAUDE.md`, `README.md`,
 and any other docs, and performs the special `TASKS.md` cleanup (summarize completed tasks
@@ -4148,7 +4148,7 @@ run **last**.
 
 **Subtasks**
 
-1. [ ] Confirm all depended-on tasks (#48, #49, #55, #56, #57, #58, #59) are Done.
+1. [ ] Confirm all depended-on tasks (#48, #49, #55, #56, #57, #58, #59, #61) are Done.
 2. [ ] Run the **`/update-docs`** skill and let it sync `CLAUDE.md`, `README.md`, and any
    other docs to the code, plus the `TASKS.md` completed-task cleanup. (`PROMPT.md` is
    never modified.)
@@ -4165,5 +4165,99 @@ run **last**.
 
 - This is a **documentation-only** pass via the `update-docs` skill — no feature work.
 - Depends on every other open task so it runs **last**: #48/#49 are the code-improvement
-  passes the user asked to include; #55–#59 are the new features. If further tasks are added
-  later, re-confirm this remains the final one.
+  passes the user asked to include; #55–#59 and #61 are the new features. If further tasks
+  are added later, re-confirm this remains the final one.
+
+---
+
+### 61. [ ] New-session flow: deep keyboard-speed pass (fast keybind-driven launch)
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Another pass over the **start-a-new-agent** model — the top-left panel that expands from
+the New session button (#53, built on #27's function and #26's ⌘N). This pass is
+specifically about **launch speed via the keyboard**: a power user should be able to spin
+up the next agent with quick keystrokes — **keybinds / quick motions to select a recent
+folder, a folder, or a branch** — ideally without ever touching the mouse. This is a
+**research + design + implement** task: first **deeply research** the best way to make this
+flow fast, then design and build the chosen model.
+
+Today (#53) the panel supports ⌘N to open, autofocus, **Enter-to-create**, Escape/Tab — but
+**picking a recent folder or a branch is click/Tab-only**: there is no fuzzy type-ahead, no
+number/letter quick-select, and no zero-input "repeat last" path. Close that gap.
+
+**Scope:** UX / interaction layer only — like #53, **do not change the underlying function**
+(`spawnSession`: folder / recents / branch / `git checkout` / destructive-confirm / spawn
+stays exactly as #27). This is about *how fast the keyboard can drive it*.
+
+**Research (do first — document findings + a recommended model before building):**
+
+- Fast launcher / quick-switcher patterns: **command-palette fuzzy-find** (VS Code ⌘P,
+  Raycast, Linear), **number/letter quick-select** (1–9 or ⌘1–9 for the top recents),
+  **type-ahead** lists, **modal "vim-like" motions**, and **"repeat last"** one-shot launch.
+- How to resolve **folder + branch** fastest: one unified fuzzy palette vs a short guided
+  keyboard sequence (folder → branch → create), each step a single keystroke.
+- **Hotkey-vs-typing conflicts:** single-key hotkeys (e.g. `2` for recent #2) collide with
+  typing in the name/search field — resolve via modifiers (⌘1–9 / Alt) or context (digits
+  select only when the search box is empty). Pick a scheme.
+- The **OS folder dialog** is the slow part for *new* folders; recents are the fast path.
+  Research whether a typed-path quick-entry (with autocomplete) is worth adding, or keep the
+  native dialog for the rare new-folder case.
+- **Discoverability:** inline `kbd` hints so users learn the keys.
+- **No conflicts** with existing global keys (⌘N #26, Shift+Arrows #24) or claude's terminal
+  keys (the capture-phase listener in `useKeyboardNav.ts`); preserve the #49/#53 a11y
+  (focus-trap, focus restore).
+
+**Recommended direction (validate / refine in the research step):** make the panel a
+**fuzzy command-palette-style launcher** — a search input that type-ahead-filters a unified
+list of recent folders (↑/↓ + Enter to choose; **⌘1–9** jump to the top N); once a folder is
+set, the **branch list becomes keyboard-navigable** (type-ahead + ↑/↓, Enter = checkout &
+start); add a **quick-repeat** (⌘N then Enter immediately launches in the most-recent folder
+on its current branch — the zero-input common case); show inline kbd hints throughout.
+
+**Subtasks**
+
+1. [ ] **Research & decide:** evaluate the patterns above; write down the options, trade-offs,
+   the hotkey/typing conflict-resolution scheme, and the **chosen model** (+ why) before
+   building.
+2. [ ] **Keyboard folder/recents selection:** type-ahead fuzzy filter over recents + quick
+   keybinds (e.g. ⌘1–9) to pick a recent without the mouse; keep "Choose folder…" for new
+   folders (add a typed-path quick-entry only if research favors it).
+3. [ ] **Keyboard branch selection:** make the branch list type-ahead + arrow-navigable with
+   a keybind to jump to it; Enter on a non-current branch = checkout & start, keeping the
+   destructive-confirm (#52) when agents are running in the folder.
+4. [ ] **Quick-repeat / fewest-keystrokes path:** the fastest common case (e.g. ⌘N → Enter
+   launches the last folder/branch) with sensible defaults.
+5. [ ] **Discoverability + a11y:** inline kbd hints; no conflicts with ⌘N / Shift-arrows /
+   terminal keys; preserve focus-trap + focus-restore (#49/#53).
+6. [ ] Keep all #27 function intact (folders / recents / branch / checkout / warning / spawn)
+   — UX only.
+
+**Acceptance criteria**
+
+- [ ] A user can open the flow and **select a recent folder and a branch entirely by
+  keyboard** (type-ahead and/or quick keybinds), then launch — no mouse required.
+- [ ] There is a clearly faster path than today (e.g. quick-repeat / number hotkeys); the
+  chosen model + research is documented in the task notes.
+- [ ] No regression to existing function (#27), global keys (#26 / #24), terminal input, or
+  a11y (#49 / #53); the keybinds are discoverable (kbd hints).
+
+**Notes**
+
+- Files: `src/components/NewSessionModal/*` (the panel — likely reworked), `src/store.ts`
+  (`newSessionOpen` / `newSessionRepo` / `recents` / `spawnSession`), `src/useKeyboardNav.ts`
+  (⌘N + global-key coexistence), `src/components/Sidebar/Sidebar.tsx` (the button is the
+  visual origin). Builds on **#53** (expanding panel), **#27** (function), **#26** (⌘N), and
+  must coexist with **#24** (Shift-arrow nav) — all already done, so no open dependency.
+- A focused **UX/interaction redesign with a research phase** (like #53/#42): document the
+  chosen model + rationale. Function is fixed — keyboard speed is the only goal.
+- **#60 (docs cleanup) depends on this task** so it runs after this pass lands.
+- **Assumptions** (no clarification available): the recommended starting model is a command
+  palette + ⌘1–9 recents + type-ahead branches + ⌘N-then-Enter quick-repeat; the research
+  subtask may refine it. Hotkey/typing conflicts are resolved via modifiers or empty-field
+  context. The native folder dialog stays for new folders unless research favors typed-path
+  entry.
