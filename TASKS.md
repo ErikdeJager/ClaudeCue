@@ -175,7 +175,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 Tasks #1–#63 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. New work goes here as a fresh `### N.` entry
-in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#76**), with its
+in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#77**), with its
 `Depends on:` prerequisites.
 
 ---
@@ -992,3 +992,86 @@ not wanted).
   `src/store.ts`, `src/components/ViewSwitch/ViewSwitch.tsx`, `src/components/Overview/Overview.tsx`,
   `src/useKeyboardNav.ts`, `src/ipc.ts`, `src/store.test.ts`,
   `src-tauri/src/{store.rs,commands.rs,lib.rs}`, `CLAUDE.md`, `README.md`.
+
+---
+
+### 76. [ ] Canvas keyboard navigation — Shift+arrows between panels, ⌘1–9 to jump canvases
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** #75
+**Created:** 2026-06-19
+
+**Description**
+
+Add keyboard navigation inside Canvas mode (#46/#58):
+- **Shift+Arrow** moves the focused panel **spatially between the panels** in the current
+  canvas (the BSP leaves) — Shift+→ goes to the panel on the right, etc.
+- **⌘1–9** jumps directly to **canvas N** (the Nth tab). No prev/next chord (per the
+  requester) and **only while the Canvas view is active**.
+
+**Keybind research (why these are conflict-safe).** The hard constraint is that a panel often
+hosts a focused `claude` TUI or shell with its own keybinds. On macOS, **Cmd (⌘) combos never
+reach the terminal/PTY** — they're handled at the app layer — and the Claude Code TUI uses
+**no ⌘+number / ⌘+arrow / ⌘+bracket** bindings (it leans on Ctrl-keys, Shift+Tab, Esc). So
+**⌘1–9 is guaranteed safe** even over a focused claude session. The app's global key handler
+already runs in the **capture phase with `stopPropagation`** (`useKeyboardNav.ts`), intercepting
+before xterm forwards to the PTY — it already does this for Shift+Arrow (#24), so claiming
+Shift+Arrow for panel nav in Canvas is consistent and safe (claude doesn't critically use
+Shift+Arrow — it uses Shift+Tab/Shift+Enter). Sources: Claude Code keybind reference (via the
+claude-code-guide) + macOS tab-switch conventions (Apple, Chrome/Safari).
+
+**Context-sensitive Shift+Arrow.** Today Shift+←/→ = prev/next agent in Overview (#24), and
+#75 removes the Shift+↑/↓→Focus bindings. Branch on the active view: in **Overview**, Shift+
+arrows keep navigating agents; in **Canvas**, Shift+arrows navigate panels.
+
+**Implementation notes.**
+- **Focused-panel concept:** Canvas has no "active leaf" today. Add one (store state or
+  per-canvas `activeLeafId`), highlight the focused panel (subtle border à la #50, on tokens),
+  and on navigation **focus the panel's content** (e.g. call the xterm's focus) so keystrokes
+  go there.
+- **Spatial BSP navigation:** add a pure helper in `canvasTree.ts` that computes each leaf's
+  rectangle from the tree + `sizes`, then picks the nearest leaf in the arrow direction
+  (overlapping on the perpendicular axis). Wrap-around optional.
+- **⌘1–9:** `selectCanvas(canvases[N-1])` when `view === "canvas"`; no-op if N exceeds the tab
+  count.
+- **Guards:** all of this lives in `useKeyboardNav.ts` (capture phase). Gate on
+  `!newSessionOpen` so the new-session modal's own ⌘1–9 recents (#61/#66) and inputs aren't
+  hijacked — coordinate with #66 (which is changing the modal's ⌘1–9 usage).
+
+Out of scope: a prev/next canvas chord (chosen: jump-only); making canvas-switch global
+(chosen: Canvas-view-only); reordering panels via keyboard.
+
+**Subtasks**
+
+1. [ ] Add a focused/active Canvas leaf concept + a subtle highlight on the active panel; focus
+   its content (xterm/etc.) when it becomes active.
+2. [ ] `canvasTree.ts`: pure helper to compute leaf rects from the tree+sizes and find the
+   spatial neighbor in a given direction.
+3. [ ] `useKeyboardNav.ts`: in Canvas view, Shift+arrows = move focused panel spatially
+   (Overview keeps agent nav); ⌘1–9 = jump to canvas N; capture-phase + `!newSessionOpen` guard.
+4. [ ] Verify no conflict with a focused claude/terminal (⌘1–9 never reaches the PTY;
+   Shift+arrows intercepted before xterm).
+
+**Acceptance criteria**
+
+- [ ] In Canvas, Shift+←/→/↑/↓ move the focused panel to the spatially adjacent panel; the
+  active panel is highlighted and receives subsequent keystrokes.
+- [ ] In Canvas, ⌘1 … ⌘9 jump to the 1st … 9th canvas tab (no-op past the tab count); active
+  only in Canvas view.
+- [ ] With a `claude` session focused in a panel, ⌘1–9 still switches canvases (doesn't reach
+  claude) and Shift+arrows still move panels (don't reach claude).
+- [ ] In Overview, Shift+←/→ still navigate agents (unchanged); the new-session modal's keys
+  aren't hijacked.
+
+**Notes**
+
+- Decisions (from the requester, after research): panel nav = Shift+Arrow; canvas switch =
+  ⌘1–9 jump only (no prev/next chord); active only in Canvas view.
+- Depends on #75 (Focus removal) — it edits the same `useKeyboardNav.ts` and frees Shift+↑/↓;
+  build the Canvas branch on the cleaned-up handler.
+- Coordinate with #66 (new-session modal ⌘1–9 recents) — the `!newSessionOpen` guard keeps
+  them separate.
+- Key code: `src/useKeyboardNav.ts` (view-branched Shift+arrows + ⌘1–9),
+  `src/components/Canvas/Canvas.tsx` (active-leaf highlight + content focus),
+  `src/components/Canvas/canvasTree.ts` (spatial neighbor helper), `src/store.ts`
+  (`selectCanvas`, `canvases`/`activeCanvasId`, active-leaf state).
