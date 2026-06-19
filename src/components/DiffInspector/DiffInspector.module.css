@@ -186,12 +186,15 @@
 .body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  /* Long lines soft-wrap (#80) instead of scrolling right; keep vertical scroll. */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .code {
-  width: max-content;
-  min-width: 100%;
+  /* Fill the body width (#80) so lines wrap within it, rather than sizing to the
+     widest line (which forced horizontal scroll). */
+  width: 100%;
   font-family: var(--mono);
   font-size: var(--fs-diff);
   line-height: var(--lh-diff);
@@ -205,6 +208,8 @@
 
 .line {
   display: flex;
+  /* Top-align the gutter number to the first row of a wrapped line (#80). */
+  align-items: flex-start;
 }
 
 .gutter {
@@ -226,8 +231,13 @@
 
 .content {
   flex: 1;
+  min-width: 0;
   padding-right: var(--space-12);
-  white-space: pre;
+  /* Soft-wrap long lines (#80): pre-wrap keeps indentation/spaces; overflow-wrap
+     also breaks very long unbroken tokens (minified lines, URLs). min-width:0
+     lets this flex item shrink below its content so wrapping actually kicks in. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   color: var(--text-primary);
 }
 
@@ -242,10 +252,13 @@
 /* --- Split layout --- */
 .splitLine {
   display: flex;
+  /* Top-align the two cells so wrapped old/new content stays readable (#80). */
+  align-items: flex-start;
 }
 
 .splitCell {
   display: flex;
+  align-items: flex-start;
   width: 50%;
   min-width: 0;
   border-right: 1px solid var(--border-hairline);

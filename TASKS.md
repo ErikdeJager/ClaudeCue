@@ -1258,9 +1258,9 @@ sidebar row highlight extend to every item kind. Presence-in-canvas = the item a
 
 ---
 
-### 80. [ ] Diff viewer — wrap long lines to fit width (no horizontal scroll)
+### 80. [x] Diff viewer — wrap long lines to fit width (no horizontal scroll)
 
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Status:** Done · _(Not started | In progress | Blocked | Done)_
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -1294,13 +1294,13 @@ rendering (#64 covers that surface separately).
 
 **Acceptance criteria**
 
-- [ ] In the diff viewer, a line longer than the panel width wraps to the next visual line and
+- [x] In the diff viewer, a line longer than the panel width wraps to the next visual line and
   fits within the width — no horizontal scrollbar / no scrolling right to read it.
-- [ ] The wrapped line keeps its single gutter line number, top-aligned to the first visual
+- [x] The wrapped line keeps its single gutter line number, top-aligned to the first visual
   row; continuation rows have no extra number.
-- [ ] Works in both unified and split views; code indentation/whitespace is preserved
+- [x] Works in both unified and split views; code indentation/whitespace is preserved
   (pre-wrap) and very long tokens still wrap (overflow-wrap).
-- [ ] Add/del/context colors, gutter, and tab rendering are otherwise unchanged; the viewer
+- [x] Add/del/context colors, gutter, and tab rendering are otherwise unchanged; the viewer
   behaves the same in Overview diff columns and Canvas diff panels.
 
 **Notes**
