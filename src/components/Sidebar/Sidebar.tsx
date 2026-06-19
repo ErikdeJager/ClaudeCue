@@ -160,7 +160,6 @@ function Sidebar() {
   const selectedId = useStore((s) => s.selectedId);
   const select = useStore((s) => s.select);
   const removeSession = useStore((s) => s.removeSession);
-  const spawnSession = useStore((s) => s.spawnSession);
   const openNewSession = useStore((s) => s.openNewSession);
   const refreshBranches = useStore((s) => s.refreshBranches);
   const forgetRepo = useStore((s) => s.forgetRepo);
@@ -306,7 +305,7 @@ function Sidebar() {
                 <button
                   type="button"
                   className={`${styles.plus} ${isEmpty ? styles.plusCoral : ""}`}
-                  onClick={() => void spawnSession(repo)}
+                  onClick={() => openNewSession(repo)}
                   title="New session in this repo"
                   aria-label="New session in this repo"
                 >

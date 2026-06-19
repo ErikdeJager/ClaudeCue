@@ -6,11 +6,13 @@
   z-index: 100;
 }
 
-/* Compact popover anchored bottom-left, overlaying part of the sidebar. */
+/* Panel anchored top-left at the New session button (margin 12px), expanding
+   from it (#53). transform-origin: top left makes the scale-in read as the
+   button opening up. */
 .popover {
   position: fixed;
   left: var(--space-12);
-  bottom: var(--space-12);
+  top: var(--space-12);
   z-index: 101;
   display: flex;
   flex-direction: column;
@@ -22,14 +24,23 @@
   border-radius: var(--radius-window);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-popover);
-  animation: popover-in var(--dur-fast) var(--ease-out);
+  transform-origin: top left;
+  animation: popover-in var(--dur-slow) var(--ease-out);
 }
 
 .title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
   margin: 0 0 var(--space-12);
   color: var(--text-primary);
   font-size: var(--fs-ui);
   font-weight: 600;
+}
+
+/* Echoes the New session button the panel grew from (#53). */
+.titleIcon {
+  color: var(--accent);
 }
 
 .label {
@@ -37,6 +48,11 @@
   margin: 0 0 var(--space-6);
   color: var(--text-secondary);
   font-size: var(--fs-meta-sm);
+}
+
+.optional {
+  color: var(--text-muted);
+  font-weight: 400;
 }
 
 .pickRow {
@@ -253,10 +269,10 @@
 @keyframes popover-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: scale(0.9);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: scale(1);
   }
 }

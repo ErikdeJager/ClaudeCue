@@ -3621,9 +3621,9 @@ focus-visible / disabled states.
 
 ---
 
-### 53. [ ] Redefine the "start a new agent" model — focused UI/UX redesign
+### 53. [x] Redefine the "start a new agent" model — focused UI/UX redesign
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -3656,25 +3656,25 @@ guided mini-flow vs inline form) — justify the choice in the notes.
 
 **Subtasks**
 
-1. [ ] Audit the current new-session UX (#27); write down the friction points + the
+1. [x] Audit the current new-session UX (#27); write down the friction points + the
    redefined model (what changes and why) before building.
-2. [ ] **Placement/motion:** re-anchor to top-left, expanding from the New session button,
+2. [x] **Placement/motion:** re-anchor to top-left, expanding from the New session button,
    with a fun animation (reduced-motion fallback).
-3. [ ] **Flow redesign:** improve the internal steps/hierarchy — folder + recents, branch
+3. [x] **Flow redesign:** improve the internal steps/hierarchy — folder + recents, branch
    detection/selection presentation, optional name, and the destructive-checkout
    confirmation — into a short, obvious, low-friction path with good defaults and clear
    status. Keep autofocus + Enter-to-create; Escape / outside-click to close.
-4. [ ] Make all entry points (top button, ⌘N #26, per-repo +, context-menu New session #54)
+4. [x] Make all entry points (top button, ⌘N #26, per-repo +, context-menu New session #54)
    open the same redefined model consistently.
-5. [ ] Keep all #27 functionality intact (branches, checkout, warning, spawn) — UI/UX only.
+5. [x] Keep all #27 functionality intact (branches, checkout, warning, spawn) — UI/UX only.
 
 **Acceptance criteria**
 
-- [ ] The start-a-new-agent flow is visibly redesigned: top-left, expanding from the New
+- [x] The start-a-new-agent flow is visibly redesigned: top-left, expanding from the New
   session button with a fun animation (reduced-motion → fade).
-- [ ] The interaction model is clearly improved (fewer/clearer steps, good defaults, obvious
+- [x] The interaction model is clearly improved (fewer/clearer steps, good defaults, obvious
   common path) and consistent across all entry points.
-- [ ] No behavior/backend change; all #27 functionality still works.
+- [x] No behavior/backend change; all #27 functionality still works.
 
 **Notes**
 
@@ -3684,6 +3684,32 @@ guided mini-flow vs inline form) — justify the choice in the notes.
   placement** (function from #27 stays). Coordinates with #26 (button/⌘N), #52 (the confirm
   now uses the custom checkbox), and #54 (context-menu "New session"). Focused UX redesign —
   document the chosen model + rationale; revisited again in the #49 UX pass.
+- **Done 2026-06-19.** **Audit (subtask 1):** friction in #27's popover — (a) it opened
+  **bottom-left**, disconnected from the **top-left** New session button that triggered it;
+  (b) the fast path (recents) sat *below* the "Choose…" button, recall-before-recognition;
+  (c) the optional **Name** field was autofocused even when no folder was chosen yet (can't
+  create); (d) the per-repo **+** *bypassed* the flow (direct spawn) — an inconsistent
+  entry point. **Chosen model:** keep a single **expanding inline panel** (not a multi-step
+  wizard — extra clicks; not a full modal — too heavy) anchored at the button, with the
+  internal order re-prioritized. **Subtask 2 — placement/motion:** `.popover` re-anchored
+  `top: 12px` (was `bottom`) to sit at the button (margin 12px), `transform-origin: top
+  left` + a `scale(0.9)→1` + fade over `--dur-slow` so it reads as the button opening up; a
+  `Plus` accent title icon echoes the button. Reduced-motion → the **global killswitch**
+  makes it appear instantly (motionless — stricter than a fade, and consistent with every
+  other animation in the app; a bespoke fade would have to fight the killswitch's
+  `!important`). **Subtask 3 — flow:** **recents now lead** the Folder section (the fast
+  path), then "Choose another…"/"Choose folder…"; the path shows the selection; Name is
+  demoted with a quiet "optional" tag; focus goes to **Name when a folder is prefilled**
+  (straight to naming + Enter) else to the **folder picker** (recognition-first). Branch
+  picker + destructive Checkbox (#52) + Enter-to-create + Esc/outside-click close all kept.
+  **Subtask 4 — consistency:** the per-repo **+** now `openNewSession(repo)` (opens the same
+  panel prefilled) instead of direct-spawn; the top button + ⌘N (#26) already did; #54's
+  context-menu item will call the same `openNewSession(repo)`. **Subtask 5:** function is
+  untouched — `spawnSession` (folder/recents/branch/checkout/warning/spawn) is the same
+  #27 path; this is UI/UX + entry-point wiring only. **Hard gate green:** frontend
+  `build`/`lint`/`format:check`/`test` (63); Rust unchanged (37, no backend). The animation
+  + layout are runtime-visual; the flow/focus/entry-point logic is build-typed. Revisited in
+  the #49 UX pass.
 
 ---
 

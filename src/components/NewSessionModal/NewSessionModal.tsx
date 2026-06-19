@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, FolderOpen, GitBranch } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, FolderOpen, GitBranch, Plus } from "lucide-react";
 
 import { listBranches, pickDirectory } from "../../ipc";
 import { repoName } from "../../paths";
@@ -9,14 +9,18 @@ import Checkbox from "../Checkbox/Checkbox";
 import styles from "./NewSessionModal.module.css";
 
 /**
- * Compact bottom-left popover to start a session (#27): folder picker +
- * recent-folder chips + optional name, plus git **branch detection** — when the
- * folder is a repo its local branches are listed; picking one checks it out
- * before the agent starts. A destructive-checkout warning appears (and must be
- * acknowledged) when the chosen branch differs from the current one *and* an
- * agent is already running in that folder. State lives in the store
- * (`newSessionOpen` / `newSessionRepo`); `spawnSession` does the checkout +
- * spawn, adds to the store + recents, selects it, and toasts.
+ * Start-a-new-agent panel (#53, supersedes #27's bottom-left popover): a panel
+ * that **expands from the New session button** (top-left, scale-from-corner;
+ * reduced-motion → instant via the global killswitch). The flow leads with the
+ * **fast path — recent folders** (recognition over recall), then "Choose
+ * another…", then git **branch detection** (when the folder is a repo, pick one
+ * to check out first), an optional name, and a destructive-checkout
+ * acknowledgement (custom Checkbox #52) when switching a branch under a running
+ * agent. Every entry point — the top button, ⌘N (#26), the per-repo + — opens
+ * this same model (prefilled when a repo is known). Function is unchanged from
+ * #27: state in the store (`newSessionOpen`/`newSessionRepo`); `spawnSession`
+ * does the checkout + spawn, persists/selects/toasts. Autofocus + Enter create;
+ * Escape / outside-click close.
  */
 function NewSessionModal() {
   const open = useStore((s) => s.newSessionOpen);
@@ -33,7 +37,10 @@ function NewSessionModal() {
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
 
-  // Reset / prefill each time the popover opens.
+  const nameRef = useRef<HTMLInputElement>(null);
+  const chooseRef = useRef<HTMLButtonElement>(null);
+
+  // Reset / prefill each time the panel opens.
   useEffect(() => {
     if (open) {
       setCwd(prefillRepo);
@@ -43,6 +50,18 @@ function NewSessionModal() {
       setSelectedBranch(null);
       setAcknowledged(false);
     }
+  }, [open, prefillRepo]);
+
+  // Focus the right first control on open: the name when a folder is already
+  // known (per-repo + / prefilled — straight to naming + Enter), otherwise the
+  // folder picker (the user's first decision is which folder).
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => {
+      if (prefillRepo) nameRef.current?.focus();
+      else chooseRef.current?.focus();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [open, prefillRepo]);
 
   // Detect branches whenever the chosen folder changes; default to the current.
@@ -126,23 +145,13 @@ function NewSessionModal() {
           void create();
         }}
       >
-        <h2 className={styles.title}>New session</h2>
+        <h2 className={styles.title}>
+          <Plus size={15} strokeWidth={2} className={styles.titleIcon} />
+          New session
+        </h2>
 
-        <p className={styles.label}>Working directory</p>
-        <div className={styles.pickRow}>
-          <button
-            type="button"
-            className={styles.pickButton}
-            onClick={() => void pick()}
-          >
-            <FolderOpen size={15} strokeWidth={1.5} />
-            Choose…
-          </button>
-          <span className={cwd ? styles.path : styles.pathEmpty}>
-            {cwd ?? "No folder selected"}
-          </span>
-        </div>
-
+        {/* Folder — lead with recents (the fast path), then choose another. */}
+        <p className={styles.label}>Folder</p>
         {recents.length > 0 && (
           <div className={styles.chips}>
             {recents.slice(0, 6).map((recent) => (
@@ -158,6 +167,20 @@ function NewSessionModal() {
             ))}
           </div>
         )}
+        <div className={styles.pickRow}>
+          <button
+            ref={chooseRef}
+            type="button"
+            className={styles.pickButton}
+            onClick={() => void pick()}
+          >
+            <FolderOpen size={15} strokeWidth={1.5} />
+            {recents.length > 0 ? "Choose another…" : "Choose folder…"}
+          </button>
+          <span className={cwd ? styles.path : styles.pathEmpty}>
+            {cwd ?? "No folder selected"}
+          </span>
+        </div>
 
         {branches && branches.all.length > 0 && (
           <>
@@ -186,15 +209,15 @@ function NewSessionModal() {
         )}
 
         <label className={styles.label} htmlFor="session-name">
-          Name (optional)
+          Name <span className={styles.optional}>optional</span>
         </label>
         <input
+          ref={nameRef}
           id="session-name"
           className={styles.input}
           value={name}
           placeholder={cwd ? repoName(cwd) : "Folder name"}
           onChange={(event) => setName(event.currentTarget.value)}
-          autoFocus
         />
 
         {isDestructive && (
