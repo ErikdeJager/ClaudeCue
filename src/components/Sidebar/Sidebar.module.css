@@ -321,20 +321,41 @@
   background: var(--accent-dim);
 }
 
-/* Pending scheduled-session row (#93): indented under its repo like file items;
-   clock + name, fire time pushed right, cancel × on hover. */
+/* Pending scheduled-session row (#93/#94): a draggable item like file/diff rows —
+   indented under its repo; clock + name, fire time pushed right, cancel × on hover.
+   Click selects/jumps (#79); the whole label is the drag-into-Canvas handle. */
 .scheduleRow {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
   margin: var(--space-1) var(--space-8);
-  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-20);
   border-radius: var(--radius-control);
-  color: var(--text-secondary);
 }
 
 .scheduleRow:hover {
   background: var(--bg-hover);
+}
+
+.scheduleRowSelected,
+.scheduleRowSelected:hover {
+  background: var(--accent-dim);
+}
+
+.scheduleRowDragging {
+  opacity: 0.5;
+}
+
+.scheduleMain {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-20);
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
 }
 
 .scheduleIcon {
@@ -351,8 +372,9 @@
 }
 
 .scheduleWhen {
-  margin-left: auto;
   flex-shrink: 0;
+  margin-left: auto;
+  padding-left: var(--space-6);
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: var(--fs-meta-sm);
@@ -360,11 +382,12 @@
 
 .scheduleCancel {
   display: flex;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  margin-right: var(--space-4);
   border: 0;
   border-radius: var(--radius-chip);
   background: transparent;

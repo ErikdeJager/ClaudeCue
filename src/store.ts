@@ -220,7 +220,7 @@ export function repoColor(
  * (by repo path + file). Matched against Canvas leaves for view-aware nav (#79). */
 type SidebarItem = {
   id: string;
-  kind: "agent" | "terminal" | "file" | "diff";
+  kind: "agent" | "terminal" | "file" | "diff" | "scheduled";
   repoPath?: string;
   file?: string;
 };
@@ -241,6 +241,8 @@ function matchesCanvasItem(content: CanvasContent, item: SidebarItem): boolean {
       );
     case "diff":
       return content.kind === "diff" && content.repoPath === item.repoPath;
+    case "scheduled":
+      return content.kind === "scheduled" && content.scheduleId === item.id;
   }
 }
 
@@ -254,6 +256,9 @@ function leafItemId(
 ): string | null {
   if (content.kind === "agent" || content.kind === "terminal") {
     return content.sessionId ?? null;
+  }
+  if (content.kind === "scheduled") {
+    return content.scheduleId ?? null;
   }
   const panels = overviewPanels[content.repoPath ?? ""] ?? [];
   if (content.kind === "file") {

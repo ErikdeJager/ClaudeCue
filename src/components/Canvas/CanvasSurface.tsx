@@ -17,6 +17,7 @@ import DetachedNote from "../DetachedNote/DetachedNote";
 import DiffInspector from "../DiffInspector/DiffInspector";
 import FileSwitcher from "../FileSwitcher/FileSwitcher";
 import FileViewer from "../FileViewer/FileViewer";
+import ScheduledPanel from "../ScheduledPanel/ScheduledPanel";
 import Terminal from "../Terminal/Terminal";
 import { focusTerminal } from "../Terminal/terminalPool";
 import { removeLeaf, updateSizes } from "./canvasTree";
@@ -58,6 +59,7 @@ function panelTitle(content: CanvasContent): string {
   if (content.kind === "file") return content.file?.split("/").pop() ?? "File";
   if (content.kind === "diff") return "Diff";
   if (content.kind === "terminal") return "Terminal";
+  if (content.kind === "scheduled") return "Scheduled";
   return content.label ?? "Panel";
 }
 
@@ -141,6 +143,9 @@ function LeafPanel({
     }
     if (content.kind === "diff" && content.repoPath) {
       return <DiffInspector repoPath={content.repoPath} active />;
+    }
+    if (content.kind === "scheduled" && content.scheduleId) {
+      return <ScheduledPanel scheduleId={content.scheduleId} />;
     }
     return <div className={styles.placeholder}>Empty panel</div>;
   };

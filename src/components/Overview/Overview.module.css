@@ -195,6 +195,12 @@
   white-space: nowrap;
 }
 
+/* Clock cue before a scheduled card's title (#94), in the leading slot. */
+.scheduleLeadIcon {
+  flex-shrink: 0;
+  color: var(--status-running);
+}
+
 .actions {
   display: flex;
   flex-shrink: 0;

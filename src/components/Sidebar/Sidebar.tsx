@@ -13,6 +13,7 @@ import {
 
 import { listFiles } from "../../ipc";
 import { repoName, sessionLabel } from "../../paths";
+import { formatFireTime } from "../../time";
 import {
   dedupeBranchLabels,
   REPO_PALETTE,
@@ -26,42 +27,59 @@ import FilePicker from "../FilePicker/FilePicker";
 import ViewSwitch from "../ViewSwitch/ViewSwitch";
 import styles from "./Sidebar.module.css";
 
-/** Compact local fire time for a pending schedule row (#93), e.g. "Jun 21, 3:45 PM". */
-function formatFireTime(fireAt: number): string {
-  return new Date(fireAt * 1000).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-/** A pending scheduled session row (#93): name/branch + fire time + cancel ×.
- * Minimal (non-draggable, no rich panel — that's #94). */
+/** A pending scheduled-session row (#93/#94): a dnd-kit draggable item (drops into
+ * Canvas as a scheduled panel), click selects/jumps to it (#79), × cancels. The
+ * whole label is the drag handle; a small activation distance keeps clicks working. */
 function ScheduleRow({
   schedule,
+  selected,
+  onOpen,
   onCancel,
 }: {
   schedule: ScheduledSession;
+  selected: boolean;
+  onOpen: () => void;
   onCancel: () => void;
 }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: `schedule:${schedule.id}`,
+      data: {
+        kind: "scheduled",
+        scheduleId: schedule.id,
+        repoPath: schedule.cwd,
+      },
+    });
   const label =
     schedule.name?.trim() || schedule.branch || repoName(schedule.cwd);
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform) }
+    : undefined;
   return (
     <div
-      className={styles.scheduleRow}
+      ref={setNodeRef}
+      className={`${styles.scheduleRow} ${selected ? styles.scheduleRowSelected : ""} ${isDragging ? styles.scheduleRowDragging : ""}`}
+      style={style}
       title={`Scheduled for ${new Date(schedule.fire_at * 1000).toLocaleString()}`}
     >
-      <Clock
-        size={13}
-        strokeWidth={1.5}
-        className={styles.scheduleIcon}
-        aria-hidden
-      />
-      <span className={styles.scheduleName}>{label}</span>
-      <span className={styles.scheduleWhen}>
-        {formatFireTime(schedule.fire_at)}
-      </span>
+      <button
+        type="button"
+        className={styles.scheduleMain}
+        onClick={onOpen}
+        {...attributes}
+        {...listeners}
+      >
+        <Clock
+          size={13}
+          strokeWidth={1.5}
+          className={styles.scheduleIcon}
+          aria-hidden
+        />
+        <span className={styles.scheduleName}>{label}</span>
+        <span className={styles.scheduleWhen}>
+          {formatFireTime(schedule.fire_at)}
+        </span>
+      </button>
       <button
         type="button"
         className={styles.scheduleCancel}
@@ -782,6 +800,14 @@ function Sidebar() {
                   <ScheduleRow
                     key={s.id}
                     schedule={s}
+                    selected={s.id === selectedId}
+                    onOpen={() =>
+                      selectItem({
+                        kind: "scheduled",
+                        id: s.id,
+                        repoPath: s.cwd,
+                      })
+                    }
                     onCancel={() => void cancelSchedule(s.id)}
                   />
                 ))}

@@ -127,9 +127,9 @@ clear error if it is missing).
   detached window re-docks** its canvas (its `Destroyed` handler re-broadcasts the
   set; the main window reclaims the PTYs). Detached windows are **per-session** — not
   restored on relaunch (capability `canvas-*` in `capabilities/default.json`).
-- **Scheduled sessions (#93):** an agent can be **scheduled to launch later**. The
-  **"+ Schedule session"** sidebar button / **⌘⇧N** opens the new-session modal in
-  **schedule mode** — folder → branch → a final step for **launch time** (a
+- **Scheduled sessions (#93/#94):** an agent can be **scheduled to launch later**.
+  The **"+ Schedule session"** sidebar button / **⌘⇧N** opens the new-session modal
+  in **schedule mode** — folder → branch → a final step for **launch time** (a
   `datetime-local`), optional **prompt**, optional **name** — and calls
   `create_schedule`. Records persist in `store.rs` (`schedules: ScheduledSession[]`).
   A **poll loop** in `lib.rs` (every `SCHEDULE_POLL_SECS`) calls
@@ -138,9 +138,12 @@ clear error if it is missing).
   positional invocation, see Conventions), converts the record into a live session,
   and emits **`schedule://fired`** (→ the main window moves it scheduled→live). On
   boot the first tick fires anything **missed while closed** (catch-up). One-shot
-  only; pending schedules show in the sidebar (name/branch + fire time + cancel). The
-  full update surface (`create`/`list`/`cancel`/`update`) is exposed now so **#94**
-  (the draggable scheduled item type + auto-saving prompt panel) is pure frontend.
+  only (local clock). **#94** makes a schedule a first-class **draggable item type**:
+  a `CanvasContent` **`kind: "scheduled"`** (+ a `payloadToContent` case) renders the
+  shared **`ScheduledPanel`** — an **auto-saving** (debounced → `update_schedule`)
+  editor for the launch time / name / prompt + cancel — in the **sidebar** (a
+  draggable row, click selects/jumps #79, × cancels), an **Overview card**, and a
+  **Canvas panel**. Time helpers live in `src/time.ts`.
 
 ## Layout
 
@@ -155,15 +158,17 @@ clear error if it is missing).
 │   ├── ipc.ts              # Typed Tauri command/event wrappers
 │   ├── outputBus.ts        # Per-session output pub/sub (bytes kept out of store)
 │   ├── paths.ts            # Shared path helpers (repoName, sessionLabel)
+│   ├── time.ts             # Schedule time helpers (toLocalInput, formatFireTime) (#93/#94)
 │   ├── windowContext.ts    # Window identity (#84): main vs canvas-<id>, ownership helpers
 │   ├── ownership.ts        # useSessionOwners hook — which window renders each PTY (#84)
 │   ├── useKeyboardNav.ts   # Global keyboard shortcuts (#24/#76/#77/#84/#93)
 │   ├── components/         # React components (CSS Module alongside each):
 │   │                       #   Sidebar, Overview, Canvas (+ CanvasSurface),
 │   │                       #   CanvasWindow (#84), Terminal, FileViewer, FilePicker,
-│   │                       #   DiffInspector, DetachedNote (#84), BusyIndicator,
-│   │                       #   Checkbox, NewSessionModal, Toaster, ViewSwitch,
-│   │                       #   ClaudeMissing, EmptyState
+│   │                       #   FileSwitcher (#90), DiffInspector, DetachedNote (#84),
+│   │                       #   ScheduledPanel (#94), BusyIndicator, Checkbox,
+│   │                       #   NewSessionModal, Toaster, ViewSwitch, ClaudeMissing,
+│   │                       #   EmptyState
 │   ├── styles/             # tokens.css (design tokens) + global.css (reset/base)
 │   └── types/              # Shared TS types (backend-mirrored models)
 ├── src-tauri/              # Rust backend (Tauri)

@@ -38,6 +38,9 @@ export function payloadToContent(
   if (data.kind === "terminal" && typeof data.sessionId === "string") {
     return { kind: "terminal", sessionId: data.sessionId, repoPath };
   }
+  if (data.kind === "scheduled" && typeof data.scheduleId === "string") {
+    return { kind: "scheduled", scheduleId: data.scheduleId, repoPath };
+  }
   return null;
 }
 
@@ -61,6 +64,13 @@ function isDuplicate(tree: CanvasNode | null, content: CanvasContent): boolean {
       (l) =>
         l.content.kind === "terminal" &&
         l.content.sessionId === content.sessionId,
+    );
+  }
+  if (content.kind === "scheduled") {
+    return leaves.some(
+      (l) =>
+        l.content.kind === "scheduled" &&
+        l.content.scheduleId === content.scheduleId,
     );
   }
   return false;

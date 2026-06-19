@@ -130,6 +130,8 @@ export interface CanvasContent {
   repoPath?: string;
   file?: string;
   sessionId?: string;
+  /** Pending scheduled session this panel shows (#94, kind: "scheduled"). */
+  scheduleId?: string;
 }
 
 /** A single panel. */

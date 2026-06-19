@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> Tasks #1–#93 have shipped; newer open tasks (#94+) are in **## Tasks** below.
+> The backlog has fully shipped (#1–#94).
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -205,6 +205,8 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #93 Scheduled sessions (part 1): an agent can be **scheduled to launch later**. A "+ Schedule session" sidebar button / **⌘⇧N** opens the new-session modal in **schedule mode** (folder → branch → launch time + optional prompt + name → `create_schedule`); records persist (`store.rs` `schedules`), and a `lib.rs` poll loop fires due ones — checkout + spawn `claude` **pre-seeded with the prompt** (positional `claude --session-id <id> "<prompt>"`, CLI-verified) → a live session, emitting `schedule://fired`; **boot catch-up** for schedules missed while closed; one-shot; pending schedules listed in the sidebar with cancel. The full create/list/cancel/update command surface is exposed for #94.
 
+- #94 Scheduled sessions (part 2): a schedule is now a first-class **draggable item type** — a `CanvasContent` `kind: "scheduled"` (+ a `payloadToContent` case) rendering the shared **`ScheduledPanel`** (an auto-saving launch-time / name / **prompt** editor, debounced → `update_schedule`, + cancel) in the **sidebar** (a draggable row; click selects/jumps #79; × cancels), an **Overview card**, and a **Canvas panel**. Pure frontend on #93's command surface; time helpers in `src/time.ts`.
+
 ---
 
 ## Design reference (dark theme only)
@@ -241,8 +243,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#93 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. The open tasks (#94+) follow. New work goes
+All tasks (#1–#94) are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. There are no open tasks. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -254,66 +256,3 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 94. [ ] Scheduled sessions (part 2 of 2): draggable item type (sidebar/Overview/Canvas) + auto-saving prompt panel
-
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
-**Depends on:** #93
-**Created:** 2026-06-19
-
-**Description**
-
-**Part 2 of two** — builds on **#93** (the scheduling engine, the schedule modal, and the basic
-pending list). Turn scheduled sessions into a **first-class, draggable item type** across every
-surface and add the **editable scheduled-agent panel**. This part is **pure frontend** — it consumes
-#93's persisted records + Tauri commands (including **update-prompt / name / time**); **no backend or
-engine changes**.
-
-**Pieces:**
-
-- **Sidebar:** upgrade #93's basic pending row into the **standard draggable item** (like sessions /
-  files / diffs, #45/#59) — a dnd-kit **draggable source** that drops into the active Canvas; a click
-  **selects/jumps** to it in the current view (#79); the × **cancels** the schedule.
-- **Overview:** a **scheduled card** in the repo cluster (#38), reusing the shared panel body.
-- **Canvas:** a new `CanvasContent` kind **`"scheduled"`** + a **`payloadToContent`** case (new item
-  types are draggable by default per that pattern, #47/#59), resolved at render to the shared panel.
-- **Scheduled-agent panel** (shared body for the Overview card + Canvas panel): shows **branch,
-  custom name, and fire time**, plus a **big prompt textarea** that **auto-saves** (debounced) to the
-  record via #93's **update-prompt** command — the prompt is optional and editable any time before it
-  fires; includes a **cancel** control. In-panel editing of **name / fire-time** too (uses #93's
-  update-name/time commands) if straightforward.
-- When the schedule **fires** (engine, #93), the item is consumed and becomes a normal live agent
-  everywhere; this panel is the **pending (pre-fire)** representation.
-
-**Out of scope:** any backend/engine change (all in #93); recurring schedules.
-
-**Subtasks**
-
-1. [ ] **Sidebar:** upgrade the pending row to a dnd-kit draggable item (drop into Canvas),
-   click-to-select/jump (#79), × cancel.
-2. [ ] **Overview:** a scheduled card using the shared panel body.
-3. [ ] **Canvas:** `"scheduled"` content kind + `payloadToContent` + render the shared panel body.
-4. [ ] **Scheduled-agent panel:** branch / name / fire-time details + a **big auto-saving prompt
-   textarea** (debounced → #93 `update-prompt`) + cancel; optional in-panel name/time edit.
-5. [ ] **Docs + checks:** update CLAUDE.md (the scheduled **item type** + the auto-saving panel +
-   drag-into-canvas); `npm run build`, `npm run lint`, `npm test` pass.
-
-**Acceptance criteria**
-
-- [ ] Scheduled sessions appear in the **sidebar** (draggable + cancelable), in **Overview**, and can
-  be **dragged into a Canvas**.
-- [ ] The scheduled-agent panel shows **branch, custom name, and fire time**, and a **big prompt
-  field that auto-saves** as you type (persisted via #93's command); a schedule created with **no
-  prompt** can have one **added later** here.
-- [ ] Canceling from any surface removes the schedule (and its timer, via #93).
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass; CLAUDE.md documents the item type + panel.
-
-**Notes**
-
-- **Part 2 of 2** — depends on **#93** for the records, store state, and update commands; this part is
-  **pure frontend** (no Rust changes).
-- Reuses item plumbing — sidebar drag (#45/#59), Overview cluster (#38), Canvas `payloadToContent`
-  (#46/#47). Created via the schedule modal (#93), **not** the repo "Views" registry (#82), so #82 is
-  unaffected.

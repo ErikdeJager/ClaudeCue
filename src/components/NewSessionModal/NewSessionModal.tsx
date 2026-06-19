@@ -12,6 +12,7 @@ import {
 import { listBranches, pickDirectory } from "../../ipc";
 import { repoName } from "../../paths";
 import { useStore } from "../../store";
+import { toLocalInput } from "../../time";
 import type { BranchList } from "../../types";
 import styles from "./NewSessionModal.module.css";
 
@@ -32,13 +33,6 @@ const BRANCH_FILTER_THRESHOLD = 4;
 // Default lead time for a new schedule (#93): 5 minutes out, so the prefilled
 // launch time is sensibly in the future.
 const DEFAULT_LEAD_MS = 5 * 60 * 1000;
-
-// Format a Date as a local `<input type="datetime-local">` value (no timezone
-// suffix — datetime-local is local-clock, matching the backend's local fire time).
-function toLocalInput(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 /**
  * Start-a-new-agent panel — a two-step, keyboard-driven flow (#66, rework of

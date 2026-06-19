@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
-import { Copy, GripVertical, X } from "lucide-react";
+import { Clock, Copy, GripVertical, X } from "lucide-react";
 import {
   closestCenter,
   DndContext,
@@ -21,7 +21,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { mergeRepoOrder, repoColor, useStore } from "../../store";
 import { useSessionOwners } from "../../ownership";
 import { repoName, sessionLabel } from "../../paths";
-import type { OverviewPanel, SessionView } from "../../types";
+import { formatFireTime } from "../../time";
+import type { OverviewPanel, ScheduledSession, SessionView } from "../../types";
 import { ownedHere } from "../../windowContext";
 // The Focus inspector's diff component is already parameterized by { repoPath,
 // active }, so the Overview diff panel (#39) reuses it directly — one source.
@@ -31,6 +32,7 @@ import DiffInspector from "../DiffInspector/DiffInspector";
 import EmptyState from "../EmptyState/EmptyState";
 import FileSwitcher from "../FileSwitcher/FileSwitcher";
 import FileViewer from "../FileViewer/FileViewer";
+import ScheduledPanel from "../ScheduledPanel/ScheduledPanel";
 import Terminal from "../Terminal/Terminal";
 import styles from "./Overview.module.css";
 
@@ -294,9 +296,76 @@ function ExtraPanel({
   );
 }
 
+interface ScheduleCardProps {
+  schedule: ScheduledSession;
+  branch: string;
+  color: string;
+  groupStart: boolean;
+  selected: boolean;
+  onCancel: () => void;
+}
+
+/** A pending scheduled-session card in the Overview cluster (#94): the shared
+ * ScheduledPanel body framed like the other columns, with a clock cue + cancel. */
+function ScheduleCard({
+  schedule,
+  branch,
+  color,
+  groupStart,
+  selected,
+  onCancel,
+}: ScheduleCardProps) {
+  const title = (
+    <>
+      <span className={styles.name}>
+        {schedule.name?.trim() || schedule.branch || "Scheduled"}
+      </span>
+      <span className={styles.meta}>
+        <span className={styles.metaDot} style={{ background: color }} />
+        <span className={styles.metaText}>
+          {repoName(schedule.cwd)}
+          {branch && ` · ${branch}`} · {formatFireTime(schedule.fire_at)}
+        </span>
+      </span>
+    </>
+  );
+  const actions = (
+    <button
+      type="button"
+      className={styles.action}
+      onClick={onCancel}
+      title="Cancel schedule"
+      aria-label="Cancel schedule"
+    >
+      <X size={15} strokeWidth={1.5} />
+    </button>
+  );
+  return (
+    <PanelColumn
+      id={schedule.id}
+      color={color}
+      groupStart={groupStart}
+      selected={selected}
+      title={title}
+      leading={
+        <Clock
+          size={14}
+          strokeWidth={1.5}
+          className={styles.scheduleLeadIcon}
+          aria-hidden
+        />
+      }
+      actions={actions}
+    >
+      <ScheduledPanel scheduleId={schedule.id} />
+    </PanelColumn>
+  );
+}
+
 type ColumnItem =
   | { kind: "agent"; session: SessionView }
-  | { kind: "panel"; panel: OverviewPanel };
+  | { kind: "panel"; panel: OverviewPanel }
+  | { kind: "schedule"; schedule: ScheduledSession };
 
 /**
  * The Overview "agent wall" (#38): a customizable arrangement of equal-width
@@ -322,6 +391,8 @@ function Overview() {
   const removeOverviewPanel = useStore((s) => s.removeOverviewPanel);
   const reorderOverview = useStore((s) => s.reorderOverview);
   const sessionBusy = useStore((s) => s.sessionBusy);
+  const schedules = useStore((s) => s.schedules);
+  const cancelSchedule = useStore((s) => s.cancelSchedule);
   // PTY ownership across windows (#84): an agent shown in a detached canvas window
   // renders there, not on this wall — its card shows a note instead.
   const owners = useSessionOwners();
@@ -350,7 +421,7 @@ function Overview() {
   const anyPanels = Object.values(overviewPanels).some(
     (list) => list.length > 0,
   );
-  if (sessions.length === 0 && !anyPanels) {
+  if (sessions.length === 0 && !anyPanels && schedules.length === 0) {
     return <EmptyState onNewSession={() => openNewSession()} />;
   }
 
@@ -383,6 +454,10 @@ function Overview() {
       repoSet.add(repo);
     }
   }
+  // Repos with only pending schedules show too (#94).
+  for (const sc of schedules) {
+    if (!filter || sc.cwd === filter) repoSet.add(sc.cwd);
+  }
   const repoList = [...repoSet].sort((a, b) => {
     const byName = repoName(a)
       .toLowerCase()
@@ -397,14 +472,19 @@ function Overview() {
     .map((repo) => {
       const agents = ordered.filter((s) => s.repoPath === repo);
       const extras = overviewPanels[repo] ?? [];
+      const repoSchedules = schedules.filter((sc) => sc.cwd === repo);
       const defaultKeys = [
         ...agents.map((s) => s.id),
         ...extras.map((p) => p.id),
+        ...repoSchedules.map((sc) => sc.id),
       ];
       const keys = mergeRepoOrder(overviewOrder[repo] ?? [], defaultKeys);
       const byKey = new Map<string, ColumnItem>();
       for (const s of agents) byKey.set(s.id, { kind: "agent", session: s });
       for (const p of extras) byKey.set(p.id, { kind: "panel", panel: p });
+      for (const sc of repoSchedules) {
+        byKey.set(sc.id, { kind: "schedule", schedule: sc });
+      }
       const items = keys
         .map((k) => byKey.get(k))
         .filter((x): x is ColumnItem => x !== undefined);
@@ -491,6 +571,19 @@ function Overview() {
                           )
                         }
                         onRemove={() => void removeSession(session.id)}
+                      />
+                    );
+                  }
+                  if (item.kind === "schedule") {
+                    return (
+                      <ScheduleCard
+                        key={item.schedule.id}
+                        schedule={item.schedule}
+                        branch={branch}
+                        color={color}
+                        groupStart={groupStart}
+                        selected={item.schedule.id === selectedId}
+                        onCancel={() => void cancelSchedule(item.schedule.id)}
                       />
                     );
                   }
