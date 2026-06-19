@@ -81,20 +81,32 @@
   border-left: 1px solid var(--border-strong);
 }
 
-/* Selected agent: an on-brand accent frame drawn over the card (no layout shift,
-   not clipped, click-through) plus a subtle header tint — echoes the sidebar's
-   selected row treatment. */
+/* Selected agent (#50): a thin frame in the repo's own color (#35) drawn over the
+   card (no layout shift, not clipped, click-through) plus a quiet header tint —
+   echoes the sidebar's selected row, now matching the repo badge. The frame
+   color softens via color-mix where supported; the plain declaration is the
+   fallback (still the repo color, 1px). */
 .cardSelected::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: 2px solid var(--accent);
+  border: 1px solid var(--card-color, var(--accent));
+  border-color: color-mix(
+    in srgb,
+    var(--card-color, var(--accent)) 70%,
+    transparent
+  );
   pointer-events: none;
   z-index: 2;
 }
 
 .cardSelected .header {
-  background: var(--accent-dim);
+  background: var(--bg-hover);
+  background: color-mix(
+    in srgb,
+    var(--card-color, var(--accent)) 12%,
+    transparent
+  );
 }
 
 .header {

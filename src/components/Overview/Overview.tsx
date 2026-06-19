@@ -67,11 +67,14 @@ function PanelColumn({
     transition,
     isDragging,
   } = useSortable({ id });
-  const style: CSSProperties = {
+  // `--card-color` drives the repo-colored selection frame (#50) — a pseudo-
+  // element can't read an inline style, so expose the dynamic color as a var.
+  const style = {
     borderTopColor: color,
     transform: CSS.Transform.toString(transform),
     transition,
-  };
+    "--card-color": color,
+  } as CSSProperties;
   return (
     <div
       ref={setNodeRef}

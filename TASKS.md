@@ -3426,9 +3426,9 @@ regressed.
 
 ---
 
-### 50. [ ] Overview selected-agent border: use the repo color + make it thinner & subtler
+### 50. [x] Overview selected-agent border: use the repo color + make it thinner & subtler
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -3445,27 +3445,41 @@ var(--accent) }` in `Overview.module.css`) plus an accent-dim header tint. Two c
 
 **Subtasks**
 
-1. [ ] Drive the selected frame color from the repo color (inline style / CSS custom
+1. [x] Drive the selected frame color from the repo color (inline style / CSS custom
    property, since it's dynamic per repo) instead of `var(--accent)`.
-2. [ ] Reduce the border weight (e.g. 2px → 1px) and soften it (a lower-opacity tint of
+2. [x] Reduce the border weight (e.g. 2px → 1px) and soften it (a lower-opacity tint of
    the repo color) so it's subtle, not demanding; reconsider the `--accent-dim` header
    tint similarly (quiet, tasteful).
-3. [ ] Keep it layout-shift-free (the existing `::after` overlay) and ensure it reads
+3. [x] Keep it layout-shift-free (the existing `::after` overlay) and ensure it reads
    clearly across different repo colors over the terminal background.
 
 **Acceptance criteria**
 
-- [ ] The selected agent's border is the repo's color (matching its badge), not the global
+- [x] The selected agent's border is the repo's color (matching its badge), not the global
   accent.
-- [ ] The border is visibly thinner/subtler than the current 2px accent frame while still
+- [x] The border is visibly thinner/subtler than the current 2px accent frame while still
   clearly indicating selection.
-- [ ] No layout shift; reads well across different repo colors.
+- [x] No layout shift; reads well across different repo colors.
 
 **Notes**
 
 - Files: `src/components/Overview/Overview.tsx` + `Overview.module.css` (`.cardSelected`),
   `src/store.ts` (`repoColor`/`repoColors` from #35). Refines #23 (border) + #36 (badges);
   both done. The repo color is the only dynamic value — inject via inline style / CSS var.
+- **Done 2026-06-19.** `PanelColumn` (Overview.tsx) already computes the repo `color`
+  (#35/#36) for the top band; now also exposes it as a **`--card-color` CSS custom
+  property** on the card (a pseudo-element can't read an inline style). `.cardSelected::after`
+  is now **1px** (was 2px) in `var(--card-color)`, **softened** to a 70% tint via
+  `color-mix(... transparent)` — with the plain `border: 1px solid var(--card-color)`
+  declaration as the fallback (still the repo color, just unsoftened) where `color-mix`
+  isn't supported. The header tint dropped `--accent-dim` (peach) for a repo-colored 12%
+  `color-mix` tint (fallback `--bg-hover`, neutral) so the whole selection reads as the
+  agent's repo identity, quiet not demanding. **No layout shift** (still the `inset:0`
+  `::after` overlay); reads cleanly across the bright Catppuccin repo palette over the dark
+  terminal bg. Pure visual change — no behavior/Rust. **Hard gate green:** frontend
+  `build`/`lint`/`format:check`/`test` (63); Rust unchanged. The exact tints are
+  runtime-visual; the color-mix-with-fallback is by-construction safe (worst case = 1px
+  full repo-color frame + neutral header tint, which already satisfies the acceptance).
 
 ---
 
