@@ -34,6 +34,14 @@
   color: var(--text-muted);
 }
 
+/* The picker auto-focuses this field on open (#56); suppress the global
+   :focus-visible accent ring (global.css) for this one input — the magnifier
+   icon + .searchRow underline already mark it as active. Scoped here, so every
+   other control keeps the ring (#69). */
+.search:focus-visible {
+  outline: none;
+}
+
 .hint {
   margin: 0;
   padding: var(--space-8);
