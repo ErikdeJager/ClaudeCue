@@ -175,7 +175,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 Tasks #1–#63 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. New work goes here as a fresh `### N.` entry
-in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#73**), with its
+in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#75**), with its
 `Depends on:` prerequisites.
 
 ---
@@ -747,3 +747,50 @@ repo menu then drag), tabs/splits inside one terminal item, and shell-history re
   (`ExtraPanel`), `src/components/Canvas/canvasDrop.ts` + `Canvas.tsx` (content kind),
   `src/components/Terminal/{Terminal.tsx,terminalPool.ts}` + `src/App.tsx`
   (`reconcileTerminals`).
+
+---
+
+### 73. [ ] Markdown viewer — make switching back from raw to rendered obvious (two-way toggle)
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+In the file viewer's markdown mode (`FileViewer`, #40/#44), clicking the code/raw toggle
+shows the raw source, but users can't tell how to get **back** to the rendered view — it
+feels one-way.
+
+In the code the toggle *is* bidirectional: a single small, dim (`--text-muted`) icon button
+in the top-right of the viewer toolbar flips `showRaw` both ways — `Code2` (`</>`) when
+rendered, switching to an `Eye` icon (title "Show rendered") when raw. So the likely problem
+is **discoverability**: the lone, subtle corner icon doesn't read as the way back, and the
+icon swap is easy to miss.
+
+Make returning to the rendered view obvious: replace the single ambiguous icon with a
+**clear two-way toggle** — e.g. a two-segment "Rendered / Raw" control (labels or two icons)
+with the active state highlighted — so it's always apparent which mode you're in and how to
+switch. Keep it markdown-only, compact, on tokens, and a11y-labeled. Also **verify the switch
+actually works at runtime** in every context (Focus inspector, Overview column, Canvas
+panel); if a real bug prevents the back-toggle, fix it.
+
+Out of scope: code/raw-only files (they have no rendered mode); the viewer's content
+rendering itself.
+
+**Acceptance criteria**
+
+- [ ] From the raw view of a markdown file there is an obvious, labeled control to return to
+  the rendered view, and it works.
+- [ ] The control clearly shows the current mode (rendered vs raw) — not a single ambiguous
+  icon.
+- [ ] Works in the Focus inspector, an Overview markdown column, and a Canvas panel;
+  markdown-only; tokens + a11y labels preserved.
+
+**Notes**
+
+- The toggle currently lives in `FileViewer.tsx` (`showRaw`, the `.toolbar` button swapping
+  `Code2`/`Eye`) and `FileViewer.module.css` (`.toolbar`, `.toggle`); the code flips both
+  ways, so this is primarily a clarity/discoverability fix (confirm there's no runtime bug).
+- Key code: `src/components/FileViewer/FileViewer.tsx` (`showRaw`, toolbar toggle),
+  `src/components/FileViewer/FileViewer.module.css` (`.toolbar`, `.toggle`).
