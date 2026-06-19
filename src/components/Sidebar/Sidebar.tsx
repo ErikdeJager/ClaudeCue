@@ -15,6 +15,7 @@ import {
 import type { SessionView } from "../../types";
 import BusyIndicator from "../BusyIndicator/BusyIndicator";
 import { appendCanvasContent } from "../Canvas/canvasDrop";
+import FilePicker from "../FilePicker/FilePicker";
 import ViewSwitch from "../ViewSwitch/ViewSwitch";
 import styles from "./Sidebar.module.css";
 
@@ -275,7 +276,17 @@ function Sidebar() {
                 className={`${styles.repoHeader} ${isEmpty ? styles.repoEmpty : ""}`}
                 onContextMenu={(event) => {
                   event.preventDefault();
-                  setMenu({ repo, x: event.clientX, y: event.clientY });
+                  // Clamp so the menu — and the taller file picker it can become
+                  // (#56) — stays on-screen near the viewport edges.
+                  const x = Math.max(
+                    8,
+                    Math.min(event.clientX, window.innerWidth - 300),
+                  );
+                  const y = Math.max(
+                    8,
+                    Math.min(event.clientY, window.innerHeight - 360),
+                  );
+                  setMenu({ repo, x, y });
                   setMenuMode("menu");
                 }}
               >
@@ -399,41 +410,22 @@ function Sidebar() {
                 </label>
               </div>
             ) : menuMode === "files" ? (
-              // Pick a repo file to open as an Overview file-viewer column (#44).
-              <div className={styles.mdPicker}>
-                <p className={styles.mdPickerHead}>Open file viewer</p>
-                {fileList === null ? (
-                  <p className={styles.mdPickerHint}>Loading…</p>
-                ) : fileList.length === 0 ? (
-                  <p className={styles.mdPickerHint}>No files in this repo.</p>
-                ) : (
-                  <div className={styles.mdPickerList}>
-                    {fileList.map((f) => (
-                      <button
-                        key={f}
-                        type="button"
-                        role="menuitem"
-                        className={styles.menuItem}
-                        title={f}
-                        onClick={() => {
-                          // One column per file — don't duplicate an open one.
-                          if (
-                            !overviewPanels[menu.repo]?.some(
-                              (p) => p.kind === "markdown" && p.file === f,
-                            )
-                          ) {
-                            void addOverviewPanel(menu.repo, "markdown", f);
-                          }
-                          setView("overview");
-                          closeMenu();
-                        }}
-                      >
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              // Searchable file picker (#56) → open as an Overview file column (#44).
+              <FilePicker
+                files={fileList}
+                onPick={(f) => {
+                  // One column per file — don't duplicate an open one.
+                  if (
+                    !overviewPanels[menu.repo]?.some(
+                      (p) => p.kind === "markdown" && p.file === f,
+                    )
+                  ) {
+                    void addOverviewPanel(menu.repo, "markdown", f);
+                  }
+                  setView("overview");
+                  closeMenu();
+                }}
+              />
             ) : menuMode === "confirm" ? (
               <button
                 type="button"

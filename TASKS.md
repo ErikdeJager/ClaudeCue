@@ -3930,9 +3930,9 @@ following the #42 precedent.
 
 ---
 
-### 56. [ ] Searchable file-picker element for the repo "Open file viewer" menu
+### 56. [x] Searchable file-picker element for the repo "Open file viewer" menu
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -3950,25 +3950,25 @@ switches to Overview).
 
 **Subtasks**
 
-1. [ ] Build a reusable `FilePicker` component: an autofocused search `<input>` + a
+1. [x] Build a reusable `FilePicker` component: an autofocused search `<input>` + a
    filtered, scrollable list of the repo's files (from `listFiles`), each row showing the
    **basename** prominently and the **containing directory** dimmed; bounded size, kept
    on-screen; Escape / outside-click closes; keyboard-friendly (type to filter; optionally
    arrow + Enter to choose).
-2. [ ] Filter by a case-insensitive **substring match over the path** (so both filename and
+2. [x] Filter by a case-insensitive **substring match over the path** (so both filename and
    folder match); include a "no matches" state and a loading state.
-3. [ ] Wire it into the repo context menu in place of the current `menuMode === "files"`
+3. [x] Wire it into the repo context menu in place of the current `menuMode === "files"`
    list; clicking a file runs the **same** open action (dedupe + `addOverviewPanel(repo,
    "markdown", file)` + `setView("overview")` + close menu).
-4. [ ] Keep it on-system (tokens; mono for paths) and accessible.
+4. [x] Keep it on-system (tokens; mono for paths) and accessible.
 
 **Acceptance criteria**
 
-- [ ] The "Open file viewer…" picker has a working search box that filters the list live;
+- [x] The "Open file viewer…" picker has a working search box that filters the list live;
   long lists scroll within a bounded panel and never overflow/overlap.
-- [ ] File names are clearly legible (basename + dim path); clicking one opens it exactly as
+- [x] File names are clearly legible (basename + dim path); clicking one opens it exactly as
   before.
-- [ ] The picker is keyboard-dismissable and on-system.
+- [x] The picker is keyboard-dismissable and on-system.
 
 **Notes**
 
@@ -3979,6 +3979,20 @@ switches to Overview).
   item). The component could later back other file/folder pickers, but scope here is the
   repo file-open picker.
 - **Assumption:** substring filter over the repo-relative path; basename-prominent rows.
+- **Done 2026-06-19.** New reusable `src/components/FilePicker/*`: an autofocused search box
+  over a filtered, scrollable (`max-height`-bounded) list of the repo's files; each row is a
+  prominent **basename** + dimmed **directory** (mono). Filtering is a case-insensitive
+  substring match over the full path, with **loading / empty / no-matches** states; keyboard
+  is type-to-filter + Up/Down to move the highlight + Enter to choose (mouse hover also
+  highlights), using `role="listbox"`/`option` and a labeled search input. Wired into
+  `Sidebar.tsx` in place of the old flat `menuMode === "files"` list — `onPick` runs the
+  **same** open action (dedupe → `addOverviewPanel(repo, "markdown", file)` →
+  `setView("overview")` → close). The context-menu open position is now **clamped to the
+  viewport** so the taller picker stays on-screen near edges. Removed the now-dead
+  `.mdPicker*` styles. On-system tokens throughout; the search input keeps the global
+  `:focus-visible` ring (#49). Gate green: `npm run build` + lint + `format:check` +
+  `npm test` (63); no backend changes. Live rendering/keyboard is runtime-visual (not
+  launched headlessly).
 
 ---
 

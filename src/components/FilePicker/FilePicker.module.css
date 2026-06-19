@@ -1,0 +1,85 @@
+/* Reusable searchable file picker (#56): a search box over a filtered, scrollable
+   list of files — basename prominent, directory dimmed. On-system tokens. */
+.picker {
+  display: flex;
+  width: 280px;
+  max-width: 280px;
+  flex-direction: column;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-8);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.searchIcon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.search {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-meta);
+}
+
+.search::placeholder {
+  color: var(--text-muted);
+}
+
+.hint {
+  margin: 0;
+  padding: var(--space-8);
+  color: var(--text-secondary);
+  font-size: var(--fs-meta);
+}
+
+.list {
+  display: flex;
+  max-height: 280px;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.row {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowActive {
+  background: var(--bg-hover);
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dir {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
