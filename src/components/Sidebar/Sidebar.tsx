@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 
+import { listMarkdownFiles } from "../../ipc";
 import { repoName } from "../../paths";
 import {
   dedupeBranchLabels,
@@ -82,9 +83,11 @@ function Sidebar() {
     x: number;
     y: number;
   } | null>(null);
-  const [menuMode, setMenuMode] = useState<"menu" | "confirm" | "color">(
-    "menu",
-  );
+  const [menuMode, setMenuMode] = useState<
+    "menu" | "confirm" | "color" | "markdown"
+  >("menu");
+  // The repo's *.md files while the menu is in "markdown" mode (#41); null = loading.
+  const [mdFiles, setMdFiles] = useState<string[] | null>(null);
   const closeMenu = () => {
     setMenu(null);
     setMenuMode("menu");
@@ -111,6 +114,24 @@ function Sidebar() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menu]);
+
+  // Load the repo's markdown files when the menu enters "markdown" mode (#41) —
+  // the same repo-relative `*.md` list the Focus markdown tab uses (#40).
+  useEffect(() => {
+    if (!menu || menuMode !== "markdown") return;
+    let cancelled = false;
+    setMdFiles(null);
+    void listMarkdownFiles(menu.repo)
+      .then((list) => {
+        if (!cancelled) setMdFiles(list);
+      })
+      .catch(() => {
+        if (!cancelled) setMdFiles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [menu, menuMode]);
 
   // Running (non-exited) agents in the menu's repo — gates the confirm step.
   const menuRunning = menu
@@ -254,6 +275,44 @@ function Sidebar() {
                   />
                 </label>
               </div>
+            ) : menuMode === "markdown" ? (
+              // Pick a repo *.md to open as an Overview markdown column (#41).
+              <div className={styles.mdPicker}>
+                <p className={styles.mdPickerHead}>Open markdown viewer</p>
+                {mdFiles === null ? (
+                  <p className={styles.mdPickerHint}>Loading…</p>
+                ) : mdFiles.length === 0 ? (
+                  <p className={styles.mdPickerHint}>
+                    No markdown files in this repo.
+                  </p>
+                ) : (
+                  <div className={styles.mdPickerList}>
+                    {mdFiles.map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        role="menuitem"
+                        className={styles.menuItem}
+                        title={f}
+                        onClick={() => {
+                          // One column per file — don't duplicate an open one.
+                          if (
+                            !overviewPanels[menu.repo]?.some(
+                              (p) => p.kind === "markdown" && p.file === f,
+                            )
+                          ) {
+                            void addOverviewPanel(menu.repo, "markdown", f);
+                          }
+                          setView("overview");
+                          closeMenu();
+                        }}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : menuMode === "confirm" ? (
               <button
                 type="button"
@@ -285,6 +344,14 @@ function Sidebar() {
                   }}
                 >
                   Open diff viewer
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => setMenuMode("markdown")}
+                >
+                  Open markdown viewer…
                 </button>
                 <button
                   type="button"

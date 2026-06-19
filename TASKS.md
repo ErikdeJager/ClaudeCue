@@ -2718,9 +2718,9 @@ is explicitly later.
 
 ---
 
-### 41. [ ] Markdown-viewer column in Overview (from the repo context menu)
+### 41. [x] Markdown-viewer column in Overview (from the repo context menu)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #38, #40
 **Created:** 2026-06-19
 
@@ -2734,20 +2734,20 @@ the agents working on it.
 
 **Subtasks**
 
-1. [ ] Wire the repo context-menu item "Open markdown viewer" (#31 menu) → choose a
+1. [x] Wire the repo context-menu item "Open markdown viewer" (#31 menu) → choose a
    repo `.md` (reuse #40's file selector) → add a `markdown` extra panel (#38) with the
    file path in its params.
-2. [ ] Render the panel body with the shared `MarkdownViewer` (#40), bound to the
+2. [x] Render the panel body with the shared `MarkdownViewer` (#40), bound to the
    panel's file path; hot-reload as in #40.
-3. [ ] Panel header shows the file name + repo color badge (#35); closeable +
+3. [x] Panel header shows the file name + repo color badge (#35); closeable +
    reorderable via the #38 chrome. Persist the chosen file path in the panel layout.
 
 **Acceptance criteria**
 
-- [ ] "Open markdown viewer" → pick a `.md` adds a formatted, hot-reloading markdown
+- [x] "Open markdown viewer" → pick a `.md` adds a formatted, hot-reloading markdown
   column in Overview for that repo.
-- [ ] The column persists (file + position) across restart; close/reorder work.
-- [ ] Rendering/security is shared with #40 (no duplicate renderer, path validated).
+- [x] The column persists (file + position) across restart; close/reorder work.
+- [x] Rendering/security is shared with #40 (no duplicate renderer, path validated).
 
 **Notes**
 
@@ -2755,6 +2755,27 @@ the agents working on it.
   `src/components/.../MarkdownViewer` (#40), `src/components/Sidebar/Sidebar.tsx`
   (context-menu item), `src/store.ts` + persisted panel layout (#38). Depends on #38
   (panels) and #40 (renderer + backend read/list).
+- **Done 2026-06-19.** Pure frontend — #38 already shipped the model/persistence
+  (`OverviewPanel { id, kind: "diff" | "markdown", file? }`, per-repo `overview_panels`
+  in `store.rs`) and the `addOverviewPanel(repo, kind, file?)` action with the `file`
+  param, so #41 only filled the two extension points #38/#39 left. **Subtask 1 —
+  context menu:** the #31 repo menu gained an **"Open markdown viewer…"** item that
+  switches the menu to a new `"markdown"` mode; an effect fetches the repo's `*.md`
+  via `listMarkdownFiles` (the same #40 list, repo-relative, `node_modules`/`.git`
+  excluded, path-validated server-side) and renders them as a scrollable, ellipsized
+  picker. Clicking a file → `addOverviewPanel(repo, "markdown", file)` (deduped per
+  exact file so one column per file) → `setView("overview")`. **Subtask 2 — body:**
+  `ExtraPanel`'s `kind === "markdown"` branch renders `<MarkdownViewer repoPath file
+  active />` (the #40 component reused directly — one renderer, no `rehype-raw`,
+  ~1s hot-reload while shown); keyed by `panel.id`, so reorder *moves* the node (no
+  remount/refetch). **Subtask 3 — header/persist:** the panel header already showed
+  the file basename (`panelLabel`) + the #35 repo color dot/top-band; close +
+  move-left/right come from the #38 chrome, and the chosen `file` persists in the
+  panel layout (#38 backend) across restart. **Hard gate green:** frontend
+  `build`/`lint`/`format:check`/`test` (43). No Rust change (reuses #38's
+  `overview_panels` commands + #40's `list_markdown_files`/`read_text_file`); no new
+  tests (reuses the already-tested `MarkdownViewer` + #38 store actions; the
+  menu/picker/render are runtime-visual, not launched headlessly).
 
 ---
 

@@ -14,6 +14,7 @@ import type { OverviewPanel, SessionView } from "../../types";
 // active }, so the Overview diff panel (#39) reuses it directly — one source.
 import DiffInspector from "../DiffInspector/DiffInspector";
 import EmptyState from "../EmptyState/EmptyState";
+import MarkdownViewer from "../MarkdownViewer/MarkdownViewer";
 import Terminal from "../Terminal/Terminal";
 import styles from "./Overview.module.css";
 
@@ -231,9 +232,13 @@ function ExtraPanel({
         // Reuse the Focus inspector's diff component (#39), bound to this repo
         // and always active so it polls (#29) while the column is shown.
         <DiffInspector repoPath={repoPath} active />
+      ) : panel.file ? (
+        // Markdown panel (#41): the shared MarkdownViewer (#40) bound to this
+        // panel's saved file, always active so it hot-reloads while shown.
+        <MarkdownViewer repoPath={repoPath} file={panel.file} active />
       ) : (
-        // Markdown body filled by #41.
-        <div className={styles.placeholder}>Markdown panel — added in #41.</div>
+        // A markdown panel is always created with a file; this is a guard.
+        <div className={styles.placeholder}>No file selected.</div>
       )}
     </PanelColumn>
   );

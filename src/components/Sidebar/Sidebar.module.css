@@ -336,6 +336,43 @@
   cursor: pointer;
 }
 
+/* --- Markdown file picker (#41) --- */
+.mdPicker {
+  display: flex;
+  flex-direction: column;
+  max-width: 280px;
+}
+
+.mdPickerHead {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4) var(--space-8);
+  color: var(--text-muted);
+  font-size: var(--fs-meta-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mdPickerHint {
+  margin: 0;
+  padding: var(--space-6) var(--space-8);
+  color: var(--text-secondary);
+  font-size: var(--fs-meta);
+}
+
+.mdPickerList {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* File paths can be long/nested — truncate rather than stretch the menu. */
+.mdPickerList .menuItem {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @keyframes menu-in {
   from {
     opacity: 0;
