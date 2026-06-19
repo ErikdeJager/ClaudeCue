@@ -75,6 +75,12 @@ pub struct PersistedState {
     /// keeps old files loading.
     #[serde(default)]
     pub inspector_width: Option<u32>,
+    /// Multiple named Canvas tabs (#58), stored opaquely as JSON
+    /// `{ canvases: [{ id, name, layout }], activeId }` — the frontend owns the
+    /// shape and migrates the single `canvas_layout` into it once. `null` until
+    /// first written; `default` keeps old files loading.
+    #[serde(default)]
+    pub canvases: serde_json::Value,
 }
 
 /// Thread-safe persistent store backed by a JSON file.
@@ -228,6 +234,17 @@ impl Store {
     /// Replace the Canvas layout tree and persist (#46).
     pub fn set_canvas_layout(&self, layout: serde_json::Value) -> io::Result<()> {
         self.update(|state| state.canvas_layout = layout)
+    }
+
+    /// The multi-canvas tab state (#58) — opaque JSON; `null` until first written
+    /// (the frontend then migrates from `canvas_layout`).
+    pub fn canvases(&self) -> serde_json::Value {
+        self.with(|state| state.canvases.clone())
+    }
+
+    /// Replace the multi-canvas tab state and persist (#58).
+    pub fn set_canvases(&self, canvases: serde_json::Value) -> io::Result<()> {
+        self.update(|state| state.canvases = canvases)
     }
 
     /// The Focus inspector width in px (#51), or `None` for the default.
@@ -406,6 +423,21 @@ mod tests {
         // Clearing back to null persists too.
         store.set_canvas_layout(serde_json::Value::Null).unwrap();
         assert!(Store::load(&path).canvas_layout().is_null());
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn canvases_set_and_persist() {
+        let path = temp_path("canvases");
+        let store = Store::load(&path);
+        assert!(store.canvases().is_null()); // default (pre-migration)
+
+        let tabs = serde_json::json!({
+            "canvases": [{ "id": "c1", "name": "Canvas 1", "layout": null }],
+            "activeId": "c1"
+        });
+        store.set_canvases(tabs.clone()).unwrap();
+        assert_eq!(Store::load(&path).canvases(), tabs);
         let _ = fs::remove_file(&path);
     }
 

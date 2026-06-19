@@ -12,6 +12,7 @@ import type {
   ExitPayload,
   OutputPayload,
   OverviewPanel,
+  PersistedCanvases,
   SessionRecord,
   StatePayload,
   WorkingDiff,
@@ -88,13 +89,17 @@ export const listOpenFiles = () =>
 export const setOpenFiles = (path: string, files: string[]) =>
   invoke<void>("set_open_files", { path, files });
 
-/** The Canvas layout tree (#46); null when the canvas is empty. */
+/** The legacy single Canvas layout tree (#46); read once to migrate into #58. */
 export const getCanvasLayout = () =>
   invoke<CanvasNode | null>("get_canvas_layout");
 
-/** Replace the Canvas layout tree (#46). */
-export const setCanvasLayout = (layout: CanvasNode | null) =>
-  invoke<void>("set_canvas_layout", { layout });
+/** The multi-canvas tab state (#58); null before the first migration/write. */
+export const getCanvases = () =>
+  invoke<PersistedCanvases | null>("get_canvases");
+
+/** Persist the multi-canvas tab state (#58). */
+export const setCanvases = (state: PersistedCanvases) =>
+  invoke<void>("set_canvases", { state });
 
 /** The Focus inspector width in px (#51); null = use the default. */
 export const getInspectorWidth = () =>

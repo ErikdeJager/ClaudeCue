@@ -4065,9 +4065,9 @@ task adds the **rename interaction plus a backend command to update + persist it
 
 ---
 
-### 58. [ ] Canvas tabs — multiple named canvases (browser-like)
+### 58. [x] Canvas tabs — multiple named canvases (browser-like)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -4083,27 +4083,27 @@ own independent BSP layout; switching tabs preserves layouts and never disposes 
 
 **Subtasks**
 
-1. [ ] Model + persistence: replace the single layout with a list of canvases
+1. [x] Model + persistence: replace the single layout with a list of canvases
    `{ id, name, layout: CanvasNode | null }` + an `activeCanvasId`, persisted (extend
    `store.rs`; **migrate** an existing `canvas_layout` into the first canvas "Canvas 1").
    Store actions: add / close / rename / reorder / select a canvas; default-name new
    canvases incrementally.
-2. [ ] Tab strip UI above the canvas area: tabs (active highlighted), a **+** to add an
+2. [x] Tab strip UI above the canvas area: tabs (active highlighted), a **+** to add an
    empty canvas, a per-tab close (×); enforce the always-≥1 invariant.
-3. [ ] Rename a canvas inline (double-click or context menu → input; Enter commits, Escape
+3. [x] Rename a canvas inline (double-click or context menu → input; Enter commits, Escape
    cancels).
-4. [ ] Drag-to-reorder tabs (dnd-kit sortable, reusing the #43 pattern).
-5. [ ] Make canvas content operate on the **active** canvas: `applyCanvasDrop` /
+4. [x] Drag-to-reorder tabs (dnd-kit sortable, reusing the #43 pattern).
+5. [x] Make canvas content operate on the **active** canvas: `applyCanvasDrop` /
    `appendCanvasContent` (`canvasDrop.ts`) and `Canvas.tsx` read/write the active canvas's
    layout. Verify terminals survive tab switches (reparent via the pool, never dispose).
 
 **Acceptance criteria**
 
-- [ ] The Canvas view shows a tab strip; "+" adds an empty canvas; closing tabs works and
+- [x] The Canvas view shows a tab strip; "+" adds an empty canvas; closing tabs works and
   one empty canvas always remains.
-- [ ] Canvases can be renamed (default "Canvas N") and reordered by dragging; each tab keeps
+- [x] Canvases can be renamed (default "Canvas N") and reordered by dragging; each tab keeps
   its own layout across switches and across restart.
-- [ ] Dropping content targets the active canvas; switching tabs never tears down a terminal.
+- [x] Dropping content targets the active canvas; switching tabs never tears down a terminal.
 
 **Notes**
 
@@ -4114,6 +4114,28 @@ own independent BSP layout; switching tabs preserves layouts and never disposes 
 - Builds on #46/#47; reuses dnd-kit (#43) and the #18 terminal pool. Only the active
   canvas's panels mount — confirm the pool **parks/reparents** inactive-canvas terminals
   rather than disposing. #59 builds on this multi-canvas model.
+- **Done 2026-06-19.** **Model/persistence:** replaced the single `canvasLayout` with
+  `canvases: CanvasTab[] { id, name, layout }` + `activeCanvasId` in the store; persisted as
+  one opaque JSON blob via a new backend `canvases` field + `get_canvases`/`set_canvases`
+  (store.rs/commands.rs/lib.rs). The old `canvas_layout` is **migrated** into "Canvas 1" on
+  first boot (and the migrated shape written back). Store actions: `setActiveCanvasLayout`
+  (replaces `setCanvasLayout`), `addCanvas` (incremental "Canvas N"), `closeCanvas` (keeps
+  ≥1 — closing the last makes a fresh empty one; closing the active selects the neighbor),
+  `renameCanvas` (blank keeps the name), `reorderCanvases`, `selectCanvas` — each persists.
+  **UI:** new `CanvasTabs` strip above the area — tabs (active highlighted), **+** to add, a
+  per-tab **×**, double-click to rename inline (autofocus; Enter commits, Escape cancels,
+  blur commits), and **drag-to-reorder** via a *nested* dnd-kit `DndContext` + horizontal
+  `SortableContext` (the #43 pattern) so tab drags don't clash with the app-level
+  drag-into-canvas context (only one view mounts at a time). **Active-canvas wiring:**
+  `canvasDrop.ts` (`applyCanvasDrop`/`appendCanvasContent`) and `Canvas.tsx` read/write the
+  active tab's layout. **Terminals survive tab switches** — verified: the Terminal unmount
+  calls `unmountTerminal` (park), and disposal only happens in `reconcileTerminals` on
+  session removal (App.tsx), which a tab switch never triggers. Kept `getCanvasLayout`
+  (read-only, for migration); removed the now-unused `setCanvasLayout` ipc wrapper (the
+  backend command stays registered). Hard gate green: `cargo fmt`/clippy/`test` (40,
+  +`canvases_set_and_persist`) + `npm run build`/lint/`format:check`/`test` (63;
+  `store.test.ts` baseline updated). Live drag/rename/tab-switch is runtime-visual (not
+  launched headlessly).
 
 ---
 

@@ -14,6 +14,7 @@ import type {
 import DiffInspector from "../DiffInspector/DiffInspector";
 import FileViewer from "../FileViewer/FileViewer";
 import Terminal from "../Terminal/Terminal";
+import CanvasTabs from "./CanvasTabs";
 import { removeLeaf, updateSizes } from "./canvasTree";
 import styles from "./Canvas.module.css";
 
@@ -146,8 +147,18 @@ function LeafPanel({
  * `dragActive` (from the app DndContext) toggles the edge split-zones.
  */
 function Canvas({ dragActive }: { dragActive: boolean }) {
-  const layout = useStore((s) => s.canvasLayout);
-  const setCanvasLayout = useStore((s) => s.setCanvasLayout);
+  const canvases = useStore((s) => s.canvases);
+  const activeCanvasId = useStore((s) => s.activeCanvasId);
+  const setActiveCanvasLayout = useStore((s) => s.setActiveCanvasLayout);
+
+  const layout = canvases.find((c) => c.id === activeCanvasId)?.layout ?? null;
+
+  // Resize/close fire after a render, so re-derive the active tab's *current*
+  // layout from the store rather than closing over `layout`.
+  const activeLayout = (): CanvasNode | null => {
+    const s = useStore.getState();
+    return s.canvases.find((c) => c.id === s.activeCanvasId)?.layout ?? null;
+  };
 
   // `onLayoutChanged` fires once, after a resize ends, with a { panelId: flexGrow }
   // map — commit those two values to the split.
@@ -160,13 +171,13 @@ function Canvas({ dragActive }: { dragActive: boolean }) {
     const a = next[aId];
     const b = next[bId];
     if (typeof a !== "number" || typeof b !== "number") return;
-    const tree = useStore.getState().canvasLayout;
-    if (tree) setCanvasLayout(updateSizes(tree, splitId, [a, b]));
+    const tree = activeLayout();
+    if (tree) setActiveCanvasLayout(updateSizes(tree, splitId, [a, b]));
   };
 
   const closePanel = (leafId: string) => {
-    const current = useStore.getState().canvasLayout;
-    if (current) setCanvasLayout(removeLeaf(current, leafId));
+    const current = activeLayout();
+    if (current) setActiveCanvasLayout(removeLeaf(current, leafId));
   };
 
   const renderNode = (node: CanvasNode): ReactElement => {
@@ -207,7 +218,10 @@ function Canvas({ dragActive }: { dragActive: boolean }) {
 
   return (
     <div className={styles.canvas}>
+      <CanvasTabs />
       <div className={styles.area}>
+        {/* Key the area by tab so switching tabs swaps layouts cleanly; terminals
+            survive via the #18 pool (parked on unmount, never disposed here). */}
         {layout ? renderNode(layout) : <CenterDrop />}
       </div>
     </div>

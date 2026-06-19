@@ -254,6 +254,19 @@ pub fn set_canvas_layout(
 }
 
 #[tauri::command]
+pub fn get_canvases(store: State<'_, Store>) -> serde_json::Value {
+    store.canvases()
+}
+
+/// Replace the multi-canvas tab state (#58) and persist.
+#[tauri::command]
+pub fn set_canvases(store: State<'_, Store>, state: serde_json::Value) -> Result<(), SessionError> {
+    store
+        .set_canvases(state)
+        .map_err(|e| SessionError::Io(e.to_string()))
+}
+
+#[tauri::command]
 pub fn get_inspector_width(store: State<'_, Store>) -> Option<u32> {
     store.inspector_width()
 }

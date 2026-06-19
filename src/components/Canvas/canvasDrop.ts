@@ -7,6 +7,15 @@ import { useStore } from "../../store";
 import type { CanvasContent, CanvasEdge, CanvasNode } from "../../types";
 import { appendLeaf, collectLeaves, splitLeaf } from "./canvasTree";
 
+/** The active Canvas tab's layout tree (#58), or null. */
+function activeLayout(
+  store: ReturnType<typeof useStore.getState>,
+): CanvasNode | null {
+  return (
+    store.canvases.find((c) => c.id === store.activeCanvasId)?.layout ?? null
+  );
+}
+
 /** Translate a dnd-kit drag payload into a Canvas content descriptor, or null. */
 export function payloadToContent(
   data: Record<string, unknown> | undefined,
@@ -53,15 +62,15 @@ const leaf = (content: CanvasContent): CanvasNode => ({
 /** Apply a drop onto a Canvas zone — the center (first panel) or a panel edge. */
 export function applyCanvasDrop(overId: string, content: CanvasContent): void {
   const store = useStore.getState();
-  const tree = store.canvasLayout;
+  const tree = activeLayout(store);
   if (isDuplicate(tree, content)) return;
   if (overId === "canvas-center") {
-    store.setCanvasLayout(leaf(content));
+    store.setActiveCanvasLayout(leaf(content));
     return;
   }
   const match = /^panel:(.+):(left|right|top|bottom)$/.exec(overId);
   if (match && tree) {
-    store.setCanvasLayout(
+    store.setActiveCanvasLayout(
       splitLeaf(
         tree,
         match[1] as string,
@@ -77,9 +86,9 @@ export function applyCanvasDrop(overId: string, content: CanvasContent): void {
 /** Add content without a drop target (e.g. the repo menu's "Open diff in Canvas"). */
 export function appendCanvasContent(content: CanvasContent): void {
   const store = useStore.getState();
-  const tree = store.canvasLayout;
+  const tree = activeLayout(store);
   if (isDuplicate(tree, content)) return;
-  store.setCanvasLayout(
+  store.setActiveCanvasLayout(
     tree
       ? appendLeaf(tree, content, crypto.randomUUID(), crypto.randomUUID())
       : leaf(content),

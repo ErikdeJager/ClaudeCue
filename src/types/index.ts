@@ -122,6 +122,19 @@ export type CanvasNode = CanvasLeaf | CanvasSplit;
 /** The edge of a panel a drop lands on, choosing the split direction + side. */
 export type CanvasEdge = "left" | "right" | "top" | "bottom";
 
+/** One named Canvas tab — its own independent BSP layout (#58). */
+export interface CanvasTab {
+  id: string;
+  name: string;
+  layout: CanvasNode | null;
+}
+
+/** Persisted multi-canvas state (#58): the tab list + which tab is active. */
+export interface PersistedCanvases {
+  canvases: CanvasTab[];
+  activeId: string;
+}
+
 export type ToastTone = "info" | "error";
 
 export interface Toast {

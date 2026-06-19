@@ -10,6 +10,7 @@ import { repoName } from "./paths";
 import * as updater from "./updater";
 import type {
   CanvasNode,
+  CanvasTab,
   OverviewPanel,
   SessionRecord,
   SessionView,
@@ -206,8 +207,10 @@ export interface AppState {
   overviewOrder: Record<string, string[]>;
   /** Per-repo opened files for the sidebar tree (#45); repo-relative paths. */
   openFiles: Record<string, string[]>;
-  /** The Canvas split-panel layout tree (#46); null = empty canvas. */
-  canvasLayout: CanvasNode | null;
+  /** The Canvas tabs (#58) — each a named, independent BSP layout; always ≥1. */
+  canvases: CanvasTab[];
+  /** Which Canvas tab is active (#58). */
+  activeCanvasId: string;
   /** The Focus inspector width in px (#51), within the resize bounds. */
   inspectorWidth: number;
   /** Sessions currently working, from the output-activity heuristic (#42); an
@@ -271,8 +274,18 @@ export interface AppState {
   /** Register / forget an opened file in the sidebar tree (#45, persisted). */
   openFile: (repoPath: string, file: string) => Promise<void>;
   closeFile: (repoPath: string, file: string) => Promise<void>;
-  /** Replace the Canvas layout tree and persist (#46). */
-  setCanvasLayout: (tree: CanvasNode | null) => void;
+  /** Replace the active Canvas tab's layout tree and persist (#58). */
+  setActiveCanvasLayout: (tree: CanvasNode | null) => void;
+  /** Add a new empty Canvas tab (default "Canvas N") and select it (#58). */
+  addCanvas: () => void;
+  /** Close a Canvas tab; always keeps ≥1 (closing the last leaves an empty one) (#58). */
+  closeCanvas: (id: string) => void;
+  /** Rename a Canvas tab; a blank name keeps the current one (#58). */
+  renameCanvas: (id: string, name: string) => void;
+  /** Reorder the Canvas tabs (#58, dnd-kit). */
+  reorderCanvases: (orderedIds: string[]) => void;
+  /** Switch the active Canvas tab (#58). */
+  selectCanvas: (id: string) => void;
   /** Set the Focus inspector width (clamped); live during a drag, not persisted (#51). */
   setInspectorWidth: (px: number) => void;
   /** Persist the current Focus inspector width — on drag end / keyboard step (#51). */
@@ -307,7 +320,10 @@ export const useStore = create<AppState>()((set, get) => ({
   overviewPanels: {},
   overviewOrder: {},
   openFiles: {},
-  canvasLayout: null,
+  // One empty canvas until init loads/migrates the persisted tabs (#58) — keeps
+  // the always-≥1 invariant even before the backend responds.
+  canvases: [{ id: "canvas-1", name: "Canvas 1", layout: null }],
+  activeCanvasId: "canvas-1",
   inspectorWidth: INSPECTOR_DEFAULT_WIDTH,
   sessionBusy: {},
   claudeMissing: false,
@@ -496,21 +512,52 @@ export const useStore = create<AppState>()((set, get) => ({
     // Repo colors + Overview panel layouts load independently so a failure here
     // doesn't block sessions.
     try {
-      const [colors, panels, order, files, canvas, inspectorWidth] =
-        await Promise.all([
-          ipc.listRepoColors(),
-          ipc.listOverviewPanels(),
-          ipc.listOverviewOrder(),
-          ipc.listOpenFiles(),
-          ipc.getCanvasLayout(),
-          ipc.getInspectorWidth(),
-        ]);
+      const [
+        colors,
+        panels,
+        order,
+        files,
+        canvas,
+        canvasesState,
+        inspectorWidth,
+      ] = await Promise.all([
+        ipc.listRepoColors(),
+        ipc.listOverviewPanels(),
+        ipc.listOverviewOrder(),
+        ipc.listOpenFiles(),
+        ipc.getCanvasLayout(),
+        ipc.getCanvases(),
+        ipc.getInspectorWidth(),
+      ]);
+      // Multi-canvas (#58): use the persisted tabs; else migrate the old single
+      // canvas_layout into "Canvas 1"; else start with one empty canvas. Persist
+      // the migrated shape once so the new field becomes the source of truth.
+      let canvases: CanvasTab[];
+      let activeCanvasId: string;
+      if (canvasesState && canvasesState.canvases.length > 0) {
+        canvases = canvasesState.canvases;
+        activeCanvasId = canvases.some((c) => c.id === canvasesState.activeId)
+          ? canvasesState.activeId
+          : (canvases[0]?.id ?? "");
+      } else {
+        const first: CanvasTab = {
+          id: crypto.randomUUID(),
+          name: "Canvas 1",
+          layout: canvas ?? null,
+        };
+        canvases = [first];
+        activeCanvasId = first.id;
+        void ipc
+          .setCanvases({ canvases, activeId: activeCanvasId })
+          .catch(() => {});
+      }
       set({
         repoColors: colors,
         overviewPanels: panels,
         overviewOrder: order,
         openFiles: files,
-        canvasLayout: canvas ?? null,
+        canvases,
+        activeCanvasId,
         inspectorWidth: inspectorWidth ?? INSPECTOR_DEFAULT_WIDTH,
       });
     } catch {
@@ -619,14 +666,88 @@ export const useStore = create<AppState>()((set, get) => ({
     }
   },
 
-  // Canvas layout (#46): the component computes the next tree via the pure
-  // canvasTree helpers; this just commits + persists it (resize is debounced in
-  // the component, so each call here is a settled structural/size change).
-  setCanvasLayout: (tree) => {
-    set({ canvasLayout: tree });
-    void ipc.setCanvasLayout(tree).catch(() => {
-      // Persist failed (e.g. outside Tauri); keep the local layout for the session.
-    });
+  // Canvas tabs (#58): the component computes each next layout tree via the pure
+  // canvasTree helpers; these actions commit it to the active tab and persist the
+  // whole tab set. Persist failures (e.g. outside Tauri) are swallowed — the
+  // local state still drives the session.
+  setActiveCanvasLayout: (tree) => {
+    const { canvases, activeCanvasId } = get();
+    const next = canvases.map((c) =>
+      c.id === activeCanvasId ? { ...c, layout: tree } : c,
+    );
+    set({ canvases: next });
+    void ipc
+      .setCanvases({ canvases: next, activeId: activeCanvasId })
+      .catch(() => {});
+  },
+
+  addCanvas: () => {
+    const { canvases } = get();
+    // Incremental default name: the lowest "Canvas N" not already taken.
+    const used = new Set(canvases.map((c) => c.name));
+    let n = canvases.length + 1;
+    while (used.has(`Canvas ${n}`)) n += 1;
+    const created: CanvasTab = {
+      id: crypto.randomUUID(),
+      name: `Canvas ${n}`,
+      layout: null,
+    };
+    const next = [...canvases, created];
+    set({ canvases: next, activeCanvasId: created.id });
+    void ipc
+      .setCanvases({ canvases: next, activeId: created.id })
+      .catch(() => {});
+  },
+
+  closeCanvas: (id) => {
+    const { canvases, activeCanvasId } = get();
+    let next = canvases.filter((c) => c.id !== id);
+    // Always keep at least one canvas (#58).
+    if (next.length === 0) {
+      next = [{ id: crypto.randomUUID(), name: "Canvas 1", layout: null }];
+    }
+    // If the active tab was closed, select the neighbor at the same index.
+    let active = activeCanvasId;
+    if (id === activeCanvasId) {
+      const idx = canvases.findIndex((c) => c.id === id);
+      active = next[Math.min(idx, next.length - 1)]?.id ?? next[0]?.id ?? "";
+    }
+    set({ canvases: next, activeCanvasId: active });
+    void ipc.setCanvases({ canvases: next, activeId: active }).catch(() => {});
+  },
+
+  renameCanvas: (id, name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return; // blank keeps the current name (#58)
+    const { canvases, activeCanvasId } = get();
+    const next = canvases.map((c) =>
+      c.id === id ? { ...c, name: trimmed } : c,
+    );
+    set({ canvases: next });
+    void ipc
+      .setCanvases({ canvases: next, activeId: activeCanvasId })
+      .catch(() => {});
+  },
+
+  reorderCanvases: (orderedIds) => {
+    const { canvases, activeCanvasId } = get();
+    const byId = new Map(canvases.map((c) => [c.id, c]));
+    const next = orderedIds
+      .map((cid) => byId.get(cid))
+      .filter((c): c is CanvasTab => c !== undefined);
+    // Defensive: keep any tab missing from the order (no silent drops).
+    for (const c of canvases) if (!orderedIds.includes(c.id)) next.push(c);
+    set({ canvases: next });
+    void ipc
+      .setCanvases({ canvases: next, activeId: activeCanvasId })
+      .catch(() => {});
+  },
+
+  selectCanvas: (id) => {
+    const { canvases, activeCanvasId } = get();
+    if (id === activeCanvasId || !canvases.some((c) => c.id === id)) return;
+    set({ activeCanvasId: id });
+    void ipc.setCanvases({ canvases, activeId: id }).catch(() => {});
   },
 
   // Inspector resize (#51): `set` updates state live during the drag (cheap — the
