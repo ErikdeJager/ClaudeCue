@@ -35,6 +35,11 @@ export interface OverviewPanel {
   kind: "diff" | "markdown" | "terminal";
   /** Panel parameter, e.g. the markdown file path; absent for diff/terminal panels. */
   file?: string;
+  /** Diff panel branch-compare state (#81): "working" (vs HEAD) or "compare"
+   * (base → target), plus the two chosen branches; absent on non-diff panels. */
+  diff_source?: "working" | "compare";
+  compare_base?: string;
+  compare_target?: string;
 }
 
 export type FileStatusCode = "M" | "A" | "D";

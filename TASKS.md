@@ -1315,9 +1315,9 @@ rendering (#64 covers that surface separately).
 
 ---
 
-### 81. [ ] Diff viewer — branch-compare mode (two-dot `git diff base target`)
+### 81. [x] Diff viewer — branch-compare mode (two-dot `git diff base target`)
 
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Status:** Done · _(Not started | In progress | Blocked | Done)_
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -1362,29 +1362,29 @@ in the existing diff viewer).
 
 **Subtasks**
 
-1. [ ] Backend: `compare_branches(cwd, base, target)` in `git.rs` (validate both branches;
+1. [x] Backend: `compare_branches(cwd, base, target)` in `git.rs` (validate both branches;
    `git diff base target`; reuse `parse_unified_diff`; `WorkingDiff` out) + Tauri command +
    `compareBranches` IPC wrapper.
-2. [ ] DiffInspector: add a Working-tree↔Compare source toggle; in Compare mode show base/target
+2. [x] DiffInspector: add a Working-tree↔Compare source toggle; in Compare mode show base/target
    branch selectors (from `listBranches`) and fetch `compareBranches` via the generalized
    `load`.
-3. [ ] Reuse the existing body (file list, unified/split, #80 wrapping); summary shows
+3. [x] Reuse the existing body (file list, unified/split, #80 wrapping); summary shows
    "base → target" + counts.
-4. [ ] Refresh on branch change + manual Refresh; keep #29 polling for working-tree mode only.
-5. [ ] Persist source mode + base/target on the diff panel (extend the `diff` OverviewPanel;
+4. [x] Refresh on branch change + manual Refresh; keep #29 polling for working-tree mode only.
+5. [x] Persist source mode + base/target on the diff panel (extend the `diff` OverviewPanel;
    `types/index.ts` + `store.rs`).
 
 **Acceptance criteria**
 
-- [ ] The diff viewer has a Working-tree / Compare source toggle; Compare mode shows base +
+- [x] The diff viewer has a Working-tree / Compare source toggle; Compare mode shows base +
   target branch pickers from the repo's local branches.
-- [ ] Selecting two branches loads `git diff base target` (two-dot) and renders it in the same
+- [x] Selecting two branches loads `git diff base target` (two-dot) and renders it in the same
   diff body (file list + unified/split + wrapped lines), with the summary showing base → target
   + counts.
-- [ ] Working-tree mode is unchanged (vs HEAD, auto-refreshing #29); switching back and forth
+- [x] Working-tree mode is unchanged (vs HEAD, auto-refreshing #29); switching back and forth
   works.
-- [ ] The chosen compare mode + branches persist across view switches and an app restart.
-- [ ] Unknown branches are rejected backend-side; a clear empty/error state shows if the
+- [x] The chosen compare mode + branches persist across view switches and an app restart.
+- [x] Unknown branches are rejected backend-side; a clear empty/error state shows if the
   compare can't be produced.
 
 **Notes**

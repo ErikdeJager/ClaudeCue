@@ -107,6 +107,7 @@ pub fn run() {
             commands::working_diff,
             commands::list_branches,
             commands::checkout_branch,
+            commands::compare_branches,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -328,6 +328,15 @@ export interface AppState {
     file?: string,
   ) => Promise<void>;
   removeOverviewPanel: (repoPath: string, id: string) => Promise<void>;
+  /** Persist a repo's diff-panel branch-compare config on its diff panel (#81). */
+  setDiffCompare: (
+    repoPath: string,
+    config: {
+      diff_source?: "working" | "compare";
+      compare_base?: string;
+      compare_target?: string;
+    },
+  ) => void;
   /** Record a terminal item's shell exit (#72) so its Terminal shows Restart. */
   markTerminalExited: (id: string, code: number | null) => void;
   /** Respawn a terminal item's shell in `repoPath` under the same id (#72). */
@@ -737,6 +746,28 @@ export const useStore = create<AppState>()((set, get) => ({
     } catch {
       // ignore
     }
+  },
+
+  setDiffCompare: (repoPath, config) => {
+    const panels = get().overviewPanels[repoPath] ?? [];
+    const diffPanel = panels.find((p) => p.kind === "diff");
+    // No diff panel for this repo (e.g. a Canvas-only diff): nothing to persist.
+    if (!diffPanel) return;
+    // Skip when unchanged — the DiffInspector re-runs this on every mount.
+    if (
+      diffPanel.diff_source === config.diff_source &&
+      (diffPanel.compare_base ?? undefined) === config.compare_base &&
+      (diffPanel.compare_target ?? undefined) === config.compare_target
+    ) {
+      return;
+    }
+    const next = panels.map((p) =>
+      p.kind === "diff" ? { ...p, ...config } : p,
+    );
+    set((s) => ({
+      overviewPanels: { ...s.overviewPanels, [repoPath]: next },
+    }));
+    void ipc.setOverviewPanels(repoPath, next).catch(() => {});
   },
 
   markTerminalExited: (id, code) =>

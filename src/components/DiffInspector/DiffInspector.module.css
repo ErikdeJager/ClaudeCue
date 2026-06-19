@@ -65,6 +65,42 @@
   color: var(--text-primary);
 }
 
+/* --- Source toggle + branch-compare pickers (#81) --- */
+.sourceRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.comparePickers {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.branchSelect {
+  min-width: 0;
+  flex: 1;
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-chip);
+  background: var(--bg-base);
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+  cursor: pointer;
+}
+
+.compareArrow {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta-sm);
+}
+
 .refresh {
   display: flex;
   width: 24px;

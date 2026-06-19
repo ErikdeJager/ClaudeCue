@@ -132,6 +132,10 @@ export const currentBranches = (paths: string[]) =>
 export const workingDiff = (cwd: string) =>
   invoke<WorkingDiff>("working_diff", { cwd });
 
+/** Two-dot branch comparison for the diff viewer (#81): git diff base target. */
+export const compareBranches = (cwd: string, base: string, target: string) =>
+  invoke<WorkingDiff>("compare_branches", { cwd, base, target });
+
 /** Local branches + current branch for a folder (new-session branch picker). */
 export const listBranches = (cwd: string) =>
   invoke<BranchList>("list_branches", { cwd });

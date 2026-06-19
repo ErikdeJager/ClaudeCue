@@ -147,6 +147,50 @@ pub fn working_diff(cwd: impl AsRef<Path>) -> WorkingDiff {
     }
 }
 
+/// Two-dot `git diff <base> <target>` (#81) — the head-to-head difference,
+/// oriented base → target. Validates both branches exist (like `checkout_branch`)
+/// so the IPC boundary can't pass arbitrary refspecs; reuses `parse_unified_diff`
+/// and returns the same `WorkingDiff` shape (summary labeled "base → target").
+pub fn compare_branches(
+    cwd: impl AsRef<Path>,
+    base: &str,
+    target: &str,
+) -> Result<WorkingDiff, String> {
+    let cwd = cwd.as_ref();
+    let all = list_branches(cwd).all;
+    if !all.iter().any(|b| b == base) {
+        return Err(format!("unknown branch `{base}`"));
+    }
+    if !all.iter().any(|b| b == target) {
+        return Err(format!("unknown branch `{target}`"));
+    }
+    let diff = run_git_raw(
+        cwd,
+        &[
+            "-c",
+            "core.quotepath=false",
+            "diff",
+            base,
+            target,
+            "--no-color",
+            "--no-ext-diff",
+        ],
+    )
+    .unwrap_or_default();
+    let files = parse_unified_diff(&diff);
+    let adds: u32 = files.iter().map(|f| f.add).sum();
+    let dels: u32 = files.iter().map(|f| f.del).sum();
+    Ok(WorkingDiff {
+        summary: DiffSummary {
+            branch: format!("{base} → {target}"),
+            files_changed: files.len() as u32,
+            adds,
+            dels,
+        },
+        files,
+    })
+}
+
 /// Local branches of `cwd` plus the current one (for the new-session branch
 /// picker). Non-git folders / repos with no branches return an empty list, which
 /// the UI treats as "just spawn here" (no branch picker).

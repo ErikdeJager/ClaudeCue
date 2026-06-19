@@ -368,6 +368,17 @@ pub fn checkout_branch(cwd: String, branch: String) -> Result<(), SessionError> 
     git::checkout_branch(&cwd, &branch).map_err(SessionError::Git)
 }
 
+/// Two-dot branch comparison for the diff viewer (#81) — `git diff base target`,
+/// rendered in the same diff body as `working_diff`.
+#[tauri::command]
+pub fn compare_branches(
+    cwd: String,
+    base: String,
+    target: String,
+) -> Result<WorkingDiff, SessionError> {
+    git::compare_branches(&cwd, &base, &target).map_err(SessionError::Git)
+}
+
 fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

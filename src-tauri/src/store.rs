@@ -40,11 +40,20 @@ pub struct PersistedSession {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OverviewPanel {
     pub id: String,
-    /// `"diff"` (#39) or `"markdown"` (#41).
+    /// `"diff"` (#39), `"markdown"` (#41), or `"terminal"` (#72).
     pub kind: String,
     /// Panel parameter, e.g. the markdown file path; `None` for a diff panel.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// Diff panel branch-compare state (#81): `"working"` (vs HEAD) or
+    /// `"compare"` (base → target), plus the two chosen branches. `None` on
+    /// non-diff panels / older records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diff_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compare_base: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compare_target: Option<String>,
 }
 
 /// The on-disk shape of the persistence file.
@@ -351,11 +360,17 @@ mod tests {
                 id: "p1".into(),
                 kind: "diff".into(),
                 file: None,
+                diff_source: None,
+                compare_base: None,
+                compare_target: None,
             },
             OverviewPanel {
                 id: "p2".into(),
                 kind: "markdown".into(),
                 file: Some("README.md".into()),
+                diff_source: None,
+                compare_base: None,
+                compare_target: None,
             },
         ];
         store
