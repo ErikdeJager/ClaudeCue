@@ -175,7 +175,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 Tasks #1–#63 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. New work goes here as a fresh `### N.` entry
-in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#72**), with its
+in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#73**), with its
 `Depends on:` prerequisites.
 
 ---
@@ -636,3 +636,114 @@ Out of scope: the busy/idle detection (#55 backend heuristic stays); non-agent p
   (`.ball`/`.busy`/`busy-pulse`), `src/components/Sidebar/Sidebar.tsx` (`.rowBusy`,
   `SessionRow`), `src/components/Overview/Overview.tsx` (`.headerBusy`, `SessionCard`),
   `src/components/Focus/Focus.tsx` (toolbar, ~204).
+
+---
+
+### 72. [ ] Plain terminal item — a shell PTY that works like the file/diff viewers
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Add a new openable **item type: a plain terminal** — a real PTY running the user's shell
+where they can type — that behaves like the existing non-agent items (file viewer #44, diff
+viewer #39): opened from the repo menu, shown as an Overview column and a sidebar row, and
+draggable into a Canvas panel. It is **not** a `claude` agent (no busy indicator, no branch
+label, no claude-resume) — it's an *item*.
+
+**Shell & cwd:** run the user's `$SHELL` (fallback `/bin/zsh`) with the working directory set
+to the item's repo/folder.
+
+**Reuse what's already generic.** The PTY layer and the `Terminal` pool are not
+claude-specific — `SessionManager` (`pty.rs`) drives any PTY by id (reader thread, bounded
+scrollback, `session://output`/`session://exited`, `write_stdin`, `resize_pty`,
+`kill_session`, `session_scrollback`), and the `Terminal` pool component renders any PTY by
+id. Only `spawn_session` hardcodes `claude`. So a terminal item is a new PTY spawned by a new
+`spawn_terminal(cwd)` command (running `$SHELL`, no `--session-id`/`--resume`), rendered by
+the same `<Terminal>` — its **panel id = its PTY id**.
+
+**Model.** Add a new item kind `"terminal"`:
+- `OverviewPanel.kind` gains `"terminal"` (`types/index.ts`; `store.rs` `OverviewPanel.kind`
+  is already a free `String`; the `file` field is unused for terminals).
+- `CanvasContent.kind` gains `"terminal"` (with `repoPath` + the PTY/panel id).
+
+**Surfaces (parity with file/diff items):**
+- **Repo context menu** (Sidebar): add **"Open terminal"** next to "Open diff viewer" /
+  "Open file viewer…" → creates a terminal panel in that repo + spawns the shell.
+- **Overview:** render it as a column via the shared `ExtraPanel`/`PanelColumn` — title
+  "Terminal" + repo·branch subtitle; × closes (kills the shell + removes the panel).
+- **Sidebar:** a tree row under the repo (a `TerminalRow`, like `FileRow`/`DiffRow`) — click
+  opens Overview, hover-× removes, draggable into Canvas.
+- **Canvas:** `payloadToContent` maps a terminal drag payload → `{ kind: "terminal",
+  repoPath, … }`; Canvas renders `<Terminal>`; dedupe by id like agent/diff.
+
+**Persistence (decision): persist the item, fresh shell on boot.** Terminal panels persist in
+`overview_panels`, so the item reappears after an app restart — but a plain shell can't
+resume, so on boot respawn a **fresh** `$SHELL` for each terminal panel using its persisted
+id (previous output/history is gone). Removing the item (×) kills the shell and drops the
+persisted panel. (Agents stay in `sessions.json` + claude-resume; terminals live in
+`overview_panels` + shell-respawn — clean separation.)
+
+**Integration gotchas to handle:**
+- `reconcileTerminals(active)` (`App.tsx`) disposes pooled terminals whose id isn't in
+  `active` (today the agent session ids) — include terminal-item PTY ids so they aren't
+  disposed.
+- The `Terminal` component reads agent `sessions` for its exit/reconnecting overlay; a
+  terminal-item PTY isn't in `sessions`, so make the exit state work for non-agent PTYs (e.g.
+  on shell exit show a simple exited state + Restart that respawns the shell). Item
+  semantics: × always closes+removes, independent of the agent-exit rework (#63).
+
+Out of scope: a non-repo/global terminal, a Canvas-native "new terminal" button (open via the
+repo menu then drag), tabs/splits inside one terminal item, and shell-history restore.
+
+**Subtasks**
+
+1. [ ] Backend: add `spawn_terminal(cwd)` (+ a with-id variant for boot) in
+   `pty.rs`/`commands.rs` running `$SHELL` (fallback `/bin/zsh`) via `spawn_with_id`; reuse
+   the existing write/resize/kill/scrollback/event paths. Clear error if the shell is missing.
+2. [ ] Model: add `"terminal"` to `OverviewPanel.kind` (`types/index.ts`) and
+   `CanvasContent.kind`; add a typed IPC wrapper for `spawn_terminal`.
+3. [ ] Repo menu: add **"Open terminal"** → `addOverviewPanel(repo, "terminal")` + spawn the
+   shell with that panel's id.
+4. [ ] Overview: render the terminal panel as a column (`ExtraPanel`/`PanelColumn`, title
+   "Terminal", × kills+removes).
+5. [ ] Sidebar: add a `TerminalRow` under the repo (click→Overview, ×→remove, draggable into
+   Canvas).
+6. [ ] Canvas: extend `payloadToContent` + the render switch + dedupe for `kind: "terminal"`
+   → `<Terminal>`.
+7. [ ] Pool: include terminal-item ids in `reconcileTerminals`; make the `Terminal` exit
+   overlay work for non-agent PTYs (shell exit → restart affordance).
+8. [ ] Persistence/boot: respawn a fresh `$SHELL` for each persisted terminal panel on
+   startup using its id; removing the item kills the shell + drops the panel.
+
+**Acceptance criteria**
+
+- [ ] A repo's context menu has "Open terminal"; choosing it opens a usable shell (typing
+  works) in the repo folder, as an Overview column.
+- [ ] The terminal item also shows as a sidebar row under the repo and can be dragged into a
+  Canvas panel — the same item rendering everywhere (pool intact, no remount).
+- [ ] The terminal is not treated as an agent: no busy indicator, no branch label, not in the
+  agent/session list; its × kills the shell and removes the item.
+- [ ] After an app restart, the terminal item reappears (persisted) with a fresh shell in the
+  repo folder.
+- [ ] Multiple terminal items per repo work; each is an independent shell.
+
+**Notes**
+
+- Decisions (from the requester): plain `$SHELL` (fallback `/bin/zsh`) in the repo folder;
+  persist the item + fresh shell on boot (no history resume); behaves like file/diff items
+  (repo menu → Overview + sidebar + Canvas).
+- Reuses the generic PTY/`SessionManager` registry + the `Terminal` pool (both already
+  id-keyed, not claude-specific); only `spawn_session` is claude-specific.
+- Shares the Overview panel rendering with #70 (title-bar drag) and the panel pipeline
+  broadly — coordinate/rebase.
+- Key code: `src-tauri/src/pty.rs` (`spawn_with_id`, add `spawn_terminal`),
+  `src-tauri/src/commands.rs`, `src-tauri/src/store.rs` (`OverviewPanel`),
+  `src/types/index.ts` (`OverviewPanel`, `CanvasContent`), `src/store.ts`
+  (`addOverviewPanel`, boot respawn), `src/ipc.ts`, `src/components/Sidebar/Sidebar.tsx`
+  (repo menu + `FileRow`/`DiffRow` → add `TerminalRow`), `src/components/Overview/Overview.tsx`
+  (`ExtraPanel`), `src/components/Canvas/canvasDrop.ts` + `Canvas.tsx` (content kind),
+  `src/components/Terminal/{Terminal.tsx,terminalPool.ts}` + `src/App.tsx`
+  (`reconcileTerminals`).
