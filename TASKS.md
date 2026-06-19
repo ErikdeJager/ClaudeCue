@@ -584,3 +584,234 @@ selector to diff/terminal/agent panels; changing `FileViewer`'s content renderin
   #82). State-update precedent: `setDiffCompare` (`store.ts`) updates a panel in place + persists.
   Builds on #44 (FileViewer), #59 (overviewPanels as the single item source), #46/#47 (Canvas).
 - Independent of the open tasks (#84, #88, #89).
+
+---
+
+### 91. [ ] Folder context menu: "Kill all agents" + "Close all items"
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Add two **bulk actions** to the sidebar repo (folder) context menu (#31/#54/#82, `Sidebar.tsx`):
+
+1. **Kill all agents** — kill + forget **every running agent** in the folder (including its worktree
+   agents, #74), leaving the folder and its **non-agent items** (file / diff / terminal panels) in
+   place. (Per-session this is `removeSession` = kill + forget.)
+2. **Close all items** — clear the **entire folder workspace**: kill + forget all agents **and**
+   remove all non-agent items (file viewers, diff viewers, terminals — each terminal's shell PTY is
+   killed), but **keep the folder in recents** so its (now empty) repo header stays, with its coral
+   `+`. This differs from the existing **Forget folder** (#31), which *additionally* drops the folder
+   from recents.
+
+Both are destructive → red/danger styling (#54), placed in the destructive area of the menu (above
+"Forget folder"). Confirm before killing when agents are running (reuse the menu's existing confirm
+pattern, `menuMode`). Show each only when applicable: **Kill all agents** when ≥1 running agent;
+**Close all items** when the folder has any agent or any panel. Use the bulk-toast pattern (#83): a
+single summary toast and **no per-item spam** (the `forgetRepo` mechanics — `intentionalKills` +
+suppressed per-exit/per-panel toasts).
+
+**Concrete changes (grounding):**
+- **store** — add `killAllAgents(repoPath)` (remove all sessions where `repoPath === repo` **or**
+  `worktreeParent === repo` that are running; `intentionalKills.add` + `ipc.killSession`; keep
+  `overviewPanels` and `recents`; one summary toast) and `closeAllItems(repoPath)` (do the
+  kill-all, then remove every `overviewPanels[repo]` entry incl. terminal-PTY kills, persist via
+  `ipc.setOverviewPanels(repoPath, [])`; keep the folder in `recents`; one summary toast). Mirror
+  `forgetRepo` (`store.ts`) for the kill mechanics and selection/filter cleanup; reuse
+  `removeOverviewPanel`'s terminal-kill handling.
+- **Sidebar** (`Sidebar.tsx`) — add the two danger menu items; gate **Kill all agents** /
+  **Close all items** behind the confirm step when `menuRunning > 0` (extend the existing
+  `confirm` mode, or add parallel confirm modes).
+
+**Out of scope:** changing **Forget folder** (#31) behaviour; a global "kill everything" across all
+repos; killing agents without forgetting (we remove them, matching `removeSession`).
+
+**Subtasks**
+
+1. [ ] store: `killAllAgents(repoPath)` — remove all running agents (repo + its worktrees), one
+   summary toast, no per-exit spam; keep panels + recents.
+2. [ ] store: `closeAllItems(repoPath)` — kill all agents **and** remove all `overviewPanels[repo]`
+   (terminal PTYs killed), persist the empty list, keep the folder in recents; one summary toast.
+3. [ ] Sidebar repo menu: two danger items above "Forget folder", each shown only when applicable
+   and confirmed when agents are running.
+4. [ ] `npm run build`, `npm run lint`, `npm test` pass.
+
+**Acceptance criteria**
+
+- [ ] The repo context menu offers **Kill all agents** (shown only with ≥1 running agent) and
+  **Close all items** (shown only when the folder has any agent or panel), styled as destructive.
+- [ ] **Kill all agents** removes every running agent in the folder (and its worktrees) but leaves
+  the folder listed and its file/diff/terminal panels intact.
+- [ ] **Close all items** removes every agent **and** every panel (terminals' shells killed) while
+  **keeping the folder in recents** (empty header with `+` remains).
+- [ ] A single summary toast per action (no per-item spam); running-agent actions confirm first;
+  `npm run build` / `lint` / `test` pass.
+
+**Notes**
+
+- Requester intent: a quick "kill all agents here" and a stronger "clear this folder's workspace"
+  without forgetting the folder.
+- Reference: `forgetRepo` (`store.ts`) — kill mechanics, `intentionalKills`, selection/filter
+  cleanup, worktree handling (#74); `removeOverviewPanel` — terminal-PTY kill + persist.
+- Independent of the other open tasks (#84, #88–#90).
+
+---
+
+### 92. [ ] Fix the unclickable "Restart" button on the exited-process overlay
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+The **Restart** button on the "Process exited (code N)" overlay (`Terminal.tsx` `.exitOverlay`) is
+**visible but unclickable** — clicks never reach `handleRestart`, so an exited/crashed agent (#63) or
+shell terminal (#72) can't be relaunched from the overlay.
+
+**Root cause (confirmed).** In `Terminal.module.css`, `.wrapper` (`position: relative`), `.slot`
+(the pooled-xterm reparent target, `position: absolute; inset: 0`), the pooled `.terminal` container
+(`position: absolute; inset: 0`), and `.exitOverlay` (`position: absolute; inset: 0`) **all have
+`z-index: auto`**, so **none establishes a stacking context**. xterm's own stylesheet
+(`@xterm/xterm/css/xterm.css`) puts **positive z-indexes** on its internal layers (helpers/canvases/
+decorations — up to ~11). Positive-z-index descendants paint in a higher stacking group than the
+`z-index: auto` `.exitOverlay`, so xterm's layers (some transparent) sit **above** the overlay in
+hit-testing: the button paints (it's a later sibling) but pointer events resolve to the xterm layer,
+not the button.
+
+**Fix.** Make the overlay reliably top-most **and** interactive:
+- Give `.exitOverlay` an explicit `z-index` above xterm's layers (xterm tops out ~11 → e.g.
+  `z-index: 20`), and/or **contain** xterm's stacking by isolating the wrapper
+  (`.wrapper { isolation: isolate }` or `.slot { z-index: 0 }`), so xterm's internal z-indexes no
+  longer escape above the overlay.
+- Confirm the **"Reconnecting…"** overlay (same element) is unaffected/also correct.
+
+**Subtasks**
+
+1. [ ] `Terminal.module.css`: raise/contain stacking so `.exitOverlay` (and its button) sit above the
+   pooled xterm layers and receive pointer events (explicit `z-index` and/or `isolation: isolate`).
+2. [ ] Verify clicking **Restart** fires `handleRestart` → resume (agent, #63) / respawn (terminal
+   item, #72) and `resetTerminal`, in **both** Overview and Canvas.
+3. [ ] `npm run build`, `npm run lint` pass.
+
+**Acceptance criteria**
+
+- [ ] The **Restart** button on the exit overlay is clickable and actually relaunches the session
+  (agent resume / terminal respawn), with the pooled terminal reset so it repaints cleanly (#63).
+- [ ] Works wherever a terminal renders (Overview card, Canvas panel); the "Reconnecting…" overlay
+  still behaves correctly.
+- [ ] `npm run build` and `npm run lint` pass.
+
+**Notes**
+
+- Reported via screenshot: "Process exited (code 0)" with a **Restart** button that can't be clicked.
+- The overlay is a later DOM sibling of `.slot`, so it *paints* on top — but xterm's positive
+  z-indexes out-stack it for hit-testing because nothing between them isolates the stacking context.
+- Touches `Terminal.module.css` (and possibly `Terminal.tsx`) only; independent of other open tasks.
+
+---
+
+### 93. [ ] Scheduled sessions: "+ Schedule session" button, modal, scheduling engine, and scheduled-agent panels
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Add **scheduled sessions** — agents that launch **automatically at a chosen time**, optionally
+pre-seeded with a prompt so `claude` starts ready to go. Major new feature spanning a new launcher,
+a backend scheduling engine, and a new draggable item type.
+
+**Pieces:**
+
+- **"+ Schedule session" button** below the "New session" button in the sidebar (`Sidebar.tsx`),
+  with a distinct-but-related keybind **⌘⇧N** (⌘N opens New session #26; ⌘⇧N schedules). Add it to
+  `useKeyboardNav` — the existing ⌘N branch requires `!e.shiftKey`, so ⌘⇧N is free and "fitting".
+- **Schedule modal** = the New-session flow (folder → branch, **reusing `NewSessionModal`**'s
+  two-step #66 UI) **plus a final step**: pick a **launch time** (date + time), optionally enter a
+  **prompt**, and optionally a **custom name** (re-added here — #66 dropped the inline name field, but
+  the scheduled panel surfaces a name). The **prompt is optional** (can be added/edited later in the
+  panel).
+- **Prompt → run command.** The prompt is passed **positionally** so `claude` boots with it ready:
+  `claude --session-id <uuid> "<prompt>"` (combined with the existing optional `git checkout`).
+  Backend: extend `pty.rs spawn_session` to accept an optional initial prompt appended after
+  `--session-id <id>` (the args are currently a fixed slice; add the positional). **Verify against
+  the real CLI** (as #30 did for `--session-id`/`--resume`) and record the finding.
+- **Scheduling engine (backend).** Persist scheduled records — `{ id, cwd, branch (+ checkout?),
+  worktree?, name?, prompt, fire_at, created_at }` — in the app-data dir (`store.rs`); arm a backend
+  timer/scheduler (`lib.rs`/`pty.rs`); when `fire_at` is reached, spawn the agent (with checkout +
+  prompt), **convert** the scheduled record into a live session, and emit an event so the frontend
+  moves the item scheduled→live. On boot, reload schedules and re-arm; if `fire_at` **already passed**
+  while the app was closed, **fire on boot (catch-up)**. Tauri commands: create / list / cancel /
+  update-prompt (+ update-name/time).
+- **UI — a new "scheduled" item type** flowing like existing items (#45/#59 sidebar, #38 Overview,
+  #46/#47 Canvas):
+  - **Sidebar (left panel):** a scheduled row under its repo with **basic details** (name/branch +
+    fire time, a clock icon), draggable into a Canvas, with a × to **cancel** it.
+  - **Overview:** a scheduled card.
+  - **Canvas:** draggable in — new `CanvasContent` kind `"scheduled"` + a `payloadToContent` case
+    (new item types are draggable by default per that pattern).
+  - **Scheduled-agent panel** (shared body for the Overview card + Canvas panel): shows **branch,
+    custom name, fire time, and the prompt**, with a **big prompt textarea** that **auto-saves**
+    (debounced) to the record; the prompt is optional and editable any time before it fires; includes
+    a way to **cancel** the schedule.
+- **On fire**, the scheduled item is **consumed** and becomes a normal live agent, appearing
+  everywhere agents do.
+
+**Decisions / out of scope (assumed — no requester Q&A):**
+- Keybind **⌘⇧N**; prompt **optional** + editable in-panel with **auto-save**; **catch-up fire on
+  boot** for schedules missed while closed; re-add an optional **custom name** in the schedule flow.
+- **One-shot** schedules only — **recurring** schedules are out of scope.
+- Editing **fire time** after creation is a **nice-to-have** (include if cheap; the core editable
+  field in the panel is the prompt).
+- Time zone = the local machine zone.
+
+**Subtasks (phased)**
+
+1. [ ] **Backend data + spawn:** persisted scheduled-session records (`store.rs`); Tauri commands to
+   create / list / cancel / update (prompt, name, time) (`commands.rs`); extend `pty.rs spawn_session`
+   to append an optional positional prompt — and **verify the `claude "<prompt>"` invocation** works
+   (note it in CLAUDE.md like #30).
+2. [ ] **Scheduling engine:** arm timers per schedule; on fire spawn (checkout + prompt) and convert
+   to a live session; boot reload + **catch-up**; emit fired/updated events (`lib.rs`/`pty.rs`).
+3. [ ] **Frontend store/IPC:** scheduled-sessions state + typed IPC + actions (schedule, cancel,
+   updatePrompt/name/time, onFired→move into `sessions`); persistence wiring.
+4. [ ] **Launcher:** "+ Schedule session" button under New session + **⌘⇧N** (`useKeyboardNav`);
+   the schedule modal (reuse `NewSessionModal` folder→branch + a final time/prompt/name step).
+5. [ ] **New "scheduled" item type:** sidebar row (basic details + clock + cancel + draggable),
+   Overview card, Canvas content (`"scheduled"` kind + `payloadToContent` + draggable), and the
+   shared **scheduled-agent panel** (branch / name / fire time + big auto-saving prompt textarea +
+   cancel).
+6. [ ] **Docs + checks:** update CLAUDE.md (scheduled sessions, ⌘⇧N, the engine, the new item type,
+   the prompt-positional spawn); `npm run build`, `npm run lint`, `npm test`, `cargo test` pass.
+
+**Acceptance criteria**
+
+- [ ] A "+ Schedule session" button (and **⌘⇧N**) opens a modal that mirrors New session (folder →
+  branch) and adds a final step to pick a **launch time** and optionally a **prompt** (+ name);
+  scheduling with **no prompt** is allowed.
+- [ ] At the scheduled time the agent launches automatically with the prompt pre-loaded
+  (`claude --session-id <id> "<prompt>"`, plus checkout when a non-current branch was chosen), and
+  the scheduled item becomes a normal live agent; a schedule **missed while the app was closed fires
+  on next boot**.
+- [ ] Scheduled sessions appear in the **sidebar** (basic details, draggable, cancelable) and in
+  **Overview**, and can be **dragged into a Canvas**; their panel shows **branch, custom name, fire
+  time, and a big prompt field that auto-saves**.
+- [ ] Scheduled records **persist** across restart (timers re-armed on boot); canceling removes the
+  schedule and its timer.
+- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass; CLAUDE.md documents the
+  feature.
+
+**Notes**
+
+- **Large feature** — consider phasing: (A) backend records + engine + spawn-with-prompt + the
+  button/modal; (B) the full sidebar/Overview/Canvas item type + the auto-saving panel.
+- Reuses `NewSessionModal` (#66), the spawn flow (`pty.rs`), item plumbing (#45/#59/#38/#46/#47), and
+  keyboard nav (#26). Scheduled items are a **new draggable item type** but created via the schedule
+  modal — **not** via the repo "Views" registry (#82) — so #82 is unaffected.
+- `claude "<prompt>"` as the initial-prompt invocation must be CLI-verified before relying on it
+  (mirror the #30 flag-verification note in CLAUDE.md).
+- Independent of the other open tasks (#84, #88–#92).
