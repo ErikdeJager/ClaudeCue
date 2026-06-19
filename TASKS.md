@@ -175,7 +175,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 Tasks #1–#63 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. New work goes here as a fresh `### N.` entry
-in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#65**), with its
+in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#69**), with its
 `Depends on:` prerequisites.
 
 ---
@@ -244,3 +244,223 @@ touching unrelated panels.
 - Sanity-check edge cases: wide markdown tables and long inline code / URLs
   (`.markdown table` has no horizontal-scroll wrapper, and `overflow-y: auto` couples
   `overflow-x` to `auto`).
+
+---
+
+### 65. [ ] New session panel should fully cover the New session button (no corner peeking out)
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+When the New session panel opens (it "grows from" the New session button, #53), a **sliver
+of the button's top-left corner stays visible** around the panel. The panel should
+completely cover the button.
+
+Cause: both the button (`.newButton`, `Sidebar.module.css`) and the panel (`.popover`,
+`NewSessionModal.module.css`) anchor at 12px from the top-left, but the panel's corner uses
+`--radius-window` (10px) while the button uses the smaller `--radius-control` (~7px) — the
+button's sharper corner protrudes past the panel's rounder one. Fix so the panel fully
+occludes the button (match the panel's top-left radius to the button's or sharper, and/or
+nudge the panel's origin a hair up/left). Keep the "grows from the button" scale-in; stay
+on tokens.
+
+Out of scope: the panel's internal flow/keybindings (#66).
+
+**Acceptance criteria**
+
+- [ ] With the panel open, no part of the New session button is visible around it (top-left
+  corner included).
+- [ ] The open animation still reads as growing from the button; tokens only.
+
+**Notes**
+
+- Shares the New session component with #66; coordinate/rebase to avoid CSS conflicts.
+- Key code: `src/components/NewSessionModal/NewSessionModal.module.css` (`.popover`,
+  `.overlay`), `src/components/Sidebar/Sidebar.module.css` (`.newButton`, `.sidebar`).
+
+---
+
+### 66. [ ] Rework the new-session flow — two-step folder→branch keyboard flow, branch filter, in-button hints, remove Name, "Start"
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Rework the new-session panel (`NewSessionModal.tsx`, #53/#61) into a clean two-step,
+keyboard-driven flow.
+
+**Step 1 — Folder.** Recents search auto-focused on open (already). Type to filter; ↑/↓
+moves the highlight (= target folder). **Enter no longer starts the agent** — it
+**advances to the Branch step** for a git repo.
+
+**Step 2 — Branch.** Only for a git repo — **skip entirely for a non-git folder** (no
+branches, so Enter in step 1 starts the agent directly). On entry, focus lands on the
+branch picker; ↑/↓ moves; **Enter starts the agent** (`git checkout` first for a
+non-current branch, existing destructive-confirm gate preserved).
+
+**Branch filter + priority sort.** Show a **branch filter** input above the list **when
+there are more than 4 branches** (auto-focused on entering the step; type to filter, ↑/↓ to
+move, Enter to start). Pin **well-known branches to the top in priority order** — `main`,
+then `master`, then `dev`/`develop` — then the rest (current branch highlighted as the
+default selection); matching priority branches sort to the top of filtered results too.
+
+**In-button key hints.** Remove the standalone hint row (`.hints`); move affordances **into
+the buttons** — ⏎ in **Start**, esc in **Cancel**. **Drop the other hint visuals**
+(per-recent ⌘1–9 badges, ↑/↓ hints). Navigation stays type-to-filter + ↑/↓; the
+now-unhinted ⌘1–9 quick-jump may stay working silently or be removed.
+
+**Remove the Name field** from creation **for now**, and **stop defaulting the session name
+to the folder name** — a session created here has **no custom name** (name = empty/null).
+(Custom names are still settable via sidebar rename #57; their display is #67.)
+
+**Rename the action button** "Create" → **"Start"**, shown as **"Start"** normally and
+**"Checkout & start"** when a non-current branch is selected.
+
+Preserve: a11y focus-trap / focus-restore / outside-click + Escape close (#49), the ⌘N
+launcher entry, the destructive-checkout acknowledgement (#27).
+
+**Subtasks**
+
+1. [ ] Folder step: keep search auto-focus + type/↑↓ filter; change Enter to **advance**
+   (focus Branch step for git; start immediately for non-git / 0 branches).
+2. [ ] Branch step: auto-focus on entry; ↑↓ roving; Enter starts (checkout for non-current,
+   destructive-confirm intact).
+3. [ ] Branch filter input above the list, shown when **>4 branches**; type filters, ↑↓
+   moves, Enter starts.
+4. [ ] Sort branches: pin `main` > `master` > `dev`/`develop` to the top, current
+   highlighted/default, rest after; priority branches sort to top of filtered results.
+5. [ ] Remove `.hints` row; ⏎ in Start, esc in Cancel; remove ⌘1–9 badges and ↑↓ hints.
+6. [ ] Remove the Name input; stop defaulting name to repoName — new sessions have no custom
+   name.
+7. [ ] Rename action button to "Start" / "Checkout & start".
+
+**Acceptance criteria**
+
+- [ ] Opening focuses the recents search; typing/↑↓ filters & highlights a folder.
+- [ ] Enter on a **git** folder advances to the Branch step (no start); Enter on a
+  **non-git** folder starts immediately.
+- [ ] In the Branch step, ↑↓ moves and Enter starts (checkout for a non-current branch;
+  destructive-confirm still gates it).
+- [ ] Branch filter appears when >4 branches, auto-focused, filters as you type;
+  `main`/`master`/`dev` pinned to the top in that order (and atop matching results).
+- [ ] No standalone hint row; Start shows ⏎, Cancel shows esc; no ⌘1–9 / ↑↓ hint badges
+  remain.
+- [ ] No Name field; a session created here has no custom name.
+- [ ] Action button reads "Start" (or "Checkout & start" when switching branches).
+
+**Notes**
+
+- Decisions (from the requester): drop all list-nav hint visuals (keep only ⏎/esc in
+  buttons); "Start" / "Checkout & start"; branch filter when >4 branches with
+  main/master/dev priority-pinned; remove Name; display handled in #67.
+- #67 **depends on this task** removing the default custom-name behavior.
+- Shares the New session component with #65; coordinate/rebase.
+- Key code: `NewSessionModal.tsx` (`onSearchKeyDown`, `onBranchKeyDown`, `create`,
+  `.hints`, Name input, button labels), `NewSessionModal.module.css`, `src/store.ts`
+  (`spawnSession`), `git.rs` / `list_branches` (branch data).
+
+---
+
+### 67. [ ] Session label: branch is the primary title; a custom name overrides it (branch becomes the subtitle)
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** #66
+**Created:** 2026-06-19
+
+**Description**
+
+Unify how an agent session is labeled everywhere:
+
+- **No custom name → primary = the branch** (folder name for a non-git folder); no subtitle.
+- **Custom name set → primary = the custom name, branch becomes the subtitle** (folder name
+  for non-git).
+
+Today surfaces are inconsistent and a "custom name" effectively always exists (creation
+forces `name = custom || repoName`), so this only behaves right once **#66** removes the
+default-name behavior (custom names then come only from rename #57).
+
+Current rendering to unify:
+- **Sidebar** (`Sidebar.tsx`): primary = branch (`label`), secondary = `session.name`.
+- **Overview** (`Overview.tsx`): primary = `name ?? repoName`, secondary = `repoName · branch`.
+- **Focus** (`Focus.tsx`): `name · branch · …`.
+- **Canvas** (`Canvas.tsx`): title = `name ?? repoName`, subtitle = `repoName · branch`.
+
+Desired: every surface uses primary = `name || branch || folderName`; subtitle =
+branch/folderName **only when a custom name is set**. Keep each surface's existing **repo
+color badge / grouping** (#35–#37) for "which repo"; drop now-redundant repo/branch text the
+new rule would duplicate.
+
+**Subtasks**
+
+1. [ ] Define the rule once (shared helper): primary = `name || branch || folderName`;
+   subtitle = `name ? (branch || folderName) : null`.
+2. [ ] Apply to Sidebar rows, Overview cards, Focus toolbar, Canvas panel titles.
+3. [ ] Preserve repo color/badge; remove redundant repo/branch text left by the change.
+
+**Acceptance criteria**
+
+- [ ] A session with no custom name shows the **branch** as its primary label on all
+  surfaces (folder name when non-git), no subtitle.
+- [ ] After renaming (#57), the **custom name** is primary and the **branch** is the
+  subtitle on all surfaces.
+- [ ] Sidebar, Overview, Focus, Canvas all follow the same rule; repo color/badge retained.
+
+**Notes**
+
+- Decision (from the requester): applies to all surfaces.
+- Depends on #66 (stops defaulting the name, so "has a custom name" is meaningful).
+- Branch comes from the live `branches` map in the store (by repo); non-git → primary falls
+  back to folder name.
+- Key code: `Sidebar.tsx` (`SessionRow`), `Overview.tsx`, `Focus.tsx`, `Canvas.tsx`,
+  `src/paths.ts`.
+
+---
+
+### 68. [ ] Repo filter selector should visually include its "+" (new-session) button
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+In the sidebar, each repo/folder group has a header (`Sidebar.tsx` `.repoHeader`) with two
+side-by-side buttons: the **repo title** (`.repoTitle`) — a click-to-filter-Overview
+selector (#34) showing the repo color dot (#35) + name + session count — and a separate
+**"+"** button (`.plus`, "New session in this repo", #54). The active-filter highlight
+(`.repoActive` → `--accent-dim` rounded box) is applied to the **title only**, so the "+"
+sits *outside* the highlighted box and looks detached/odd (see screenshot).
+
+Make the filter selector **visually include the "+"**: the selector's box — its hover and
+active-filter highlight — should enclose **both** the repo title and the "+" as one cohesive
+control, instead of highlighting just the title and leaving the "+" floating beside it. Keep
+them as **two separate click targets** (title = filter Overview; "+" = new session in repo)
+and preserve the empty-repo accent "+" treatment (`.plusCoral`) and a11y labels.
+
+Likely approach: move the rounded background / hover / active highlight from `.repoTitle` to
+the `.repoHeader` container (title and "+" transparent inside it), so the whole row reads as
+one selector. Stay on tokens.
+
+Out of scope: changing what the title or "+" *do*; the session-row labels (#67).
+
+**Acceptance criteria**
+
+- [ ] The repo header's hover and active-filter highlight enclose both the repo title and
+  the "+" as a single rounded selector — the "+" no longer sits outside the highlighted box.
+- [ ] Clicking the title still filters Overview; clicking the "+" still opens New session in
+  that repo; empty-repo accent "+" and a11y labels preserved.
+- [ ] Tokens only; no off-system values.
+
+**Notes**
+
+- From the screenshot: the active repo filter shows the accent-dim box around "● ClaudeCue"
+  with the "+" detached to its right.
+- Shares `Sidebar.tsx` / `Sidebar.module.css` with #67 but touches different elements (repo
+  header vs `SessionRow`); independent.
+- Key code: `src/components/Sidebar/Sidebar.tsx` (`.repoHeader`, `.repoTitle`/`.repoActive`,
+  `.plus`/`.plusCoral`), `src/components/Sidebar/Sidebar.module.css` (lines ~63–158).
