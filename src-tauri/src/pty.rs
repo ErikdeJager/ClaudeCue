@@ -33,6 +33,10 @@ const READ_CHUNK: usize = 8 * 1024;
 const BUSY_WINDOW_MS: u64 = 700;
 /// How often the monitor thread re-evaluates each session's busy state (#42).
 const MONITOR_TICK_MS: u64 = 200;
+/// Output is treated as the terminal's **echo of typing** (not Claude working,
+/// #55) unless it arrives at least this long after the last keystroke. Tuned so
+/// keystroke echo never reads as busy, while sustained autonomous output does.
+const INPUT_ECHO_MS: u64 = 300;
 
 /// Errors surfaced to the frontend. Serialized as `{ kind, message }` so the UI
 /// can branch on `kind` (e.g. show the "claude not found" surface).
@@ -102,10 +106,18 @@ pub enum SessionEvent {
     },
 }
 
-/// Per-session activity map shared between the reader threads (which stamp the
-/// last-output time) and the monitor thread (which derives busy/idle), keyed by
-/// session id. The value is the millis-since-`base` of the last output (0 = none).
-type Activity = Arc<Mutex<HashMap<String, Arc<AtomicU64>>>>;
+/// Per-session activity timestamps (millis-since-`base`, 0 = none) for the busy
+/// heuristic. `last_output` is stamped by the reader thread (#42); `last_input`
+/// by `write_stdin` (#55) so the monitor can tell the terminal's echo of typing
+/// from genuine Claude output.
+struct ActivityState {
+    last_output: AtomicU64,
+    last_input: AtomicU64,
+}
+
+/// Per-session activity map shared between the reader threads, `write_stdin`, and
+/// the monitor thread (which derives busy/idle), keyed by session id.
+type Activity = Arc<Mutex<HashMap<String, Arc<ActivityState>>>>;
 
 /// Bounded byte ring buffer used to replay recent output to late subscribers.
 struct Scrollback {
@@ -217,6 +229,14 @@ impl SessionManager {
 
     /// Send keystrokes / paste to a session's stdin.
     pub fn write_stdin(&self, id: &str, data: &str) -> Result<(), SessionError> {
+        // Stamp the keystroke time *before* writing, so the echo the terminal
+        // sends back can never be mistaken for autonomous Claude output (#55).
+        if let Ok(map) = self.activity.lock() {
+            if let Some(state) = map.get(id) {
+                let now = self.base.elapsed().as_millis() as u64;
+                state.last_input.store(now.max(1), Ordering::Relaxed);
+            }
+        }
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(id)
@@ -377,11 +397,14 @@ impl SessionManager {
         let child = Arc::new(Mutex::new(child));
         let events = self.event_sender()?;
 
-        // Register this session's last-output stamp for the busy heuristic (#42);
-        // a restart with the same id replaces the previous atomic here.
-        let last_output = Arc::new(AtomicU64::new(0));
+        // Register this session's activity stamps for the busy heuristic (#42/#55);
+        // a restart with the same id replaces the previous state here.
+        let activity_state = Arc::new(ActivityState {
+            last_output: AtomicU64::new(0),
+            last_input: AtomicU64::new(0),
+        });
         if let Ok(mut map) = self.activity.lock() {
-            map.insert(id.clone(), Arc::clone(&last_output));
+            map.insert(id.clone(), Arc::clone(&activity_state));
         }
 
         let reader_handle = std::thread::spawn({
@@ -397,7 +420,7 @@ impl SessionManager {
                     &child,
                     &scrollback,
                     &events,
-                    &last_output,
+                    &activity_state,
                     base,
                     &activity,
                 )
@@ -447,7 +470,7 @@ fn reader_loop(
     child: &Arc<Mutex<Box<dyn Child + Send + Sync>>>,
     scrollback: &Arc<Mutex<Scrollback>>,
     events: &Sender<SessionEvent>,
-    last_output: &Arc<AtomicU64>,
+    state: &Arc<ActivityState>,
     base: Instant,
     activity: &Activity,
 ) {
@@ -460,7 +483,7 @@ fn reader_loop(
                 // Stamp the last-output time for the busy heuristic (#42); `.max(1)`
                 // keeps 0 reserved as the "no output yet" sentinel.
                 let now = base.elapsed().as_millis() as u64;
-                last_output.store(now.max(1), Ordering::Relaxed);
+                state.last_output.store(now.max(1), Ordering::Relaxed);
                 let chunk = buf[..n].to_vec();
                 if let Ok(mut sb) = scrollback.lock() {
                     sb.push(&chunk);
@@ -481,7 +504,7 @@ fn reader_loop(
     // Stop tracking activity — but only if the map still points to *our* atomic
     // (a restart with the same id may have replaced it; don't drop the new one).
     if let Ok(mut map) = activity.lock() {
-        if matches!(map.get(&id), Some(a) if Arc::ptr_eq(a, last_output)) {
+        if matches!(map.get(&id), Some(a) if Arc::ptr_eq(a, state)) {
             map.remove(&id);
         }
     }
@@ -510,9 +533,16 @@ fn monitor_loop(activity: Activity, events: Sender<SessionEvent>, base: Instant)
                 Err(poisoned) => poisoned.into_inner(),
             };
             map.iter()
-                .map(|(id, last)| {
-                    let last_ms = last.load(Ordering::Relaxed);
-                    let busy = last_ms != 0 && now.saturating_sub(last_ms) < BUSY_WINDOW_MS;
+                .map(|(id, state)| {
+                    let out = state.last_output.load(Ordering::Relaxed);
+                    let inp = state.last_input.load(Ordering::Relaxed);
+                    // Busy = recent output that arrived meaningfully *after* the
+                    // last keystroke, so the terminal's echo of typing doesn't
+                    // read as Claude working (#55). No keystrokes yet (inp == 0)
+                    // → any recent output counts.
+                    let busy = out != 0
+                        && now.saturating_sub(out) < BUSY_WINDOW_MS
+                        && (inp == 0 || out.saturating_sub(inp) >= INPUT_ECHO_MS);
                     (id.clone(), busy)
                 })
                 .collect()
@@ -719,5 +749,33 @@ mod tests {
         let snapshot = mgr.scrollback(&info.id).expect("scrollback");
         assert!(String::from_utf8_lossy(&snapshot).contains("scrollback-marker"));
         let _ = mgr.kill_session(&info.id);
+    }
+
+    #[test]
+    fn typing_echo_does_not_read_as_busy() {
+        // The PTY echoes keystrokes back as output; that echo must NOT be reported
+        // as Claude working (#55) — only sustained autonomous output should.
+        let (mgr, rx) = manager();
+        let info = mgr
+            .spawn_program("cat", &[], &tmp(), None)
+            .expect("spawn cat");
+
+        let mut saw_busy = false;
+        let deadline = Instant::now() + Duration::from_millis(1500);
+        while Instant::now() < deadline {
+            // Simulate the user typing a character (no newline → pure TTY echo).
+            let _ = mgr.write_stdin(&info.id, "x");
+            if let Ok(SessionEvent::State { busy: true, .. }) =
+                rx.recv_timeout(Duration::from_millis(80))
+            {
+                saw_busy = true;
+                break;
+            }
+        }
+        let _ = mgr.kill_session(&info.id);
+        assert!(
+            !saw_busy,
+            "keystroke echo must not mark the session busy (#55)"
+        );
     }
 }

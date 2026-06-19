@@ -3841,9 +3841,9 @@ color #35, Open diff viewer #39, Open markdown viewer #41). Two changes:
 
 ---
 
-### 55. [ ] Busy indicator: pulsing ball (grayed when idle) + only show when Claude is genuinely working
+### 55. [x] Busy indicator: pulsing ball (grayed when idle) + only show when Claude is genuinely working
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -3867,14 +3867,14 @@ following the #42 precedent.
 
 **Subtasks**
 
-1. [ ] Rework `BusyIndicator` into a **single pulsing ball** that takes a `busy` prop:
+1. [x] Rework `BusyIndicator` into a **single pulsing ball** that takes a `busy` prop:
    dimmed (`--status-idle`) when idle, pulsing Blue (`--status-running`) when busy; smaller
    footprint; reduced-motion → a **static** colored dot (no pulse), via the global
    killswitch / a `prefers-reduced-motion` rule.
-2. [ ] Render it **always** (not conditionally on `busy`) at all three call sites so the
+2. [x] Render it **always** (not conditionally on `busy`) at all three call sites so the
    grayed idle state shows: Sidebar `SessionRow`, Overview `SessionCard` header, Focus
    toolbar — pass `busy={sessionBusy[id] ?? false}` to each.
-3. [ ] **Detection fix** — make typing not count as busy. The backend already sees
+3. [x] **Detection fix** — make typing not count as busy. The backend already sees
    keystrokes (`write_stdin`) and output (reader-thread `last_output` stamp). **Default
    approach (no new dependency):** stamp a per-session **last-input** time in `write_stdin`
    and, in `monitor_loop`, exclude output that is merely the echo of recent keystrokes (so
@@ -3882,16 +3882,16 @@ following the #42 precedent.
    still noisy:** CPU sampling of the `claude` child via `sysinfo`, or Claude Code hooks
    (`UserPromptSubmit`/`Stop`) — both flagged as the future upgrade in #42. Keep the
    existing debounce (no rapid flicker). Verify against the real `claude` TUI.
-4. [ ] Keep the status tokens (#33): idle = `--status-idle`, busy = `--status-running`
+4. [x] Keep the status tokens (#33): idle = `--status-idle`, busy = `--status-running`
    (Blue) or `--status-done` (Green).
 
 **Acceptance criteria**
 
-- [ ] The indicator is a single small pulsing ball — colored + pulsing when busy, grayed
+- [x] The indicator is a single small pulsing ball — colored + pulsing when busy, grayed
   when idle, always visible; reduced-motion shows a static dot.
-- [ ] Typing into an otherwise-idle session does **not** turn the indicator busy; a session
+- [x] Typing into an otherwise-idle session does **not** turn the indicator busy; a session
   generating a response does; no rapid flicker.
-- [ ] Shows consistently in the sidebar row, the Overview card header, and the Focus toolbar.
+- [x] Shows consistently in the sidebar row, the Overview card header, and the Focus toolbar.
 
 **Notes**
 
@@ -3906,6 +3906,27 @@ following the #42 precedent.
   existing signals, no new crate); escalate to `sysinfo`/hooks only if it stays noisy.
 - **Assumption** (no clarification available): ball color = Blue (`--status-running`);
   switch to Green if preferred.
+- **Done 2026-06-19.** **Visual:** `BusyIndicator` is now a single **7px ball** (was three
+  bouncing dots) — Catppuccin **Blue** (`--status-running`) pulsing (opacity + scale) while
+  working, **dimmed** (`--status-idle`) when idle; takes a `busy` prop and is **always
+  rendered** at all three sites (Sidebar `SessionRow`, Overview `SessionCard`, Focus toolbar,
+  each passed `busy={sessionBusy[id] ?? false}`) so the grayed idle state shows. The pulse
+  is `transform`/`opacity` only; the global reduced-motion killswitch settles it to a static
+  colored dot. **Detection (the research part):** chose the **input-echo-exclusion**
+  heuristic (no new crate) — a per-session `last_input` stamp set in `write_stdin`
+  (`ActivityState { last_output, last_input }`), and `monitor_loop` now reports busy only
+  when recent output arrived **≥`INPUT_ECHO_MS` (300ms) after** the last keystroke: `busy =
+  recent_output && (no input yet || last_output − last_input ≥ 300ms)`. So the terminal's
+  echo of typing (output ≈ input time) no longer reads as busy, while sustained autonomous
+  output does; the `BUSY_WINDOW_MS` debounce is unchanged (no flicker). Input is stamped
+  *before* the PTY write so the echo can't beat it. **Tests:** new
+  `typing_echo_does_not_read_as_busy` (cat echo → never busy) + existing
+  `busy_state_tracks_output_then_goes_idle` (sustained output → busy→idle) both pass — 38
+  Rust + 63 frontend tests; clippy/fmt/build/lint/format all green. **Caveats:** the real
+  `claude` TUI isn't headless-verifiable (per #42) — the heuristic is modeled with `cat`
+  (echo) / `sh` (sustained output); if `claude`'s idle TUI emits periodic output, escalate
+  to `sysinfo`/hooks as the task notes. The pulse keyframe is kept **local** to
+  `BusyIndicator.module.css` (matching the prior `busy-bounce`), not `global.css`.
 
 ---
 

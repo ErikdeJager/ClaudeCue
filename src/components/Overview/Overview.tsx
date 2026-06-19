@@ -146,12 +146,10 @@ function SessionCard({
   );
   const actions = (
     <>
-      {/* Busy indicator (#42), left of the card actions, only while working. */}
-      {busy && (
-        <span className={styles.headerBusy}>
-          <BusyIndicator />
-        </span>
-      )}
+      {/* Status ball (#55), left of the card actions; dimmed when idle. */}
+      <span className={styles.headerBusy}>
+        <BusyIndicator busy={busy} />
+      </span>
       <button
         type="button"
         className={styles.action}

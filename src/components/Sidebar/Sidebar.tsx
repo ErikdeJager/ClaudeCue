@@ -69,13 +69,11 @@ function SessionRow({
           <span className={styles.rowSecondary}>{session.name}</span>
         )}
       </button>
-      {/* Busy indicator (#42): always visible while working; the Remove ghost
+      {/* Status ball (#55): always shown (dimmed when idle); the Remove ghost
           shows on hover to its right. */}
-      {busy && (
-        <span className={styles.rowBusy}>
-          <BusyIndicator />
-        </span>
-      )}
+      <span className={styles.rowBusy}>
+        <BusyIndicator busy={busy} />
+      </span>
       <button
         type="button"
         className={styles.remove}

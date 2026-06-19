@@ -1,29 +1,28 @@
 import styles from "./BusyIndicator.module.css";
 
 interface BusyIndicatorProps {
-  /** Accessible label + hover tooltip. */
+  /** Pulses Blue while true; sits dimmed/grayed when false (#55). */
+  busy: boolean;
+  /** Accessible label + hover tooltip; defaults to the busy/idle state. */
   label?: string;
 }
 
 /**
- * A small, playful "working" indicator (#42): three dots bouncing in a staggered
- * wave while a `claude` session is busy. Rendered only when busy — idle shows
- * nothing. Motion respects the global `prefers-reduced-motion` killswitch
- * (`src/styles/global.css`), which settles the dots into a static colored
- * cluster. The busy color is the Yellow status token (#33).
+ * A single small status ball (#55, supersedes #42's bouncing dots): a Catppuccin
+ * Blue dot that **pulses while the session is working** and sits **dimmed**
+ * (`--status-idle`) when idle. Always rendered so the grayed idle state is
+ * visible. Motion respects the global `prefers-reduced-motion` killswitch
+ * (`src/styles/global.css`), which settles the pulse into a static colored dot.
  */
-function BusyIndicator({ label = "Working…" }: BusyIndicatorProps) {
+function BusyIndicator({ busy, label }: BusyIndicatorProps) {
+  const text = label ?? (busy ? "Working…" : "Idle");
   return (
     <span
-      className={styles.busy}
+      className={`${styles.ball} ${busy ? styles.busy : ""}`}
       role="status"
-      aria-label={label}
-      title={label}
-    >
-      <span className={styles.dot} />
-      <span className={styles.dot} />
-      <span className={styles.dot} />
-    </span>
+      aria-label={text}
+      title={text}
+    />
   );
 }
 

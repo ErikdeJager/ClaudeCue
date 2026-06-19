@@ -199,7 +199,7 @@ function Focus() {
               </span>
               <Copy size={13} strokeWidth={1.5} />
             </button>
-            {busy && <BusyIndicator />}
+            <BusyIndicator busy={busy} />
             <div className={styles.spacer} />
             <button
               type="button"

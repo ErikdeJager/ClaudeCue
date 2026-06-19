@@ -1,39 +1,30 @@
-/* "Working" indicator (#42): three dots bouncing in a wave. Busy → Yellow status
-   token (#33); idle renders nothing (the component is unmounted). The global
-   reduced-motion killswitch (global.css) stops the bounce, leaving a static
-   colored cluster as the accessible fallback. */
-.busy {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: var(--space-2);
+/* Status ball (#55, supersedes #42's bouncing dots): a small dot that pulses
+   Blue while the session is working and sits dimmed (gray) when idle. Always
+   rendered so the idle state is visible. The global reduced-motion killswitch
+   (global.css) stops the pulse, leaving a static colored dot. */
+.ball {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
   flex-shrink: 0;
-  height: 12px;
-  color: var(--status-awaiting);
-}
-
-.dot {
-  width: 4px;
-  height: 4px;
   border-radius: var(--radius-dot);
-  background: currentColor;
-  animation: busy-bounce 1s var(--ease-out) infinite;
+  background: var(--status-idle);
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
-.dot:nth-child(2) {
-  animation-delay: 0.16s;
+.busy {
+  background: var(--status-running);
+  animation: busy-pulse 1.4s var(--ease-out) infinite;
 }
 
-.dot:nth-child(3) {
-  animation-delay: 0.32s;
-}
-
-@keyframes busy-bounce {
+@keyframes busy-pulse {
   0%,
-  80%,
   100% {
-    transform: translateY(0);
+    opacity: 1;
+    transform: scale(1);
   }
-  40% {
-    transform: translateY(-4px);
+  50% {
+    opacity: 0.45;
+    transform: scale(0.7);
   }
 }
