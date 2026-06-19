@@ -3769,3 +3769,332 @@ color #35, Open diff viewer #39, Open markdown viewer #41). Two changes:
   `:focus-visible` outline cover keyboard use. Frontend gate green: `npm run build` (strict
   tsc) + ESLint + `format:check` + 63 vitest tests all pass. Backend untouched. Visual
   (red/hover/separator) is runtime-visual, not launched headlessly.
+
+---
+
+### 55. [ ] Busy indicator: pulsing ball (grayed when idle) + only show when Claude is genuinely working
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Two problems with the #42 busy indicator. **(1) Visual:** it is three dots bouncing
+up and down (`BusyIndicator` — `busy-bounce` keyframe), which reads like a *loading*
+spinner rather than a *busy* state, and takes more space than needed. Replace it with a
+single small **pulsing ball/dot** — a Catppuccin **Blue** (`--status-running #89b4fa`);
+**Green** (`--status-done #a6e3a1`) is equally acceptable — that **pulses while the
+session is working** and sits **grayed/dimmed** (`--status-idle #6c7086`) when idle. It
+should be **always present** (so the grayed idle state is visible) and **smaller / take
+less space** than today.
+
+**(2) Accuracy:** the current output-activity heuristic (`pty.rs`) marks a session
+**busy whenever any PTY bytes flow** — including the echo/redraw produced when **the user
+is typing** — so the indicator lights up while the user types, when Claude is not actually
+working. Fix detection so the indicator only shows busy when **Claude is genuinely
+thinking/working**, not on user keystroke echo. This is the "research and choose" part,
+following the #42 precedent.
+
+**Subtasks**
+
+1. [ ] Rework `BusyIndicator` into a **single pulsing ball** that takes a `busy` prop:
+   dimmed (`--status-idle`) when idle, pulsing Blue (`--status-running`) when busy; smaller
+   footprint; reduced-motion → a **static** colored dot (no pulse), via the global
+   killswitch / a `prefers-reduced-motion` rule.
+2. [ ] Render it **always** (not conditionally on `busy`) at all three call sites so the
+   grayed idle state shows: Sidebar `SessionRow`, Overview `SessionCard` header, Focus
+   toolbar — pass `busy={sessionBusy[id] ?? false}` to each.
+3. [ ] **Detection fix** — make typing not count as busy. The backend already sees
+   keystrokes (`write_stdin`) and output (reader-thread `last_output` stamp). **Default
+   approach (no new dependency):** stamp a per-session **last-input** time in `write_stdin`
+   and, in `monitor_loop`, exclude output that is merely the echo of recent keystrokes (so
+   *sustained autonomous* output → busy; keystroke echo → not busy). **Escalate only if
+   still noisy:** CPU sampling of the `claude` child via `sysinfo`, or Claude Code hooks
+   (`UserPromptSubmit`/`Stop`) — both flagged as the future upgrade in #42. Keep the
+   existing debounce (no rapid flicker). Verify against the real `claude` TUI.
+4. [ ] Keep the status tokens (#33): idle = `--status-idle`, busy = `--status-running`
+   (Blue) or `--status-done` (Green).
+
+**Acceptance criteria**
+
+- [ ] The indicator is a single small pulsing ball — colored + pulsing when busy, grayed
+  when idle, always visible; reduced-motion shows a static dot.
+- [ ] Typing into an otherwise-idle session does **not** turn the indicator busy; a session
+  generating a response does; no rapid flicker.
+- [ ] Shows consistently in the sidebar row, the Overview card header, and the Focus toolbar.
+
+**Notes**
+
+- Files: `src/components/BusyIndicator/*`, `src/components/Sidebar/Sidebar.tsx`
+  (`SessionRow`), `src/components/Overview/Overview.tsx` (`SessionCard`),
+  `src/components/Focus/Focus.tsx`, `src-tauri/src/pty.rs` (`write_stdin` + `monitor_loop`
+  detection), `src/styles/global.css` (pulse keyframe).
+- Builds on #42 — whose "render nothing when idle" rule is **deliberately changed** here to
+  "always render, grayed when idle." Tokens already exist (`tokens.css`):
+  `--status-running #89b4fa`, `--status-done #a6e3a1`, `--status-idle #6c7086`.
+- Detection is the research part: **default to the input-echo-exclusion heuristic** (reuses
+  existing signals, no new crate); escalate to `sysinfo`/hooks only if it stays noisy.
+- **Assumption** (no clarification available): ball color = Blue (`--status-running`);
+  switch to Green if preferred.
+
+---
+
+### 56. [ ] Searchable file-picker element for the repo "Open file viewer" menu
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Opening a file from a repo's right-click context menu ("Open file viewer…" — the
+`menuMode === "files"` branch in `Sidebar.tsx`) currently renders a **flat list of full
+repo-relative paths inside the cursor-anchored context menu**. With many files the list
+overflows, the long paths run together, and it is hard to read or find a file ("it all
+overlaps, very unclear"). Replace it with a **custom, reusable file-picker element** that
+has a **search box** to filter as you type, shows **clear file names** (basename prominent,
+directory path as dim secondary text), is **scrollable within a bounded, on-screen panel**,
+and **opens the chosen file exactly as today** (adds a file-viewer column for the repo and
+switches to Overview).
+
+**Subtasks**
+
+1. [ ] Build a reusable `FilePicker` component: an autofocused search `<input>` + a
+   filtered, scrollable list of the repo's files (from `listFiles`), each row showing the
+   **basename** prominently and the **containing directory** dimmed; bounded size, kept
+   on-screen; Escape / outside-click closes; keyboard-friendly (type to filter; optionally
+   arrow + Enter to choose).
+2. [ ] Filter by a case-insensitive **substring match over the path** (so both filename and
+   folder match); include a "no matches" state and a loading state.
+3. [ ] Wire it into the repo context menu in place of the current `menuMode === "files"`
+   list; clicking a file runs the **same** open action (dedupe + `addOverviewPanel(repo,
+   "markdown", file)` + `setView("overview")` + close menu).
+4. [ ] Keep it on-system (tokens; mono for paths) and accessible.
+
+**Acceptance criteria**
+
+- [ ] The "Open file viewer…" picker has a working search box that filters the list live;
+  long lists scroll within a bounded panel and never overflow/overlap.
+- [ ] File names are clearly legible (basename + dim path); clicking one opens it exactly as
+  before.
+- [ ] The picker is keyboard-dismissable and on-system.
+
+**Notes**
+
+- Files: `src/components/Sidebar/Sidebar.tsx` (replace the `files` menuMode UI), a new
+  reusable `src/components/FilePicker/*`, reuse `listFiles` (`files.rs` / #44).
+- Coordinates with #54 (the menu now leads with New session + separators — slot the picker
+  into that structure) and #59 (after #59, opening a file also registers it as a sidebar
+  item). The component could later back other file/folder pickers, but scope here is the
+  repo file-open picker.
+- **Assumption:** substring filter over the repo-relative path; basename-prominent rows.
+
+---
+
+### 57. [ ] Rename an agent from the sidebar (right-click) — propagates everywhere
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+An agent's display name can currently only be set **at creation** (the optional Name in
+the new-session flow). Add the ability to **right-click an agent row in the sidebar and
+give it a custom name**, which **persists** and updates **everywhere the name is shown** —
+the Overview card title, the Canvas panel title, the Focus chip, and the sidebar. The
+`name` field already exists on the session model and is read by all those surfaces; this
+task adds the **rename interaction plus a backend command to update + persist it**.
+
+**Subtasks**
+
+1. [ ] Backend: add a `rename_session(id, name)` command that updates the persisted
+   session's `name` (blank → clears it back to no custom name) and saves `sessions.json`;
+   add the matching `Store` update method (`store.rs`).
+2. [ ] Frontend store: a `renameSession(id, name)` action — optimistic update of
+   `sessions[].name` + persist via the command.
+3. [ ] Sidebar UI: right-click an agent `SessionRow` → a small context menu with **Rename**
+   (and reuse **Remove**); Rename swaps the row label for an inline `<input>` (autofocus,
+   Enter commits, Escape cancels, blur commits).
+4. [ ] Verify propagation: the new name appears in the sidebar, the Overview card header,
+   the Canvas panel title, and the Focus chip without a reload (all already read
+   `session.name`).
+
+**Acceptance criteria**
+
+- [ ] Right-clicking an agent offers Rename; entering a name updates it live everywhere and
+  survives an app restart.
+- [ ] Clearing the name reverts to the default label (branch in the sidebar per #21; repo
+  name elsewhere).
+- [ ] No regression to selection / drag / remove on the row.
+
+**Notes**
+
+- Files: `src-tauri/src/commands.rs` + `src/lib.rs` (register) + `src-tauri/src/store.rs`
+  (update name), `src/ipc.ts`, `src/store.ts` (`renameSession`),
+  `src/components/Sidebar/Sidebar.tsx` (+ css — `SessionRow` context menu + inline edit).
+- **Decision (keeps #21):** the sidebar keeps the **branch** as the primary label and shows
+  the custom name as the thin secondary sub-line; rename sets that name (and the primary
+  title used by Overview/Canvas/Focus). We do **not** reverse #21's hierarchy — the request
+  is the *ability to rename* + propagation, which this satisfies.
+- Coordinates with #59 (also adds `SessionRow` interactions). **Assumption:** rename via a
+  right-click menu + inline input; blank clears the name.
+
+---
+
+### 58. [ ] Canvas tabs — multiple named canvases (browser-like)
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Canvas currently holds a **single** split-panel layout (`canvasLayout` / persisted
+`canvas_layout`). Make Canvas support **multiple tabs**, like a browser: a tab strip with
+one tab per canvas; **always at least one tab** (if the last is closed, an empty
+"Canvas 1" remains); a **"+"** button to create a new empty canvas; **rename** any canvas
+(default names "Canvas 1", "Canvas 2", …); and **drag tabs to reorder**. Each tab has its
+own independent BSP layout; switching tabs preserves layouts and never disposes terminals
+(the #18 pool reparents).
+
+**Subtasks**
+
+1. [ ] Model + persistence: replace the single layout with a list of canvases
+   `{ id, name, layout: CanvasNode | null }` + an `activeCanvasId`, persisted (extend
+   `store.rs`; **migrate** an existing `canvas_layout` into the first canvas "Canvas 1").
+   Store actions: add / close / rename / reorder / select a canvas; default-name new
+   canvases incrementally.
+2. [ ] Tab strip UI above the canvas area: tabs (active highlighted), a **+** to add an
+   empty canvas, a per-tab close (×); enforce the always-≥1 invariant.
+3. [ ] Rename a canvas inline (double-click or context menu → input; Enter commits, Escape
+   cancels).
+4. [ ] Drag-to-reorder tabs (dnd-kit sortable, reusing the #43 pattern).
+5. [ ] Make canvas content operate on the **active** canvas: `applyCanvasDrop` /
+   `appendCanvasContent` (`canvasDrop.ts`) and `Canvas.tsx` read/write the active canvas's
+   layout. Verify terminals survive tab switches (reparent via the pool, never dispose).
+
+**Acceptance criteria**
+
+- [ ] The Canvas view shows a tab strip; "+" adds an empty canvas; closing tabs works and
+  one empty canvas always remains.
+- [ ] Canvases can be renamed (default "Canvas N") and reordered by dragging; each tab keeps
+  its own layout across switches and across restart.
+- [ ] Dropping content targets the active canvas; switching tabs never tears down a terminal.
+
+**Notes**
+
+- Files: `src/components/Canvas/*` (tab strip + active-canvas wiring),
+  `src/components/Canvas/canvasDrop.ts` (target the active canvas), `src/store.ts`
+  (`canvases` / `activeCanvasId` + actions), `src-tauri/src/store.rs` + `commands.rs` +
+  `src/ipc.ts` (persist; migrate `canvas_layout`).
+- Builds on #46/#47; reuses dnd-kit (#43) and the #18 terminal pool. Only the active
+  canvas's panels mount — confirm the pool **parks/reparents** inactive-canvas terminals
+  rather than disposing. #59 builds on this multi-canvas model.
+
+---
+
+### 59. [ ] Folders as the source of truth: show every repo item in the sidebar + drag anything into Canvas
+
+**Status:** Not started
+**Depends on:** #58
+**Created:** 2026-06-19
+
+**Description**
+
+Make the **repo/folder in the sidebar the single source of truth** for its items, and make
+**getting items into Canvas a uniform drag**. Today the sidebar tree shows a repo's
+**agents** and **opened files** (#45), but **diff viewers** exist only as Overview columns
+(`overviewPanels`, #38/#39) and never appear in the sidebar; and content reaches Canvas
+through a mix of drags and a special context-menu item. Two changes:
+
+1. **Every repo item appears in the left panel**, 1:1 with what Overview shows for that repo
+   — agents, file viewers, **and diff viewers** (plus any future item type). Opening a diff
+   or file viewer anywhere registers it under its repo in the sidebar tree.
+2. **Anything in the left panel is draggable into a Canvas** to show its contents — agents
+   (already), files (already), **diff viewers** (new), and future item types **by default**.
+   With drag covering it, **remove the repo context-menu "Open diff in Canvas"** item.
+
+**Subtasks**
+
+1. [ ] Render the repo's non-agent items (diff + file viewers from `overviewPanels`) as
+   **draggable** rows in the sidebar tree under their repo, alongside agent and opened-file
+   rows; each drags into Canvas (diff → diff panel, file → file viewer) and click-opens as
+   today.
+2. [ ] Reconcile so the **sidebar items == Overview columns** for each repo (1:1).
+   Recommended: treat the per-repo item list (`overviewPanels`) as the source of truth that
+   both the sidebar and Overview render, and fold the separate `openFiles` (#45) concept
+   into it (an opened file *is* a file item) so a file/diff opened anywhere shows in both
+   places and is draggable to Canvas. (Implementer's architecture call; the end state must
+   be 1:1.)
+3. [ ] Extend the drag-payload→content mapping (`canvasDrop.payloadToContent`) so a diff
+   item maps to a diff panel; confirm sessions/files still map. **Establish + document the
+   pattern:** a new left-panel item type is draggable into Canvas **by default** (add a
+   draggable source row + a `payloadToContent` case).
+4. [ ] Remove the "Open diff in Canvas" context-menu item; keep "Open diff viewer" /
+   "Open file viewer…" (which now also register the item in the sidebar).
+5. [ ] Drops target the **active** canvas (per #58).
+
+**Acceptance criteria**
+
+- [ ] Opening a diff viewer or a file shows it under its repo in the sidebar **and** as an
+  Overview column (the two stay 1:1 per repo).
+- [ ] Dragging any sidebar item — agent, file, or diff — into a Canvas creates/splits a
+  panel with its content; terminals stay alive.
+- [ ] The "Open diff in Canvas" context-menu item is gone (drag replaces it); future item
+  types are draggable into Canvas by default.
+
+**Notes**
+
+- Files: `src/components/Sidebar/Sidebar.tsx` (+ css — render + drag diff/file items, remove
+  "Open diff in Canvas"), `src/components/Canvas/canvasDrop.ts` (payload mapping),
+  `src/components/Overview/*` + `src/store.ts` (unify `overviewPanels` / `openFiles`),
+  backend persistence if the model changes (`store.rs`).
+- Builds on #45/#47/#38/#39; **depends on #58** (active-canvas drop target). Coordinates with
+  #56 (the file picker adds file items) and #57.
+- **Forward-looking rule for future work:** any new item placed in the left panel must be a
+  dnd-kit drag source with a `payloadToContent` case so it drops into Canvas by default.
+- **Key reconciliation:** today opening a file registers it in both `openFiles` (sidebar)
+  and `overviewPanels` markdown (Overview) — collapse to one source so they can't diverge.
+
+---
+
+### 60. [ ] Final pass: clean up the documentation with /update-docs
+
+**Status:** Not started
+**Depends on:** #48, #49, #55, #56, #57, #58, #59
+**Created:** 2026-06-19
+
+**Description**
+
+After **all** other tasks are complete — including the code-improvement iteration passes
+(#48, #49) and the feature tasks (#55–#59; #54 is already done) — bring every project
+document back in sync with the shipped code in one pass. The agent running this task must
+use the **`update-docs` skill** (`/update-docs`), which refreshes `CLAUDE.md`, `README.md`,
+and any other docs, and performs the special `TASKS.md` cleanup (summarize completed tasks
+at the top, delete their full bodies, prune now-dangling dependency references). This task
+exists so the docs reflect the **final** state once the whole backlog has landed; it must
+run **last**.
+
+**Subtasks**
+
+1. [ ] Confirm all depended-on tasks (#48, #49, #55, #56, #57, #58, #59) are Done.
+2. [ ] Run the **`/update-docs`** skill and let it sync `CLAUDE.md`, `README.md`, and any
+   other docs to the code, plus the `TASKS.md` completed-task cleanup. (`PROMPT.md` is
+   never modified.)
+3. [ ] Verify the docs accurately describe the final feature set (busy indicator, file
+   picker, agent rename, Canvas tabs, unified sidebar/drag) and that `TASKS.md` is tidied.
+
+**Acceptance criteria**
+
+- [ ] All other tasks are complete before this runs.
+- [ ] `/update-docs` has been run; `CLAUDE.md` / `README.md` / other docs match the code;
+  `TASKS.md` completed tasks are summarized and pruned.
+
+**Notes**
+
+- This is a **documentation-only** pass via the `update-docs` skill — no feature work.
+- Depends on every other open task so it runs **last**: #48/#49 are the code-improvement
+  passes the user asked to include; #55–#59 are the new features. If further tasks are added
+  later, re-confirm this remains the final one.
