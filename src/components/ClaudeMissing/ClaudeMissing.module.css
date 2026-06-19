@@ -15,7 +15,7 @@
 }
 
 .code {
-  padding: 0 4px;
+  padding: 0 var(--space-4);
   border-radius: var(--radius-chip);
   background: var(--bg-base);
   font-family: var(--mono);

@@ -108,7 +108,7 @@
 }
 
 .chip {
-  padding: 2px var(--space-8);
+  padding: var(--space-2) var(--space-8);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-chip);
   background: var(--bg-panel);
@@ -135,7 +135,7 @@
 .branches {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-1);
   max-height: 132px;
   margin-bottom: var(--space-12);
   overflow-y: auto;
@@ -197,8 +197,13 @@
 }
 
 .input:focus {
-  outline: none;
   border-color: var(--accent);
+}
+
+/* Keyboard focus keeps the global :focus-visible ring; pointer focus shows the
+   border highlight only (no ring). */
+.input:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* Destructive-checkout warning (on-system: icon + secondary text, no status

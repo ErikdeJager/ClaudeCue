@@ -77,16 +77,9 @@
   font: inherit;
 }
 
-/* Syntax palette — Catppuccin Mocha (matches #33). Scoped to the code surface. */
+/* Syntax palette — the --syn-* tokens (Catppuccin Mocha, #33) now live in
+   tokens.css as the single source of truth; consumed below via var(). */
 .code {
-  --syn-comment: #6c7086;
-  --syn-keyword: #cba6f7;
-  --syn-string: #a6e3a1;
-  --syn-number: #fab387;
-  --syn-function: #89b4fa;
-  --syn-type: #f9e2af;
-  --syn-punct: #a6adc8;
-  --syn-accent: #f5c2e7;
   color: var(--text-primary);
 }
 
@@ -186,7 +179,7 @@
 }
 
 .markdown li {
-  margin: 2px 0;
+  margin: var(--space-2) 0;
 }
 
 .markdown a {
@@ -198,7 +191,7 @@
 }
 
 .markdown code {
-  padding: 1px 4px;
+  padding: var(--space-1) var(--space-4);
   border-radius: var(--radius-chip);
   background: var(--bg-elevated);
   color: var(--text-primary);

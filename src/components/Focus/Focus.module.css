@@ -126,7 +126,7 @@
   width: 0;
   flex-shrink: 0;
   overflow: hidden;
-  transition: width 200ms var(--ease-out);
+  transition: width var(--dur-slow) var(--ease-out);
 }
 
 /* During a resize drag the width tracks the pointer — no slide transition (#51). */
@@ -246,8 +246,13 @@
 }
 
 .fileSelect:focus {
-  outline: none;
   border-color: var(--accent);
+}
+
+/* Keyboard focus keeps the global :focus-visible ring; pointer focus shows the
+   border highlight only (no ring). */
+.fileSelect:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .mdEmpty {

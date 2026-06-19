@@ -47,6 +47,16 @@
   --status-error: #f38ba8; /* Red */
   --status-idle: #6c7086; /* Overlay0 */
 
+  /* --- Syntax highlighting (Catppuccin Mocha; consumed by the FileViewer #44) --- */
+  --syn-comment: #6c7086; /* Overlay0 */
+  --syn-keyword: #cba6f7; /* Mauve */
+  --syn-string: #a6e3a1; /* Green */
+  --syn-number: #fab387; /* Peach */
+  --syn-function: #89b4fa; /* Blue */
+  --syn-type: #f9e2af; /* Yellow */
+  --syn-punct: #a6adc8; /* Subtext0 */
+  --syn-accent: #f5c2e7; /* Pink */
+
   /* --- Fonts --- */
   --ui: -apple-system, "SF Pro Text", ui-sans-serif, system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
@@ -63,7 +73,10 @@
   --fw-eyebrow: 600;
   --tracking-eyebrow: 0.04em;
 
-  /* --- Spacing scale (4px base: 4 · 6 · 8 · 12 · 16 · 20 · 24 · 32) --- */
+  /* --- Spacing scale (4px base: 4 · 6 · 8 · 12 · 16 · 20 · 24 · 32, plus
+     1/2px micro-spacing for hairline gaps & tight control padding) --- */
+  --space-1: 1px;
+  --space-2: 2px;
   --space-4: 4px;
   --space-6: 6px;
   --space-8: 8px;

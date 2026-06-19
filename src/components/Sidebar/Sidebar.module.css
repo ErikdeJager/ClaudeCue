@@ -160,7 +160,7 @@
 .row {
   display: flex;
   align-items: center;
-  margin: 1px var(--space-8);
+  margin: var(--space-1) var(--space-8);
   border-radius: var(--radius-control);
   border-left: 2px solid transparent;
 }
@@ -188,7 +188,7 @@
   flex: 1;
   min-width: 0;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-1);
   padding: var(--space-6) var(--space-8);
   border: 0;
   background: transparent;
@@ -255,7 +255,7 @@
 .fileRow {
   display: flex;
   align-items: center;
-  margin: 1px var(--space-8);
+  margin: var(--space-1) var(--space-8);
   border-radius: var(--radius-control);
 }
 

@@ -2,7 +2,7 @@
    evenly. */
 .group {
   display: flex;
-  padding: 2px;
+  padding: var(--space-2);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-control);
   background: var(--bg-base);
@@ -11,7 +11,7 @@
 .option,
 .active {
   flex: 1;
-  padding: 4px var(--space-12);
+  padding: var(--space-4) var(--space-12);
   border: 0;
   border-radius: var(--radius-chip);
   background: transparent;

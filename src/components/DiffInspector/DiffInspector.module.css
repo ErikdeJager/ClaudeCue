@@ -38,7 +38,7 @@
 
 .modeToggle {
   display: inline-flex;
-  padding: 1px;
+  padding: var(--space-1);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-chip);
   background: var(--bg-base);
@@ -46,7 +46,7 @@
 
 .mode,
 .modeActive {
-  padding: 1px var(--space-6);
+  padding: var(--space-1) var(--space-6);
   border: 0;
   border-radius: var(--radius-chip);
   background: transparent;
@@ -198,7 +198,7 @@
 }
 
 .hunkHeader {
-  padding: 2px var(--space-8);
+  padding: var(--space-2) var(--space-8);
   background: var(--bg-elevated);
   color: var(--text-muted);
 }

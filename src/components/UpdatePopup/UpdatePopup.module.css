@@ -18,7 +18,7 @@
 .text {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-1);
 }
 
 .title {
@@ -94,7 +94,7 @@
   height: 32px;
   border: 3px solid var(--border-strong);
   border-top-color: var(--accent);
-  border-radius: 50%;
+  border-radius: var(--radius-dot);
   animation: update-spin 0.8s linear infinite;
 }
 

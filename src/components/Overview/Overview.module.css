@@ -157,7 +157,7 @@
   flex: 1;
   min-width: 0;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-1);
 }
 
 .name {
@@ -197,7 +197,7 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2);
 }
 
 /* Busy indicator (#42) sitting left of an agent card's action buttons. */
