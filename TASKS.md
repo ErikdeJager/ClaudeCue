@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> Tasks #1–#89 have shipped; newer open tasks (#90+) are in **## Tasks** below.
+> Tasks #1–#90 have shipped; newer open tasks (#91+) are in **## Tasks** below.
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -189,6 +189,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #89 New-session branch step: dropped the acknowledgement checkbox **and** its gate (the destructive-checkout warning is now informational — the alert icon + the same text); the branch-step primary button always reads **Start** (the checkout still happens), and the `.actions` row wraps instead of overflowing the fixed 300px panel. The reusable `Checkbox` (#52) is kept (now unused).
 
+**File-viewer file switcher (#90).** Pick another file from the viewer header.
+
+- #90 File viewer: the header filename is now a **switcher** — clicking it opens a searchable `FilePicker` (#56) popover of the repo's files (shared `FileSwitcher` component) and picking one swaps the viewer **in place**, in both Overview file columns and Canvas file panels; persisted (store `setOverviewPanelFile` / `setLeafFile` via the pure `updateLeafContent`). Same-repo only; `FileViewer` itself unchanged.
+
 ---
 
 ## Design reference (dark theme only)
@@ -225,8 +229,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#89 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. The open tasks (#90+) follow. New work goes
+Tasks #1–#90 are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. The open tasks (#91+) follow. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -238,94 +242,6 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 90. [ ] File viewer: built-in searchable file selector in the header (click the filename → switch file)
-
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
-**Depends on:** none
-**Created:** 2026-06-19
-
-**Description**
-
-Give the universal read-only **file viewer (#44)** a **built-in file selector**: clicking the
-**filename in the viewer header** opens a **searchable picker** of the repo's files, and choosing
-one **swaps the viewer to that file** in place. Today a file viewer is bound to whatever file it was
-opened with — to look at a different file you must close it and open another from the repo menu
-(#82) / file picker (#56). This lets the user search + select a different file directly in the
-viewer.
-
-**Important grounding:** the header in the screenshot (the color dot + filename + `repo · branch` +
-×) is **not** rendered by `FileViewer` — it's drawn by the **parent**: the Overview `ExtraPanel`
-(`PanelColumn` title, `Overview.tsx`) and the Canvas panel header (`Canvas.tsx`). So the selector
-trigger lives in **those headers**, reusing the existing **`FilePicker` (#56)**; `FileViewer` itself
-needs no change — it already reloads when its `file` prop changes (`load` deps `[repoPath, file]`,
-and the raw toggle resets on `[file]`).
-
-**Decisions (requester):**
-- **Trigger:** the header **filename becomes a button** (with a small ▾ caret hint); clicking opens
-  the searchable picker popover.
-- **Surfaces:** **both** Overview file columns **and** Canvas file panels.
-- **Repo scope:** **same repo only** — the picker lists `listFiles(repoPath)` (like the repo menu's
-  "File viewer" add); the viewer stays bound to its repo.
-- **Duplicate file:** **just switch it** — switching to a file already open as another panel is
-  allowed (the in-place change is literal); the add-from-menu dedup in `addOverviewPanel` is left
-  intact.
-
-**Concrete changes (grounding):**
-- **Store** — add `setOverviewPanelFile(repoPath, panelId, file)`, mirroring `setDiffCompare`
-  (`store.ts`): `panels.map((p) => p.id === panelId ? { ...p, file } : p)`, set state, persist via
-  `ipc.setOverviewPanels`. Do **not** dedup on change (allow an already-open file).
-- **Canvas** — add a pure leaf-content update in `Canvas/canvasTree.ts` (e.g.
-  `updateLeafContent(tree, leafId, partial)`) + a store action to set the **active** canvas leaf's
-  `content.file`, persisting through the existing `setActiveCanvasLayout` (canvases blob).
-- **Header trigger** — render the file-viewer header filename as a button (▾ caret) that opens a
-  popover hosting `FilePicker` (#56); load `listFiles(repoPath)` on open; dismiss on pick /
-  outside-click / Escape. Prefer extracting a **small shared component** so Overview and Canvas
-  don't duplicate the popover logic.
-- **Wire-up** — Overview `ExtraPanel` (file panels only, `kind: "markdown"`) → `setOverviewPanelFile`;
-  Canvas file panels (`content.kind === "file"`) → the leaf-file action. Agent/diff/terminal headers
-  are untouched.
-
-**Out of scope:** switching the viewer to a **different repo's** file (same-repo only); adding the
-selector to diff/terminal/agent panels; changing `FileViewer`'s content rendering or polling.
-
-**Subtasks**
-
-1. [ ] Store: `setOverviewPanelFile(repoPath, panelId, file)` (mirror `setDiffCompare`) — set the
-   panel's `file` + persist; allow switching to an already-open file.
-2. [ ] Canvas: pure `updateLeafContent` in `canvasTree.ts` + a store action to set the active
-   canvas leaf's `content.file`, persisted via `setActiveCanvasLayout`.
-3. [ ] Header trigger: filename → button (▾ caret) opening a `FilePicker` (#56) popover over
-   `listFiles(repoPath)`; dismiss on pick / outside-click / Escape; prefer a small shared component
-   reused by both surfaces.
-4. [ ] Wire Overview `ExtraPanel` (file panels) and Canvas file panels to their respective update
-   actions; leave agent/diff/terminal headers unchanged.
-5. [ ] Confirm the swap works end-to-end (content reloads, markdown raw toggle resets) with **no**
-   `FileViewer` change needed, and the swapped file **persists** across reload/restart.
-6. [ ] `npm run build`, `npm run lint`, `npm test` pass.
-
-**Acceptance criteria**
-
-- [ ] Clicking the filename in a file viewer's header (Overview column **and** Canvas panel) opens a
-  **searchable picker** of the repo's files (reusing `FilePicker` #56).
-- [ ] Selecting a file **swaps that viewer** to it — content reloads, the markdown Rendered/Raw
-  toggle resets — and the change **persists** across an app reload/restart.
-- [ ] The picker lists files from the **viewer's own repo only**; choosing a file already open
-  elsewhere just switches this viewer (no error, no forced dedup).
-- [ ] Agent / diff / terminal headers are unchanged; the popover dismisses on pick, outside-click,
-  and Escape.
-- [ ] `npm run build`, `npm run lint`, and `npm test` all pass.
-
-**Notes**
-
-- Reported via screenshot: a file viewer header ("● .env.example  standings · main  ×") — the user
-  wants to search + select a different file from within the viewer.
-- Reuses `FilePicker` (#56) and the `listFiles` IPC (same as the repo menu's "File viewer" add,
-  #82). State-update precedent: `setDiffCompare` (`store.ts`) updates a panel in place + persists.
-  Builds on #44 (FileViewer), #59 (overviewPanels as the single item source), #46/#47 (Canvas).
-- Independent of the open tasks (#84, #88, #89).
 
 ---
 

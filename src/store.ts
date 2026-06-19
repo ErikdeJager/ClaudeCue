@@ -4,7 +4,11 @@
 
 import { create } from "zustand";
 
-import { collectLeaves, spatialNeighbor } from "./components/Canvas/canvasTree";
+import {
+  collectLeaves,
+  spatialNeighbor,
+  updateLeafContent,
+} from "./components/Canvas/canvasTree";
 import * as ipc from "./ipc";
 import { emitSessionOutput } from "./outputBus";
 import { repoName } from "./paths";
@@ -350,6 +354,12 @@ export interface AppState {
       compare_target?: string;
     },
   ) => void;
+  /** Switch an Overview file panel to another repo-relative file in place (#90). */
+  setOverviewPanelFile: (
+    repoPath: string,
+    panelId: string,
+    file: string,
+  ) => void;
   /** Record a terminal item's shell exit (#72) so its Terminal shows Restart. */
   markTerminalExited: (id: string, code: number | null) => void;
   /** Respawn a terminal item's shell in `repoPath` under the same id (#72). */
@@ -377,6 +387,8 @@ export interface AppState {
   applyCanvasSync: (canvases: CanvasTab[]) => void;
   /** Replace the set of detached canvas windows (#84, from `canvas://windows`). */
   setDetachedCanvasIds: (ids: string[]) => void;
+  /** Switch a Canvas file panel (the active tab's leaf) to another file (#90). */
+  setLeafFile: (leafId: string, file: string) => void;
   /** Set (or clear) the keyboard-focused Canvas panel (#76). */
   setActiveLeaf: (id: string | null) => void;
   /** Move the Canvas focus to the spatially adjacent panel (#76). */
@@ -849,6 +861,17 @@ export const useStore = create<AppState>()((set, get) => ({
     void ipc.setOverviewPanels(repoPath, next).catch(() => {});
   },
 
+  // Switch a file panel to another file in place (#90), mirroring setDiffCompare.
+  // No dedup — switching to a file already open elsewhere is allowed (#90).
+  setOverviewPanelFile: (repoPath, panelId, file) => {
+    const panels = get().overviewPanels[repoPath] ?? [];
+    const next = panels.map((p) => (p.id === panelId ? { ...p, file } : p));
+    set((s) => ({
+      overviewPanels: { ...s.overviewPanels, [repoPath]: next },
+    }));
+    void ipc.setOverviewPanels(repoPath, next).catch(() => {});
+  },
+
   markTerminalExited: (id, code) =>
     set((s) => ({ terminalExits: { ...s.terminalExits, [id]: code } })),
 
@@ -890,6 +913,16 @@ export const useStore = create<AppState>()((set, get) => ({
     void ipc
       .setCanvases({ canvases: next, activeId: activeCanvasId })
       .catch(() => {});
+  },
+
+  // Switch a Canvas file panel to another file in place (#90): update the active
+  // tab's leaf content and persist via setActiveCanvasLayout (the canvases blob).
+  setLeafFile: (leafId, file) => {
+    const { canvases, activeCanvasId } = get();
+    const layout =
+      canvases.find((c) => c.id === activeCanvasId)?.layout ?? null;
+    if (!layout) return;
+    get().setActiveCanvasLayout(updateLeafContent(layout, leafId, { file }));
   },
 
   addCanvas: () => {

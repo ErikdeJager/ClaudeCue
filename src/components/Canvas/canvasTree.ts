@@ -89,6 +89,27 @@ export function collectLeaves(tree: CanvasNode | null): CanvasLeaf[] {
   return [...collectLeaves(tree.a), ...collectLeaves(tree.b)];
 }
 
+/**
+ * Merge `partial` into the leaf `leafId`'s content (#90) — used to switch a file
+ * panel's `file` in place. Unchanged subtrees keep their identity, so only the
+ * affected leaf re-renders (the #18 pool reparents the rest). Returns the tree
+ * unchanged when the leaf isn't found.
+ */
+export function updateLeafContent(
+  tree: CanvasNode,
+  leafId: string,
+  partial: Partial<CanvasContent>,
+): CanvasNode {
+  if (tree.type === "leaf") {
+    return tree.id === leafId
+      ? { ...tree, content: { ...tree.content, ...partial } }
+      : tree;
+  }
+  const a = updateLeafContent(tree.a, leafId, partial);
+  const b = updateLeafContent(tree.b, leafId, partial);
+  return a === tree.a && b === tree.b ? tree : { ...tree, a, b };
+}
+
 /** The PTY session ids referenced by a layout's agent/terminal leaves (#84) —
  * the sessions whose terminal a window must render (and own) for that canvas. */
 export function sessionIdsInLayout(tree: CanvasNode | null): string[] {

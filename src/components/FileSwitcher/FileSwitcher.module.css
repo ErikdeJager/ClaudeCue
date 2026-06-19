@@ -1,0 +1,47 @@
+/* File-viewer filename switcher (#90): the header filename as a button that opens
+   a FilePicker (#56) popover to swap the viewed file in place. The label inherits
+   the host header's title style (via nameClassName); only the caret + popover chrome
+   live here. */
+.root {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.trigger {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.caret {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.trigger:hover .caret {
+  color: var(--text-secondary);
+}
+
+/* The picker popover, anchored under the filename. FilePicker sets its own width
+   (280px); this just supplies the floating surface. */
+.popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + var(--space-4));
+  z-index: 50;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+}

@@ -15,6 +15,7 @@ import type {
 import { ownedHere } from "../../windowContext";
 import DetachedNote from "../DetachedNote/DetachedNote";
 import DiffInspector from "../DiffInspector/DiffInspector";
+import FileSwitcher from "../FileSwitcher/FileSwitcher";
 import FileViewer from "../FileViewer/FileViewer";
 import Terminal from "../Terminal/Terminal";
 import { focusTerminal } from "../Terminal/terminalPool";
@@ -75,6 +76,7 @@ function LeafPanel({
   const activeLeafId = useStore((s) => s.activeLeafId);
   const setActiveLeaf = useStore((s) => s.setActiveLeaf);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
+  const setLeafFile = useStore((s) => s.setLeafFile);
   const owners = useSessionOwners();
   const isActive = leaf.id === activeLeafId;
 
@@ -156,7 +158,18 @@ function LeafPanel({
               style={{ background: repoColor(repoPath, repoColors) }}
             />
           )}
-          <span className={styles.panelTitle}>{titleText}</span>
+          {/* File panels: the filename is a switcher (#90) — pick another file in
+              this repo to swap the viewer in place. Other kinds keep a plain title. */}
+          {content.kind === "file" && content.repoPath && content.file ? (
+            <FileSwitcher
+              repoPath={content.repoPath}
+              file={content.file}
+              onPick={(f) => setLeafFile(leaf.id, f)}
+              nameClassName={styles.panelTitle}
+            />
+          ) : (
+            <span className={styles.panelTitle}>{titleText}</span>
+          )}
           {metaText && <span className={styles.panelMeta}>{metaText}</span>}
         </span>
         <span className={styles.panelActions}>

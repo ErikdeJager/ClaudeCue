@@ -29,6 +29,7 @@ import BusyIndicator from "../BusyIndicator/BusyIndicator";
 import DetachedNote from "../DetachedNote/DetachedNote";
 import DiffInspector from "../DiffInspector/DiffInspector";
 import EmptyState from "../EmptyState/EmptyState";
+import FileSwitcher from "../FileSwitcher/FileSwitcher";
 import FileViewer from "../FileViewer/FileViewer";
 import Terminal from "../Terminal/Terminal";
 import styles from "./Overview.module.css";
@@ -227,9 +228,22 @@ function ExtraPanel({
   selected,
   onClose,
 }: ExtraPanelProps) {
+  const setOverviewPanelFile = useStore((s) => s.setOverviewPanelFile);
   const title = (
     <>
-      <span className={styles.name}>{panelLabel(panel)}</span>
+      {/* File panels: the filename is a switcher (#90) — click to pick another
+          file in this repo and swap the viewer in place. Diff/terminal keep a
+          plain label. */}
+      {panel.kind === "markdown" && panel.file ? (
+        <FileSwitcher
+          repoPath={repoPath}
+          file={panel.file}
+          onPick={(f) => setOverviewPanelFile(repoPath, panel.id, f)}
+          nameClassName={styles.name}
+        />
+      ) : (
+        <span className={styles.name}>{panelLabel(panel)}</span>
+      )}
       <span className={styles.meta}>
         <span className={styles.metaDot} style={{ background: color }} />
         <span className={styles.metaText}>

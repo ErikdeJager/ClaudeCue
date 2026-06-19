@@ -11,6 +11,7 @@ import {
   sessionIdsInLayout,
   spatialNeighbor,
   splitLeaf,
+  updateLeafContent,
   updateSizes,
 } from "./canvasTree";
 
@@ -89,6 +90,27 @@ describe("canvas BSP tree (#46)", () => {
     tree = splitLeaf(tree, "p2", "bottom", ph, "p3", "s2");
     expect(collectLeaves(tree).map((l) => l.id)).toEqual(["p1", "p2", "p3"]);
     expect(collectLeaves(null)).toEqual([]);
+  });
+
+  it("merges partial content into a leaf, keeping other subtrees' identity (#90)", () => {
+    const fileLeaf: CanvasNode = {
+      type: "leaf",
+      id: "p1",
+      content: { kind: "file", repoPath: "/r", file: "a.md" },
+    };
+    const tree = splitLeaf(fileLeaf, "p1", "right", ph, "p2", "s1");
+    if (tree.type !== "split") throw new Error("expected split");
+    const sibling = tree.b; // the untouched p2 leaf
+    const next = updateLeafContent(tree, "p1", { file: "b.md" });
+    expect(collectLeaves(next).find((l) => l.id === "p1")?.content).toEqual({
+      kind: "file",
+      repoPath: "/r",
+      file: "b.md",
+    });
+    if (next.type !== "split") throw new Error("expected split");
+    expect(next.b).toBe(sibling); // unaffected subtree keeps its identity
+    // A missing leaf id leaves the tree untouched (same ref).
+    expect(updateLeafContent(tree, "nope", { file: "x.md" })).toBe(tree);
   });
 });
 
