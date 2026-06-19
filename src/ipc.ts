@@ -66,6 +66,14 @@ export const listOverviewPanels = () =>
 export const setOverviewPanels = (path: string, panels: OverviewPanel[]) =>
   invoke<void>("set_overview_panels", { path, panels });
 
+/** Repo-relative `*.md` files in a repo (markdown viewer, #40). */
+export const listMarkdownFiles = (repo: string) =>
+  invoke<string[]>("list_markdown_files", { repo });
+
+/** Read a repo-relative text file (validated inside the repo, #40). */
+export const readTextFile = (repo: string, file: string) =>
+  invoke<string>("read_text_file", { repo, file });
+
 export const openInEditor = (cwd: string) =>
   invoke<void>("open_in_editor", { cwd });
 

@@ -1,14 +1,80 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, ExternalLink, PanelRight } from "lucide-react";
 
+import { listMarkdownFiles } from "../../ipc";
 import { repoName } from "../../paths";
 import { repoColor, useStore } from "../../store";
 import DiffInspector from "../DiffInspector/DiffInspector";
+import MarkdownViewer from "../MarkdownViewer/MarkdownViewer";
 import Terminal from "../Terminal/Terminal";
 import styles from "./Focus.module.css";
 
 // Extensible tab strip — more inspector tabs can be added here later.
-const TABS = [{ id: "diff", label: "Diff" }];
+const TABS = [
+  { id: "diff", label: "Diff" },
+  { id: "markdown", label: "Markdown" },
+];
+
+/**
+ * Markdown tab content (#40): pick a repo `*.md` file and view it formatted
+ * (hot-reloading). The file list is fetched per repo; defaults to a README.
+ */
+function MarkdownTab({
+  repoPath,
+  active,
+}: {
+  repoPath: string;
+  active: boolean;
+}) {
+  const [files, setFiles] = useState<string[]>([]);
+  const [file, setFile] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    void listMarkdownFiles(repoPath)
+      .then((list) => {
+        if (cancelled) return;
+        setFiles(list);
+        setFile((cur) =>
+          cur && list.includes(cur)
+            ? cur
+            : (list.find((f) => /readme/i.test(f)) ?? list[0] ?? null),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setFiles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repoPath, active]);
+
+  if (files.length === 0) {
+    return (
+      <div className={styles.mdEmpty}>No markdown files in this repo.</div>
+    );
+  }
+  return (
+    <div className={styles.mdTab}>
+      <select
+        className={styles.fileSelect}
+        value={file ?? ""}
+        onChange={(event) => setFile(event.currentTarget.value)}
+        aria-label="Markdown file"
+      >
+        {files.map((f) => (
+          <option key={f} value={f}>
+            {f}
+          </option>
+        ))}
+      </select>
+      {file && (
+        <MarkdownViewer repoPath={repoPath} file={file} active={active} />
+      )}
+    </div>
+  );
+}
 
 /**
  * Single-session view: a large terminal filling the area, a toolbar (colored
@@ -121,6 +187,13 @@ function Focus() {
                 <div className={styles.inspectorBody}>
                   {activeTab === "diff" && (
                     <DiffInspector
+                      key={session.repoPath}
+                      repoPath={session.repoPath}
+                      active={inspectorOpen}
+                    />
+                  )}
+                  {activeTab === "markdown" && (
+                    <MarkdownTab
                       key={session.repoPath}
                       repoPath={session.repoPath}
                       active={inspectorOpen}

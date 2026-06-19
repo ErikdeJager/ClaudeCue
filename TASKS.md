@@ -2646,9 +2646,9 @@ the branch it's working on.
 
 ---
 
-### 40. [ ] Markdown viewer in the Focus inspector (pick a file, render, hot-reload)
+### 40. [x] Markdown viewer in the Focus inspector (pick a file, render, hot-reload)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -2663,27 +2663,27 @@ is explicitly later.
 
 **Subtasks**
 
-1. [ ] **Backend:** add a `read_text_file(path)` command and a way to **list markdown
+1. [x] **Backend:** add a `read_text_file(path)` command and a way to **list markdown
    files** in the repo (e.g. `list_markdown_files(repo)` — `*.md`, sensibly capped /
    excluding huge dirs like `node_modules`/`.git`). Validate the path is **inside the
    repo** (reject traversal); treat content as untrusted.
-2. [ ] **Markdown rendering:** add `react-markdown` (+ `remark-gfm` for tables/task
+2. [x] **Markdown rendering:** add `react-markdown` (+ `remark-gfm` for tables/task
    lists) — a genuine new dependency markdown needs. Render **without raw HTML**
    (no `rehype-raw`) so untrusted content can't inject markup; style headings/lists/
    code/tables on-system (tokens, JetBrains Mono for code).
-3. [ ] **Tab UI:** add a "Markdown" tab; a file selector (dropdown of repo `*.md`, or a
+3. [x] **Tab UI:** add a "Markdown" tab; a file selector (dropdown of repo `*.md`, or a
    small picker) to choose the file; render it formatted, scrollable.
-4. [ ] **Hot reload:** keep the rendered file fresh — poll the file (~1s while the tab
+4. [x] **Hot reload:** keep the rendered file fresh — poll the file (~1s while the tab
    is visible + window focused; consistent with #29) and re-render on change; preserve
    scroll position when content is unchanged. (A native watcher via the `notify` crate
    is an optional upgrade.)
 
 **Acceptance criteria**
 
-- [ ] The Focus inspector has a Markdown tab; selecting a repo `.md` renders it
+- [x] The Focus inspector has a Markdown tab; selecting a repo `.md` renders it
   formatted (GFM: tables, task lists, code blocks).
-- [ ] Editing the file on disk updates the view within ~1–2s without manual refresh.
-- [ ] Path access is restricted to the repo; no raw-HTML injection.
+- [x] Editing the file on disk updates the view within ~1–2s without manual refresh.
+- [x] Path access is restricted to the repo; no raw-HTML injection.
 
 **Notes**
 
@@ -2692,6 +2692,29 @@ is explicitly later.
   (register), `src/ipc.ts`, `src-tauri/capabilities/default.json` if needed,
   `package.json` (react-markdown + remark-gfm). The `MarkdownViewer` is reused by #41.
   Security: validate paths server-side; render sanitized markdown only.
+- **Done 2026-06-19.** **Backend** — new **`src-tauri/src/files.rs`**:
+  `list_markdown_files(repo)` walks the repo (depth ≤ 8, capped at 500, sorted)
+  returning repo-relative `*.md`/`*.markdown`, **skipping hidden dirs (`.git`, …) and
+  heavy ones (`node_modules`/`target`/`dist`/…)**; `read_text_file(repo, file)`
+  **validates the canonical target stays inside the repo** (rejects `..`, symlink
+  escapes, and absolute paths that resolve out) and caps size at 5 MB. Commands
+  `list_markdown_files` / `read_text_file` registered (custom commands → no capability
+  change). **+3 Rust tests** (list excludes heavy/hidden + non-md, reads in-repo,
+  rejects traversal) → 32. **Rendering** — added **`react-markdown` + `remark-gfm`**
+  (real deps; in `package.json`); the new reusable **`MarkdownViewer`** renders
+  `<ReactMarkdown remarkPlugins={[remarkGfm]}>` **with no `rehype-raw`**, so untrusted
+  file content can't inject HTML (it's escaped); styled fully on-system (headings/
+  lists/code/tables/blockquote/task-lists, JetBrains Mono for code). **Hot reload** —
+  `MarkdownViewer` polls **~1s while active + visible** (pauses on `document.hidden`,
+  #29 pattern), and the **content doubles as the change signature** (functional
+  `setState` bail-out when unchanged → no re-render → scroll preserved). **Tab UI** — a
+  **Markdown** tab added to the Focus inspector (`TABS`); a `MarkdownTab` lists the
+  repo's `*.md` in a `<select>` (defaults to a README) and renders the viewer below,
+  keyed by repo. CLAUDE.md stack + module map updated. **Hard gate green:** Rust
+  `fmt`/`clippy`/`test` (32) + frontend `build`/`lint`/`format:check`/`test` (43). The
+  security (path-validation, sanitized render) is unit-tested + by-construction; the
+  formatted rendering + hot-reload are runtime-visual, not launched headlessly.
+  `MarkdownViewer` is the base #41 reuses for the Overview markdown panel.
 
 ---
 

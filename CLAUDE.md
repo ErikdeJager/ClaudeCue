@@ -18,7 +18,8 @@ clear error if it is missing).
 - **Tauri 2** desktop shell (macOS only)
 - **Frontend:** React + TypeScript + Vite, **Zustand** for state, plain CSS with
   CSS-variable design tokens (CSS Modules), **xterm.js** terminals, **Lucide**
-  icons, **JetBrains Mono** (bundled, offline)
+  icons, **JetBrains Mono** (bundled, offline), **react-markdown + remark-gfm**
+  (markdown viewer #40 — GFM, no raw HTML)
 - **Backend (Rust, `src-tauri/`):** **`portable-pty`** for terminals, JSON
   persistence in the app-data dir, read-only git (shells out to `git`), and the
   Tauri **dialog** (folder picker), **opener**, **updater**, and **process** plugins
@@ -74,7 +75,8 @@ clear error if it is missing).
 │   ├── src/pty.rs          # Session/PTY core (SessionManager, portable-pty)
 │   ├── src/commands.rs     # Tauri command surface + event payloads
 │   ├── src/store.rs        # JSON persistence (sessions + recents)
-│   ├── src/git.rs          # Read-only git: branch + working-tree diff parse
+│   ├── src/git.rs          # Read-only git: branch + diff + branch list/checkout
+│   ├── src/files.rs        # Read-only file access (markdown list/read, path-validated)
 │   ├── tauri.conf.json     # Window, bundle, build config
 │   ├── capabilities/       # Tauri permission capabilities
 │   └── Cargo.toml          # Crate `claudecue` / lib `claudecue_lib`

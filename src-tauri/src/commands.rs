@@ -146,6 +146,18 @@ pub fn set_repo_color(
 }
 
 #[tauri::command]
+pub fn list_markdown_files(repo: String) -> Vec<String> {
+    crate::files::list_markdown_files(repo)
+}
+
+/// Read a repo-relative text file for the markdown viewer (#40); the path is
+/// validated to stay inside `repo` (rejects traversal).
+#[tauri::command]
+pub fn read_text_file(repo: String, file: String) -> Result<String, SessionError> {
+    crate::files::read_text_file(&repo, &file).map_err(SessionError::Io)
+}
+
+#[tauri::command]
 pub fn list_overview_panels(
     store: State<'_, Store>,
 ) -> std::collections::HashMap<String, Vec<OverviewPanel>> {
