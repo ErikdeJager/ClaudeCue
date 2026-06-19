@@ -3,6 +3,7 @@
 //   Shift+← / Shift+→  select prev/next agent in Overview                 (#24)
 //   Shift+arrows       move the focused panel spatially in Canvas         (#76)
 //   ⌘1 … ⌘9            jump to canvas N (Canvas view only)                (#76)
+//   ⌘\                 toggle the main view (Overview ↔ Canvas)           (#77)
 //   ⌘N / Ctrl+N        open the new-session flow from anywhere            (#26)
 //
 // xterm forwards keystrokes to the PTY when a terminal is focused, so the
@@ -32,6 +33,23 @@ export function useKeyboardNav(): void {
         e.stopPropagation();
         const { newSessionOpen, openNewSession } = useStore.getState();
         if (!newSessionOpen) openNewSession();
+        return;
+      }
+
+      // ⌘\ — toggle the main view between Overview and Canvas (#77). ⌘-based, so
+      // it never reaches a focused claude/terminal; inert while the new-session
+      // modal is open. Distinct from ⌘N and the Canvas ⌘1–9 / Shift+arrows (#76).
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key === "\\"
+      ) {
+        const state = useStore.getState();
+        if (state.newSessionOpen) return;
+        e.preventDefault();
+        e.stopPropagation();
+        state.setView(state.view === "overview" ? "canvas" : "overview");
         return;
       }
 

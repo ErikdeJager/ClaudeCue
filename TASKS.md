@@ -1097,9 +1097,9 @@ Out of scope: a prev/next canvas chord (chosen: jump-only); making canvas-switch
 
 ---
 
-### 77. [ ] Keybind to toggle between Overview and Canvas (⌘\)
+### 77. [x] Keybind to toggle between Overview and Canvas (⌘\)
 
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Status:** Done · _(Not started | In progress | Blocked | Done)_
 **Depends on:** #75
 **Created:** 2026-06-19
 
@@ -1121,10 +1121,10 @@ just its keyboard equivalent).
 
 **Acceptance criteria**
 
-- [ ] Pressing ⌘\ from Overview switches to Canvas, and from Canvas switches to Overview.
-- [ ] It works with a `claude` session focused in a terminal (the chord is intercepted before
+- [x] Pressing ⌘\ from Overview switches to Canvas, and from Canvas switches to Overview.
+- [x] It works with a `claude` session focused in a terminal (the chord is intercepted before
   xterm; claude never sees it).
-- [ ] No conflict with ⌘N or the Canvas ⌘1–9 / Shift+arrow bindings; it's inert while the
+- [x] No conflict with ⌘N or the Canvas ⌘1–9 / Shift+arrow bindings; it's inert while the
   new-session modal is open.
 
 **Notes**
