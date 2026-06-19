@@ -5,6 +5,7 @@
 //   ⌘1 … ⌘9            jump to canvas N (Canvas view only)                (#76)
 //   ⌘\                 toggle the main view (Overview ↔ Canvas)           (#77)
 //   ⌘N / Ctrl+N        open the new-session flow from anywhere            (#26)
+//   ⌘⇧N / Ctrl+Shift+N open the schedule-session flow                     (#93)
 //
 // xterm forwards keystrokes to the PTY when a terminal is focused, so the
 // listener runs in the **capture phase on window** — it fires before xterm's
@@ -36,6 +37,24 @@ export function useKeyboardNav(): void {
         if (IS_MAIN_WINDOW) {
           const { newSessionOpen, openNewSession } = useStore.getState();
           if (!newSessionOpen) openNewSession();
+        }
+        return;
+      }
+
+      // ⌘⇧N / Ctrl+Shift+N — open the schedule-session flow (#93). Distinct from
+      // ⌘N (new session, which requires !shiftKey). Swallowed but inert in a
+      // detached canvas window (#84 — no sidebar/launcher).
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "n"
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (IS_MAIN_WINDOW) {
+          const { newSessionOpen, openSchedule } = useStore.getState();
+          if (!newSessionOpen) openSchedule();
         }
         return;
       }

@@ -42,6 +42,31 @@ export interface OverviewPanel {
   compare_target?: string;
 }
 
+/** A pending scheduled session (#93, mirrors `store::ScheduledSession`). An agent
+ * launches automatically at `fire_at` (unix secs, local clock); one-shot. */
+export interface ScheduledSession {
+  id: string;
+  cwd: string;
+  /** A non-current branch to check out before spawning; absent otherwise. */
+  branch?: string | null;
+  name?: string | null;
+  prompt?: string | null;
+  fire_at: number;
+  created_at: number;
+}
+
+/** Payload of the `schedule://fired` event (#93): a schedule became a live session. */
+export interface ScheduleFiredPayload {
+  id: string;
+  session: SessionRecord;
+}
+
+/** Payload of the `schedule://error` event (#93): a schedule's spawn failed. */
+export interface ScheduleErrorPayload {
+  id: string;
+  message: string;
+}
+
 export type FileStatusCode = "M" | "A" | "D";
 export type HunkLineKind = "hunk" | "context" | "add" | "del";
 

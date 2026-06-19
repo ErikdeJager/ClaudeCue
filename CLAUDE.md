@@ -127,6 +127,20 @@ clear error if it is missing).
   detached window re-docks** its canvas (its `Destroyed` handler re-broadcasts the
   set; the main window reclaims the PTYs). Detached windows are **per-session** — not
   restored on relaunch (capability `canvas-*` in `capabilities/default.json`).
+- **Scheduled sessions (#93):** an agent can be **scheduled to launch later**. The
+  **"+ Schedule session"** sidebar button / **⌘⇧N** opens the new-session modal in
+  **schedule mode** — folder → branch → a final step for **launch time** (a
+  `datetime-local`), optional **prompt**, optional **name** — and calls
+  `create_schedule`. Records persist in `store.rs` (`schedules: ScheduledSession[]`).
+  A **poll loop** in `lib.rs` (every `SCHEDULE_POLL_SECS`) calls
+  `commands::fire_due_schedules`, which atomically `take_due_schedules(now)`, checks
+  out the branch (if any), spawns `claude` **pre-seeded with the prompt** (the
+  positional invocation, see Conventions), converts the record into a live session,
+  and emits **`schedule://fired`** (→ the main window moves it scheduled→live). On
+  boot the first tick fires anything **missed while closed** (catch-up). One-shot
+  only; pending schedules show in the sidebar (name/branch + fire time + cancel). The
+  full update surface (`create`/`list`/`cancel`/`update`) is exposed now so **#94**
+  (the draggable scheduled item type + auto-saving prompt panel) is pure frontend.
 
 ## Layout
 
@@ -143,7 +157,7 @@ clear error if it is missing).
 │   ├── paths.ts            # Shared path helpers (repoName, sessionLabel)
 │   ├── windowContext.ts    # Window identity (#84): main vs canvas-<id>, ownership helpers
 │   ├── ownership.ts        # useSessionOwners hook — which window renders each PTY (#84)
-│   ├── useKeyboardNav.ts   # Global keyboard shortcuts (#24/#76/#77/#84)
+│   ├── useKeyboardNav.ts   # Global keyboard shortcuts (#24/#76/#77/#84/#93)
 │   ├── components/         # React components (CSS Module alongside each):
 │   │                       #   Sidebar, Overview, Canvas (+ CanvasSurface),
 │   │                       #   CanvasWindow (#84), Terminal, FileViewer, FilePicker,
@@ -229,8 +243,13 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   **"reconnecting"** state (not an error) until their first output / a real exit;
   a failed resume shows that one terminal's exit overlay + Restart, not a toast
   wall. Session metadata + recent dirs persist to `sessions.json` in the app-data
-  dir (`store.rs`). `Remove` = kill + delete the record. If a future `claude`
-  version changes these flags, update `pty.rs` (`spawn_session` /
+  dir (`store.rs`). `Remove` = kill + delete the record. A **scheduled** session
+  (#93) additionally boots with an **initial prompt** passed **positionally**:
+  `claude --session-id <uuid> "<prompt>"` (`pty.rs spawn_session_with_prompt`). This
+  is **verified** against the real CLI (claude 2.1.x): `claude --help` documents
+  `claude [options] [command] [prompt]` — a positional prompt that starts the
+  interactive session with it sent. If a future `claude` version changes these
+  flags, update `pty.rs` (`spawn_session` / `spawn_session_with_prompt` /
   `resume_session`) and note it here.
 - **Exit handling (#63):** the discriminator is the exit code (`store.ts`
   `onExited` / the pure `isCleanExit`). A **clean exit — `claude` exits code 0

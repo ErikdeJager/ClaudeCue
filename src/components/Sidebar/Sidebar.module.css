@@ -30,6 +30,31 @@
   background: var(--accent-hover);
 }
 
+/* Schedule session (#93): a secondary, ghost-style button under the accent New
+   session button — same shape, lower emphasis. */
+.scheduleButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin: 0 var(--space-12) var(--space-12);
+  padding: var(--space-4) var(--space-12);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.scheduleButton:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .kbd {
   margin-left: auto;
   font-family: var(--mono);
@@ -294,6 +319,69 @@
 .fileRowSelected,
 .fileRowSelected:hover {
   background: var(--accent-dim);
+}
+
+/* Pending scheduled-session row (#93): indented under its repo like file items;
+   clock + name, fire time pushed right, cancel × on hover. */
+.scheduleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin: var(--space-1) var(--space-8);
+  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-20);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+}
+
+.scheduleRow:hover {
+  background: var(--bg-hover);
+}
+
+.scheduleIcon {
+  flex-shrink: 0;
+  color: var(--status-running);
+}
+
+.scheduleName {
+  overflow: hidden;
+  flex-shrink: 1;
+  font-size: var(--fs-meta-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduleWhen {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+}
+
+.scheduleCancel {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.scheduleRow:hover .scheduleCancel {
+  opacity: 1;
+}
+
+.scheduleCancel:hover {
+  color: var(--text-primary);
 }
 
 .fileMain {

@@ -19,6 +19,10 @@ use tauri::{Emitter, Manager};
 use pty::{SessionEvent, SessionManager};
 use store::Store;
 
+/// How often the #93 scheduler polls for due schedules. A few seconds is plenty
+/// for a one-shot launcher and keeps boot catch-up prompt without busy-spinning.
+const SCHEDULE_POLL_SECS: u64 = 5;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -71,6 +75,16 @@ pub fn run() {
                 }
             });
 
+            // Scheduled sessions (#93): a poll loop fires due schedules into live
+            // agents. Polling (vs per-schedule timers) handles create/update/cancel
+            // uniformly and catches up on boot — any schedule whose time passed
+            // while the app was closed fires on the first tick.
+            let scheduler = app.handle().clone();
+            thread::spawn(move || loop {
+                thread::sleep(std::time::Duration::from_secs(SCHEDULE_POLL_SECS));
+                commands::fire_due_schedules(&scheduler);
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -103,6 +117,10 @@ pub fn run() {
             commands::focus_canvas_window,
             commands::close_canvas_window,
             commands::list_canvas_windows,
+            commands::create_schedule,
+            commands::list_schedules,
+            commands::cancel_schedule,
+            commands::update_schedule,
             commands::list_files,
             commands::read_text_file,
             commands::current_branch,

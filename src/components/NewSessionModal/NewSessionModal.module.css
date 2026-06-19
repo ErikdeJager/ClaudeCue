@@ -113,6 +113,28 @@
   border-color: var(--accent);
 }
 
+/* Optional prompt for a scheduled session (#93) — multi-line, mirrors .search. */
+.promptInput {
+  width: 100%;
+  margin-bottom: var(--space-12);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-meta);
+  resize: vertical;
+}
+
+.promptInput::placeholder {
+  color: var(--text-muted);
+}
+
+.promptInput:focus {
+  border-color: var(--accent);
+}
+
 .recents {
   display: flex;
   max-height: 200px;

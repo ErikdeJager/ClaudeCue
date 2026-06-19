@@ -201,8 +201,28 @@ impl SessionManager {
         cwd: impl AsRef<Path>,
         name: Option<String>,
     ) -> Result<SessionInfo, SessionError> {
+        self.spawn_session_with_prompt(cwd, name, None)
+    }
+
+    /// Spawn a new `claude` session, optionally pre-seeded with an initial
+    /// `prompt` so it boots ready (#93 scheduled sessions). The prompt is passed
+    /// **positionally** after `--session-id <id>`:
+    /// `claude --session-id <uuid> "<prompt>"`. Verified against the real CLI
+    /// (claude 2.1.x): `claude [options] [command] [prompt]` accepts a positional
+    /// prompt that starts the interactive session with it sent. An empty/blank
+    /// prompt is omitted (a plain new session).
+    pub fn spawn_session_with_prompt(
+        &self,
+        cwd: impl AsRef<Path>,
+        name: Option<String>,
+        prompt: Option<&str>,
+    ) -> Result<SessionInfo, SessionError> {
         let id = Uuid::new_v4().to_string();
-        let args = ["--session-id", id.as_str()];
+        let mut args: Vec<&str> = vec!["--session-id", id.as_str()];
+        let trimmed = prompt.map(str::trim).filter(|p| !p.is_empty());
+        if let Some(p) = trimmed {
+            args.push(p);
+        }
         self.spawn_with_id(id.clone(), "claude", &args, cwd.as_ref(), name)
     }
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  Clock,
   FileDiff,
   FileText,
   GitBranch,
@@ -19,11 +20,60 @@ import {
   repoOrder,
   useStore,
 } from "../../store";
-import type { SessionView } from "../../types";
+import type { ScheduledSession, SessionView } from "../../types";
 import BusyIndicator from "../BusyIndicator/BusyIndicator";
 import FilePicker from "../FilePicker/FilePicker";
 import ViewSwitch from "../ViewSwitch/ViewSwitch";
 import styles from "./Sidebar.module.css";
+
+/** Compact local fire time for a pending schedule row (#93), e.g. "Jun 21, 3:45 PM". */
+function formatFireTime(fireAt: number): string {
+  return new Date(fireAt * 1000).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+/** A pending scheduled session row (#93): name/branch + fire time + cancel ×.
+ * Minimal (non-draggable, no rich panel — that's #94). */
+function ScheduleRow({
+  schedule,
+  onCancel,
+}: {
+  schedule: ScheduledSession;
+  onCancel: () => void;
+}) {
+  const label =
+    schedule.name?.trim() || schedule.branch || repoName(schedule.cwd);
+  return (
+    <div
+      className={styles.scheduleRow}
+      title={`Scheduled for ${new Date(schedule.fire_at * 1000).toLocaleString()}`}
+    >
+      <Clock
+        size={13}
+        strokeWidth={1.5}
+        className={styles.scheduleIcon}
+        aria-hidden
+      />
+      <span className={styles.scheduleName}>{label}</span>
+      <span className={styles.scheduleWhen}>
+        {formatFireTime(schedule.fire_at)}
+      </span>
+      <button
+        type="button"
+        className={styles.scheduleCancel}
+        onClick={onCancel}
+        title="Cancel schedule"
+        aria-label={`Cancel scheduled session ${label}`}
+      >
+        <X size={13} strokeWidth={1.5} />
+      </button>
+    </div>
+  );
+}
 
 interface SessionRowProps {
   session: SessionView;
@@ -404,6 +454,9 @@ function Sidebar() {
   const removeSession = useStore((s) => s.removeSession);
   const renameSession = useStore((s) => s.renameSession);
   const openNewSession = useStore((s) => s.openNewSession);
+  const openSchedule = useStore((s) => s.openSchedule);
+  const schedules = useStore((s) => s.schedules);
+  const cancelSchedule = useStore((s) => s.cancelSchedule);
   const refreshBranches = useStore((s) => s.refreshBranches);
   const forgetRepo = useStore((s) => s.forgetRepo);
   const killAllAgents = useStore((s) => s.killAllAgents);
@@ -555,6 +608,17 @@ function Sidebar() {
         <Plus size={16} strokeWidth={1.5} />
         New session
         <kbd className={styles.kbd}>⌘N</kbd>
+      </button>
+
+      {/* Schedule a session to launch later (#93) — same flow, plus a time step. */}
+      <button
+        type="button"
+        className={styles.scheduleButton}
+        onClick={() => openSchedule()}
+      >
+        <Clock size={15} strokeWidth={1.5} />
+        Schedule session
+        <kbd className={styles.kbd}>⌘⇧N</kbd>
       </button>
 
       <div className={styles.viewSwitch}>
@@ -709,6 +773,18 @@ function Sidebar() {
                   />
                 ) : null,
               )}
+
+              {/* Pending scheduled sessions for this repo (#93): name/branch +
+                  fire time + cancel. Non-draggable, no rich panel (that's #94). */}
+              {schedules
+                .filter((s) => s.cwd === repo)
+                .map((s) => (
+                  <ScheduleRow
+                    key={s.id}
+                    schedule={s}
+                    onCancel={() => void cancelSchedule(s.id)}
+                  />
+                ))}
 
               {/* Isolated worktrees (#74), nested under their parent repo: each
                   worktree folder is a sub-group (branch + "worktree" badge) with

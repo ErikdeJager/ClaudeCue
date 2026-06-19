@@ -18,6 +18,7 @@ import type {
   CanvasNode,
   CanvasTab,
   OverviewPanel,
+  ScheduledSession,
   SessionRecord,
   SessionView,
   Toast,
@@ -305,6 +306,11 @@ export interface AppState {
   /** New session modal (rendered by #10); `newSessionRepo` optionally prefills it. */
   newSessionOpen: boolean;
   newSessionRepo: string | null;
+  /** The same modal opened in **schedule** mode (#93): folder → branch → a final
+   * time/prompt/name step that creates a scheduled session instead of spawning. */
+  scheduleMode: boolean;
+  /** Pending scheduled sessions (#93), newest-first; main window only. */
+  schedules: ScheduledSession[];
 
   // --- Sync reducers ---
   setView: (view: View) => void;
@@ -330,6 +336,8 @@ export interface AppState {
   pushToast: (message: string, tone?: ToastTone) => string;
   dismissToast: (id: string) => void;
   openNewSession: (repo?: string) => void;
+  /** Open the modal in schedule mode (#93). */
+  openSchedule: (repo?: string) => void;
   closeNewSession: () => void;
 
   // --- Async / cross-cutting actions ---
@@ -421,6 +429,23 @@ export interface AppState {
   /** Clear a folder's workspace — kill all its agents AND remove all its non-agent
    * items (each terminal's shell killed) — but keep the folder in recents (#91). */
   closeAllItems: (repoPath: string) => Promise<void>;
+  /** Create a scheduled session (#93); resolves true on success. */
+  scheduleSession: (
+    cwd: string,
+    branch: string | null,
+    name: string | null,
+    prompt: string | null,
+    at: number,
+  ) => Promise<boolean>;
+  /** Cancel a pending scheduled session (#93). */
+  cancelSchedule: (id: string) => Promise<void>;
+  /** Update a schedule's prompt / name / fire time (#93). */
+  updateSchedule: (
+    id: string,
+    prompt: string | null,
+    name: string | null,
+    at: number,
+  ) => Promise<void>;
   copyToClipboard: (text: string, label?: string) => Promise<void>;
 }
 
@@ -493,6 +518,8 @@ export const useStore = create<AppState>()((set, get) => ({
   toasts: [],
   newSessionOpen: false,
   newSessionRepo: null,
+  scheduleMode: false,
+  schedules: [],
 
   setView: (view) => set({ view }),
   // Selection is decoupled from the view (#22): selecting only highlights. The
@@ -568,8 +595,19 @@ export const useStore = create<AppState>()((set, get) => ({
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   openNewSession: (repo) =>
-    set({ newSessionOpen: true, newSessionRepo: repo ?? null }),
-  closeNewSession: () => set({ newSessionOpen: false, newSessionRepo: null }),
+    set({
+      newSessionOpen: true,
+      newSessionRepo: repo ?? null,
+      scheduleMode: false,
+    }),
+  openSchedule: (repo) =>
+    set({
+      newSessionOpen: true,
+      newSessionRepo: repo ?? null,
+      scheduleMode: true,
+    }),
+  closeNewSession: () =>
+    set({ newSessionOpen: false, newSessionRepo: null, scheduleMode: false }),
 
   init: async () => {
     // Subscribe exactly once. The flag is set *before* the await so StrictMode's
@@ -643,6 +681,35 @@ export const useStore = create<AppState>()((set, get) => ({
           onCanvasesChanged: ({ canvases }) => get().applyCanvasSync(canvases),
           onWindowsChanged: (ids) => get().setDetachedCanvasIds(ids),
         });
+        // Scheduled sessions (#93): the backend engine fires schedules into live
+        // agents — the main window listens to move them scheduled→live (and to
+        // surface a failed spawn). Schedules are a main-window-only surface.
+        if (IS_MAIN_WINDOW) {
+          await ipc.subscribeScheduleEvents({
+            onFired: ({ id, session }) => {
+              set((s) => ({
+                schedules: s.schedules.filter((x) => x.id !== id),
+                recents: [
+                  session.repo_path,
+                  ...s.recents.filter((r) => r !== session.repo_path),
+                ],
+              }));
+              get().upsertSession(toSessionView(session));
+              get().pushToast(
+                `Scheduled agent started${session.name ? `: ${session.name}` : ""}`,
+              );
+            },
+            onError: ({ id, message }) => {
+              set((s) => ({
+                schedules: s.schedules.filter((x) => x.id !== id),
+              }));
+              get().pushToast(
+                message || "Scheduled agent failed to start",
+                "error",
+              );
+            },
+          });
+        }
       } catch {
         // Event subscription only works inside the Tauri webview.
         eventsSubscribed = false;
@@ -781,6 +848,15 @@ export const useStore = create<AppState>()((set, get) => ({
       }
     } catch {
       // Backend unreachable; leave colors/panels/order/canvas/width as-is.
+    }
+    // Scheduled sessions (#93) — main-window-only surface; re-armed timers live in
+    // the backend, so the frontend just lists the pending ones.
+    if (IS_MAIN_WINDOW) {
+      try {
+        set({ schedules: await ipc.listSchedules() });
+      } catch {
+        // Backend unreachable; leave schedules as-is.
+      }
     }
   },
 
@@ -1389,6 +1465,40 @@ export const useStore = create<AppState>()((set, get) => ({
     get().pushToast(
       parts.length > 0 ? `Closed ${parts.join(" + ")}` : "Nothing to close",
     );
+  },
+
+  scheduleSession: async (cwd, branch, name, prompt, at) => {
+    try {
+      const record = await ipc.createSchedule(cwd, branch, name, prompt, at);
+      // Newest-first; surface the (possibly new) folder in recents immediately.
+      set((s) => ({
+        schedules: [record, ...s.schedules],
+        recents: [cwd, ...s.recents.filter((r) => r !== cwd)],
+      }));
+      get().pushToast(`Scheduled for ${new Date(at * 1000).toLocaleString()}`);
+      return true;
+    } catch (err) {
+      get().pushToast(
+        isSessionError(err) ? err.message : "Could not schedule session",
+        "error",
+      );
+      return false;
+    }
+  },
+
+  cancelSchedule: async (id) => {
+    set((s) => ({ schedules: s.schedules.filter((x) => x.id !== id) }));
+    await ipc.cancelSchedule(id).catch(() => {});
+    get().pushToast("Schedule canceled");
+  },
+
+  updateSchedule: async (id, prompt, name, at) => {
+    set((s) => ({
+      schedules: s.schedules.map((x) =>
+        x.id === id ? { ...x, prompt, name, fire_at: at } : x,
+      ),
+    }));
+    await ipc.updateSchedule(id, prompt, name, at).catch(() => {});
   },
 
   copyToClipboard: async (text, label) => {

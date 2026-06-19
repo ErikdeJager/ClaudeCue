@@ -7,10 +7,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, Window};
+use uuid::Uuid;
 
 use crate::git::{self, BranchList, WorkingDiff};
 use crate::pty::{SessionError, SessionManager};
-use crate::store::{OverviewPanel, PersistedSession, Store};
+use crate::store::{OverviewPanel, PersistedSession, ScheduledSession, Store};
 
 /// Payload for the `session://output` event.
 #[derive(Clone, Serialize)]
@@ -39,6 +40,21 @@ pub struct StatePayload {
 #[derive(Clone, Serialize)]
 pub struct CanvasWindowsPayload {
     pub detached: Vec<String>,
+}
+
+/// Payload for `schedule://fired` (#93): a schedule launched into a live session.
+#[derive(Clone, Serialize)]
+pub struct ScheduleFiredPayload {
+    pub id: String,
+    pub session: PersistedSession,
+}
+
+/// Payload for `schedule://error` (#93): a schedule's spawn failed (e.g. claude
+/// missing); it is dropped rather than retried forever.
+#[derive(Clone, Serialize)]
+pub struct ScheduleErrorPayload {
+    pub id: String,
+    pub message: String,
 }
 
 #[tauri::command]
@@ -437,6 +453,121 @@ pub fn close_canvas_window(app: AppHandle, id: String) {
 #[tauri::command]
 pub fn list_canvas_windows(app: AppHandle) -> Vec<String> {
     detached_canvas_ids(&app, None)
+}
+
+/// Create a scheduled session (#93): persist a record that the poll loop fires at
+/// `at` (unix secs). `branch` (a non-current branch to check out), `name`, and
+/// `prompt` are optional; the backend owns the id + `created_at`.
+#[tauri::command]
+pub fn create_schedule(
+    store: State<'_, Store>,
+    cwd: String,
+    branch: Option<String>,
+    name: Option<String>,
+    prompt: Option<String>,
+    at: u64,
+) -> Result<ScheduledSession, SessionError> {
+    let sched = ScheduledSession {
+        id: Uuid::new_v4().to_string(),
+        cwd,
+        branch: branch.filter(|b| !b.is_empty()),
+        name: name.filter(|n| !n.trim().is_empty()),
+        prompt: prompt.filter(|p| !p.trim().is_empty()),
+        fire_at: at,
+        created_at: now_secs(),
+    };
+    store
+        .add_schedule(sched.clone())
+        .map_err(|e| SessionError::Io(e.to_string()))?;
+    Ok(sched)
+}
+
+/// All pending scheduled sessions (#93).
+#[tauri::command]
+pub fn list_schedules(store: State<'_, Store>) -> Vec<ScheduledSession> {
+    store.schedules()
+}
+
+/// Cancel a pending scheduled session (#93).
+#[tauri::command]
+pub fn cancel_schedule(store: State<'_, Store>, id: String) -> Result<(), SessionError> {
+    store
+        .remove_schedule(&id)
+        .map_err(|e| SessionError::Io(e.to_string()))
+}
+
+/// Update a schedule's prompt / name / fire time (#93) — the full surface #94's
+/// panel edits (so #94 needs no Rust changes).
+#[tauri::command]
+pub fn update_schedule(
+    store: State<'_, Store>,
+    id: String,
+    prompt: Option<String>,
+    name: Option<String>,
+    at: u64,
+) -> Result<(), SessionError> {
+    store
+        .update_schedule(
+            &id,
+            prompt.filter(|p| !p.trim().is_empty()),
+            name.filter(|n| !n.trim().is_empty()),
+            at,
+        )
+        .map_err(|e| SessionError::Io(e.to_string()))
+}
+
+/// Fire any due schedules (#93): for each, optionally check out its branch, spawn
+/// `claude` (pre-seeded with the prompt), persist the new live session + recent,
+/// and emit `schedule://fired` so the frontend moves it scheduled→live. A failed
+/// spawn drops the schedule (no infinite retry) and emits `schedule://error`.
+/// Called by the `lib.rs` poll loop; boot catch-up happens on the first tick.
+pub fn fire_due_schedules(app: &AppHandle) {
+    let store = app.state::<Store>();
+    let due = store.take_due_schedules(now_secs());
+    if due.is_empty() {
+        return;
+    }
+    let manager = app.state::<SessionManager>();
+    for sched in due {
+        if let Some(branch) = &sched.branch {
+            // Best-effort checkout; a failure still spawns in the folder.
+            let _ = git::checkout_branch(&sched.cwd, branch);
+        }
+        match manager.spawn_session_with_prompt(
+            &sched.cwd,
+            sched.name.clone(),
+            sched.prompt.as_deref(),
+        ) {
+            Ok(info) => {
+                let record = PersistedSession {
+                    id: info.id.clone(),
+                    claude_session_id: info.id,
+                    repo_path: sched.cwd.clone(),
+                    name: sched.name.clone(),
+                    created_at: now_secs(),
+                    worktree_parent: None,
+                };
+                let _ = store.add_session(record.clone());
+                let _ = store.touch_recent(&sched.cwd);
+                let _ = app.emit(
+                    "schedule://fired",
+                    ScheduleFiredPayload {
+                        id: sched.id,
+                        session: record,
+                    },
+                );
+            }
+            Err(error) => {
+                let _ = app.emit(
+                    "schedule://error",
+                    ScheduleErrorPayload {
+                        id: sched.id,
+                        message: error.to_string(),
+                    },
+                );
+            }
+        }
+    }
 }
 
 /// `#` followed by 3/4/6/8 hex digits.

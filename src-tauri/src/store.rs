@@ -56,6 +56,25 @@ pub struct OverviewPanel {
     pub compare_target: Option<String>,
 }
 
+/// A scheduled session (#93): an agent to launch automatically at `fire_at`
+/// (unix secs, local clock). One-shot — removed from the store when it fires (or
+/// is canceled). `branch` (when set) is checked out before spawning; `prompt`
+/// (when set) is passed positionally to `claude` so it boots ready.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScheduledSession {
+    pub id: String,
+    pub cwd: String,
+    /// Check out this branch before spawning (only set for a non-current branch).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    pub fire_at: u64,
+    pub created_at: u64,
+}
+
 /// The on-disk shape of the persistence file.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersistedState {
@@ -91,6 +110,10 @@ pub struct PersistedState {
     /// first written; `default` keeps old files loading.
     #[serde(default)]
     pub canvases: serde_json::Value,
+    /// Pending scheduled sessions (#93): agents to launch automatically at their
+    /// `fire_at`. `default` keeps old files loading.
+    #[serde(default)]
+    pub schedules: Vec<ScheduledSession>,
 }
 
 /// Thread-safe persistent store backed by a JSON file.
@@ -263,6 +286,57 @@ impl Store {
         self.update(|state| state.canvases = canvases)
     }
 
+    /// All pending scheduled sessions (#93).
+    pub fn schedules(&self) -> Vec<ScheduledSession> {
+        self.with(|state| state.schedules.clone())
+    }
+
+    /// Add a scheduled session (replacing any with the same id) and persist (#93).
+    pub fn add_schedule(&self, sched: ScheduledSession) -> io::Result<()> {
+        self.update(|state| {
+            state.schedules.retain(|x| x.id != sched.id);
+            state.schedules.push(sched);
+        })
+    }
+
+    /// Cancel (remove) a scheduled session by id and persist (#93).
+    pub fn remove_schedule(&self, id: &str) -> io::Result<()> {
+        self.update(|state| state.schedules.retain(|x| x.id != id))
+    }
+
+    /// Update a schedule's mutable fields (prompt / name / fire time) and persist
+    /// (#93) — the full update surface #94's panel edits; a no-op for an unknown id.
+    pub fn update_schedule(
+        &self,
+        id: &str,
+        prompt: Option<String>,
+        name: Option<String>,
+        fire_at: u64,
+    ) -> io::Result<()> {
+        self.update(|state| {
+            if let Some(s) = state.schedules.iter_mut().find(|s| s.id == id) {
+                s.prompt = prompt;
+                s.name = name;
+                s.fire_at = fire_at;
+            }
+        })
+    }
+
+    /// Atomically remove and return every schedule due at/before `now` (#93).
+    /// Removing under the same lock stops the poll loop from firing one twice; the
+    /// remaining set is persisted. On boot this fires anything missed while closed
+    /// (catch-up). Persist errors are swallowed (best-effort, like the rest).
+    pub fn take_due_schedules(&self, now: u64) -> Vec<ScheduledSession> {
+        let mut due = Vec::new();
+        let _ = self.update(|state| {
+            let (ready, pending): (Vec<_>, Vec<_>) =
+                state.schedules.drain(..).partition(|s| s.fire_at <= now);
+            state.schedules = pending;
+            due = ready;
+        });
+        due
+    }
+
     fn with<R>(&self, read: impl FnOnce(&PersistedState) -> R) -> R {
         let guard = self
             .inner
@@ -314,6 +388,18 @@ mod tests {
         path.push(format!("claudecue-store-{tag}-{}.json", std::process::id()));
         let _ = fs::remove_file(&path);
         path
+    }
+
+    fn sched(id: &str, fire_at: u64) -> ScheduledSession {
+        ScheduledSession {
+            id: id.to_string(),
+            cwd: "/repo/x".to_string(),
+            branch: None,
+            name: None,
+            prompt: None,
+            fire_at,
+            created_at: 0,
+        }
     }
 
     #[test]
@@ -522,6 +608,44 @@ mod tests {
 
         // An unknown id is a no-op (no panic).
         store.rename_session("missing", Some("x".into())).unwrap();
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn schedules_add_take_due_update_cancel_and_persist() {
+        let path = temp_path("schedules");
+        let store = Store::load(&path);
+        store.add_schedule(sched("s1", 100)).unwrap(); // due
+        store.add_schedule(sched("s2", 5000)).unwrap(); // future
+
+        // take_due at now=1000 → only s1; s2 remains and is persisted.
+        let due = store.take_due_schedules(1000);
+        assert_eq!(
+            due.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+            ["s1"]
+        );
+        let reloaded = Store::load(&path);
+        assert_eq!(
+            reloaded
+                .schedules()
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>(),
+            vec!["s2".to_string()]
+        );
+
+        // update the remaining schedule's prompt/name/time, then cancel it.
+        store
+            .update_schedule("s2", Some("go".into()), Some("nightly".into()), 6000)
+            .unwrap();
+        let after = Store::load(&path);
+        let s2 = &after.schedules()[0];
+        assert_eq!(s2.fire_at, 6000);
+        assert_eq!(s2.prompt.as_deref(), Some("go"));
+        assert_eq!(s2.name.as_deref(), Some("nightly"));
+
+        store.remove_schedule("s2").unwrap();
+        assert!(Store::load(&path).schedules().is_empty());
         let _ = fs::remove_file(&path);
     }
 

@@ -13,6 +13,9 @@ import type {
   OutputPayload,
   OverviewPanel,
   PersistedCanvases,
+  ScheduledSession,
+  ScheduleErrorPayload,
+  ScheduleFiredPayload,
   SessionRecord,
   StatePayload,
   WorkingDiff,
@@ -158,6 +161,38 @@ export const listBranches = (cwd: string) =>
 export const checkoutBranch = (cwd: string, branch: string) =>
   invoke<void>("checkout_branch", { cwd, branch });
 
+/** Create a scheduled session (#93); `at` is the fire time in unix secs. Returns
+ * the persisted record (the backend owns its id + created_at). */
+export const createSchedule = (
+  cwd: string,
+  branch: string | null,
+  name: string | null,
+  prompt: string | null,
+  at: number,
+) =>
+  invoke<ScheduledSession>("create_schedule", {
+    cwd,
+    branch,
+    name,
+    prompt,
+    at,
+  });
+
+/** All pending scheduled sessions (#93). */
+export const listSchedules = () => invoke<ScheduledSession[]>("list_schedules");
+
+/** Cancel a pending scheduled session (#93). */
+export const cancelSchedule = (id: string) =>
+  invoke<void>("cancel_schedule", { id });
+
+/** Update a schedule's prompt / name / fire time (#93). */
+export const updateSchedule = (
+  id: string,
+  prompt: string | null,
+  name: string | null,
+  at: number,
+) => invoke<void>("update_schedule", { id, prompt, name, at });
+
 export interface SessionEventHandlers {
   onOutput: (payload: OutputPayload) => void;
   onExited: (payload: ExitPayload) => void;
@@ -211,5 +246,31 @@ export async function subscribeCanvasEvents(
   return () => {
     unlistenChanged();
     unlistenWindows();
+  };
+}
+
+export interface ScheduleEventHandlers {
+  /** A schedule fired into a live session (#93). */
+  onFired: (payload: ScheduleFiredPayload) => void;
+  /** A schedule's spawn failed (#93) — it's dropped, not retried. */
+  onError: (payload: ScheduleErrorPayload) => void;
+}
+
+/** Subscribe to scheduled-session events (#93): `schedule://fired` (a schedule
+ * became a live agent) and `schedule://error`. Returns an unlisten fn. */
+export async function subscribeScheduleEvents(
+  handlers: ScheduleEventHandlers,
+): Promise<UnlistenFn> {
+  const unlistenFired = await listen<ScheduleFiredPayload>(
+    "schedule://fired",
+    (event) => handlers.onFired(event.payload),
+  );
+  const unlistenError = await listen<ScheduleErrorPayload>(
+    "schedule://error",
+    (event) => handlers.onError(event.payload),
+  );
+  return () => {
+    unlistenFired();
+    unlistenError();
   };
 }

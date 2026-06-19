@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   AlertTriangle,
   ChevronLeft,
+  Clock,
   FolderOpen,
   GitBranch,
   Plus,
@@ -27,6 +28,17 @@ const sortBranches = (all: string[]) =>
 
 // Only show the branch filter once the list is long enough to need it (#66).
 const BRANCH_FILTER_THRESHOLD = 4;
+
+// Default lead time for a new schedule (#93): 5 minutes out, so the prefilled
+// launch time is sensibly in the future.
+const DEFAULT_LEAD_MS = 5 * 60 * 1000;
+
+// Format a Date as a local `<input type="datetime-local">` value (no timezone
+// suffix — datetime-local is local-clock, matching the backend's local fire time).
+function toLocalInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 /**
  * Start-a-new-agent panel — a two-step, keyboard-driven flow (#66, rework of
@@ -53,8 +65,10 @@ function NewSessionModal() {
   const close = useStore((s) => s.closeNewSession);
   const spawnSession = useStore((s) => s.spawnSession);
   const spawnWorktreeSession = useStore((s) => s.spawnWorktreeSession);
+  const scheduleMode = useStore((s) => s.scheduleMode);
+  const scheduleSession = useStore((s) => s.scheduleSession);
 
-  const [step, setStep] = useState<"folder" | "branch">("folder");
+  const [step, setStep] = useState<"folder" | "branch" | "schedule">("folder");
   const [cwd, setCwd] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
@@ -63,8 +77,13 @@ function NewSessionModal() {
   const [branches, setBranches] = useState<BranchList | null>(null);
   const [branchQuery, setBranchQuery] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  // Schedule step (#93): launch time (datetime-local string), optional prompt + name.
+  const [fireAt, setFireAt] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [schedName, setSchedName] = useState("");
 
   const searchRef = useRef<HTMLInputElement>(null);
+  const fireAtRef = useRef<HTMLInputElement>(null);
   const chooseRef = useRef<HTMLButtonElement>(null);
   const recentsRef = useRef<HTMLDivElement>(null);
   const branchFilterRef = useRef<HTMLInputElement>(null);
@@ -85,6 +104,9 @@ function NewSessionModal() {
     setBranches(null);
     setBranchQuery("");
     setSelectedBranch(null);
+    setFireAt(toLocalInput(new Date(Date.now() + DEFAULT_LEAD_MS)));
+    setPrompt("");
+    setSchedName("");
   }, [open, prefillRepo]);
 
   // Focus the recents search whenever the folder step is shown (open or Back) —
@@ -148,6 +170,13 @@ function NewSessionModal() {
     }, 0);
     return () => clearTimeout(timer);
   }, [open, step, branches]);
+
+  // Schedule step (#93): focus the launch-time input when it's shown.
+  useEffect(() => {
+    if (!open || step !== "schedule") return;
+    const timer = setTimeout(() => fireAtRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [open, step]);
 
   // Escape closes the popover.
   useEffect(() => {
@@ -267,12 +296,39 @@ function NewSessionModal() {
       );
     }
     if (bl.all.length > 0) setStep("branch");
+    else if (scheduleMode) setStep("schedule");
     else void create();
   };
 
   const backToFolder = () => {
     setBranchQuery("");
     setStep("folder");
+  };
+
+  // Schedule mode (#93): advance the branch step → the launch-time step.
+  const goToSchedule = () => {
+    if (!cwd || busy) return;
+    setStep("schedule");
+  };
+
+  const backFromSchedule = () => setStep(folderIsGit ? "branch" : "folder");
+
+  // Create the schedule from the launch-time step (#93): parse the local
+  // datetime-local value → unix secs, carry the optional branch/name/prompt.
+  const submitSchedule = async () => {
+    if (!cwd || busy) return;
+    const ms = new Date(fireAt).getTime();
+    if (!Number.isFinite(ms)) return;
+    setBusy(true);
+    const ok = await scheduleSession(
+      cwd,
+      willCheckout ? (selectedBranch ?? null) : null,
+      schedName.trim() || null,
+      prompt.trim() || null,
+      Math.floor(ms / 1000),
+    );
+    if (ok) close();
+    else setBusy(false);
   };
 
   // Filter as the user types; keep a folder selected (the top match) so Enter
@@ -347,10 +403,10 @@ function NewSessionModal() {
     event: ReactKeyboardEvent<HTMLInputElement>,
   ) => {
     // ⌘⏎ starts in an isolated worktree (#74); plain Enter falls through to the
-    // form submit (normal start in the repo folder).
+    // form submit (normal start in the repo folder). No worktree in schedule mode.
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
-      void createWorktree();
+      if (!scheduleMode) void createWorktree();
       return;
     }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -363,8 +419,10 @@ function NewSessionModal() {
   const onBranchKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      // ⌘⏎ = start in an isolated worktree (#74); Enter = normal start.
-      if (event.metaKey || event.ctrlKey) void createWorktree();
+      // Schedule mode (#93): advance to the launch-time step. Else ⌘⏎ = worktree
+      // (#74), plain Enter = normal start.
+      if (scheduleMode) goToSchedule();
+      else if (event.metaKey || event.ctrlKey) void createWorktree();
       else void create();
       return;
     }
@@ -404,18 +462,28 @@ function NewSessionModal() {
         className={styles.popover}
         role="dialog"
         aria-modal="true"
-        aria-label="New session"
+        aria-label={scheduleMode ? "Schedule session" : "New session"}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={onTrapKeyDown}
         onSubmit={(event) => {
           event.preventDefault();
-          if (step === "folder") void advanceFromFolder();
-          else void create();
+          if (step === "folder") {
+            void advanceFromFolder();
+          } else if (step === "branch") {
+            if (scheduleMode) goToSchedule();
+            else void create();
+          } else {
+            void submitSchedule();
+          }
         }}
       >
         <h2 className={styles.title}>
-          <Plus size={15} strokeWidth={2} className={styles.titleIcon} />
-          New session
+          {scheduleMode ? (
+            <Clock size={15} strokeWidth={2} className={styles.titleIcon} />
+          ) : (
+            <Plus size={15} strokeWidth={2} className={styles.titleIcon} />
+          )}
+          {scheduleMode ? "Schedule session" : "New session"}
         </h2>
 
         {step === "folder" ? (
@@ -488,12 +556,16 @@ function NewSessionModal() {
                 className={styles.create}
                 disabled={!cwd || busy}
               >
-                {folderResolved && !folderIsGit ? "Start" : "Continue"}
+                {scheduleMode
+                  ? "Continue"
+                  : folderResolved && !folderIsGit
+                    ? "Start"
+                    : "Continue"}
                 <kbd className={styles.btnKbd}>⏎</kbd>
               </button>
             </div>
           </>
-        ) : (
+        ) : step === "branch" ? (
           <>
             {/* Branch step (git only) — back affordance, filter (>4), list. */}
             <button
@@ -556,7 +628,7 @@ function NewSessionModal() {
               )}
             </div>
 
-            {isDestructive && (
+            {!scheduleMode && isDestructive && (
               <div className={styles.warning}>
                 <AlertTriangle
                   size={14}
@@ -575,23 +647,90 @@ function NewSessionModal() {
               <button type="button" className={styles.cancel} onClick={close}>
                 Cancel <kbd className={styles.btnKbd}>esc</kbd>
               </button>
-              {/* Isolated worktree (#74): its own folder + separate checkout. */}
-              <button
-                type="button"
-                className={styles.cancel}
-                onClick={() => void createWorktree()}
-                disabled={!cwd || busy || !selectedBranch}
-                title="Start in an isolated git worktree"
-              >
-                Worktree <kbd className={styles.btnKbd}>⌘⏎</kbd>
-              </button>
+              {/* Isolated worktree (#74): its own folder + separate checkout. Not
+                  offered when scheduling (#93 part 1 schedules a normal agent). */}
+              {!scheduleMode && (
+                <button
+                  type="button"
+                  className={styles.cancel}
+                  onClick={() => void createWorktree()}
+                  disabled={!cwd || busy || !selectedBranch}
+                  title="Start in an isolated git worktree"
+                >
+                  Worktree <kbd className={styles.btnKbd}>⌘⏎</kbd>
+                </button>
+              )}
               <button
                 type="submit"
                 className={styles.create}
                 disabled={!canCreate}
               >
-                Start
+                {scheduleMode ? "Next" : "Start"}
                 <kbd className={styles.btnKbd}>⏎</kbd>
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Schedule step (#93): launch time + optional prompt + optional name.
+                Back returns to the branch step (git) or the folder step (non-git). */}
+            <button
+              type="button"
+              className={styles.folderBack}
+              onClick={backFromSchedule}
+              aria-label="Back"
+            >
+              <ChevronLeft size={14} strokeWidth={1.5} />
+              <span className={styles.folderBackName}>
+                {folderIsGit && selectedBranch
+                  ? selectedBranch
+                  : cwd
+                    ? repoName(cwd)
+                    : ""}
+              </span>
+              <span className={styles.folderBackHint}>back</span>
+            </button>
+
+            <p className={styles.label}>Launch time</p>
+            <input
+              ref={fireAtRef}
+              className={styles.search}
+              type="datetime-local"
+              value={fireAt}
+              onChange={(event) => setFireAt(event.currentTarget.value)}
+              aria-label="Launch time"
+            />
+
+            <p className={styles.label}>Prompt (optional)</p>
+            <textarea
+              className={styles.promptInput}
+              value={prompt}
+              placeholder="Initial prompt for claude…"
+              onChange={(event) => setPrompt(event.currentTarget.value)}
+              rows={3}
+              aria-label="Initial prompt"
+            />
+
+            <p className={styles.label}>Name (optional)</p>
+            <input
+              className={styles.search}
+              type="text"
+              value={schedName}
+              placeholder="Custom name…"
+              onChange={(event) => setSchedName(event.currentTarget.value)}
+              aria-label="Custom name"
+            />
+
+            <div className={styles.actions}>
+              <button type="button" className={styles.cancel} onClick={close}>
+                Cancel <kbd className={styles.btnKbd}>esc</kbd>
+              </button>
+              <button
+                type="submit"
+                className={styles.create}
+                disabled={!cwd || busy || !fireAt}
+              >
+                Schedule <kbd className={styles.btnKbd}>⏎</kbd>
               </button>
             </div>
           </>
