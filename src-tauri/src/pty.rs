@@ -7,12 +7,14 @@
 //! unit tests below. No status detection or approval parsing in v1 — this is a
 //! faithful terminal pipe.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
@@ -25,6 +27,12 @@ const DEFAULT_COLS: u16 = 80;
 const DEFAULT_ROWS: u16 = 24;
 /// Read chunk size for the per-session reader thread.
 const READ_CHUNK: usize = 8 * 1024;
+/// Busy heuristic (#42): a session reads as **busy** while output flowed within
+/// this window, and **idle** once it's quiet for longer. The window also
+/// debounces the busy→idle edge so brief gaps between TUI redraws don't flicker.
+const BUSY_WINDOW_MS: u64 = 700;
+/// How often the monitor thread re-evaluates each session's busy state (#42).
+const MONITOR_TICK_MS: u64 = 200;
 
 /// Errors surfaced to the frontend. Serialized as `{ kind, message }` so the UI
 /// can branch on `kind` (e.g. show the "claude not found" surface).
@@ -78,9 +86,26 @@ pub struct SessionInfo {
 /// Output / lifecycle events produced by sessions, drained by the command layer.
 #[derive(Debug, Clone)]
 pub enum SessionEvent {
-    Output { id: String, bytes: Vec<u8> },
-    Exited { id: String, code: Option<i32> },
+    Output {
+        id: String,
+        bytes: Vec<u8>,
+    },
+    Exited {
+        id: String,
+        code: Option<i32>,
+    },
+    /// Busy/idle transition from the output-activity heuristic (#42); emitted
+    /// only on change (debounced) by the monitor thread.
+    State {
+        id: String,
+        busy: bool,
+    },
 }
+
+/// Per-session activity map shared between the reader threads (which stamp the
+/// last-output time) and the monitor thread (which derives busy/idle), keyed by
+/// session id. The value is the millis-since-`base` of the last output (0 = none).
+type Activity = Arc<Mutex<HashMap<String, Arc<AtomicU64>>>>;
 
 /// Bounded byte ring buffer used to replay recent output to late subscribers.
 struct Scrollback {
@@ -129,13 +154,30 @@ pub struct SessionManager {
     sessions: Mutex<HashMap<String, Session>>,
     // `mpsc::Sender` is `!Sync`; the Mutex lets `SessionManager` be a Tauri state.
     events: Mutex<Sender<SessionEvent>>,
+    // Busy-heuristic state (#42), shared with the reader + monitor threads.
+    activity: Activity,
+    // Monotonic base for the millis timestamps in `activity`.
+    base: Instant,
 }
 
 impl SessionManager {
     pub fn new(events: Sender<SessionEvent>) -> Self {
+        let activity: Activity = Arc::new(Mutex::new(HashMap::new()));
+        let base = Instant::now();
+        // A single background thread derives busy/idle from output activity and
+        // emits `State` transitions (#42). It holds a `Sender` clone, so — like
+        // the long-lived manager — it keeps the event channel open for the app's
+        // lifetime and ends when the receiver is dropped.
+        std::thread::spawn({
+            let activity = Arc::clone(&activity);
+            let events = events.clone();
+            move || monitor_loop(activity, events, base)
+        });
         Self {
             sessions: Mutex::new(HashMap::new()),
             events: Mutex::new(events),
+            activity,
+            base,
         }
     }
 
@@ -215,6 +257,9 @@ impl SessionManager {
                 .remove(id)
                 .ok_or_else(|| SessionError::SessionNotFound(id.to_string()))?
         };
+        if let Ok(mut map) = self.activity.lock() {
+            map.remove(id);
+        }
         if let Ok(mut child) = session.child.lock() {
             let _ = child.kill();
         }
@@ -234,6 +279,9 @@ impl SessionManager {
             if let Ok(mut child) = session.child.lock() {
                 let _ = child.kill();
             }
+        }
+        if let Ok(mut map) = self.activity.lock() {
+            map.clear();
         }
     }
 
@@ -329,11 +377,31 @@ impl SessionManager {
         let child = Arc::new(Mutex::new(child));
         let events = self.event_sender()?;
 
+        // Register this session's last-output stamp for the busy heuristic (#42);
+        // a restart with the same id replaces the previous atomic here.
+        let last_output = Arc::new(AtomicU64::new(0));
+        if let Ok(mut map) = self.activity.lock() {
+            map.insert(id.clone(), Arc::clone(&last_output));
+        }
+
         let reader_handle = std::thread::spawn({
             let id = id.clone();
             let child = Arc::clone(&child);
             let scrollback = Arc::clone(&scrollback);
-            move || reader_loop(id, reader, &child, &scrollback, &events)
+            let activity = Arc::clone(&self.activity);
+            let base = self.base;
+            move || {
+                reader_loop(
+                    id,
+                    reader,
+                    &child,
+                    &scrollback,
+                    &events,
+                    &last_output,
+                    base,
+                    &activity,
+                )
+            }
         });
 
         let session = Session {
@@ -372,12 +440,16 @@ impl SessionManager {
 
 /// Reads a session's PTY until it closes, pushing bytes to scrollback and the
 /// event channel, then emits the final exit code.
+#[allow(clippy::too_many_arguments)]
 fn reader_loop(
     id: String,
     mut reader: Box<dyn Read + Send>,
     child: &Arc<Mutex<Box<dyn Child + Send + Sync>>>,
     scrollback: &Arc<Mutex<Scrollback>>,
     events: &Sender<SessionEvent>,
+    last_output: &Arc<AtomicU64>,
+    base: Instant,
+    activity: &Activity,
 ) {
     let mut buf = [0u8; READ_CHUNK];
     loop {
@@ -385,6 +457,10 @@ fn reader_loop(
             // EOF or read error (e.g. EIO once the slave closes): the PTY is done.
             Ok(0) | Err(_) => break,
             Ok(n) => {
+                // Stamp the last-output time for the busy heuristic (#42); `.max(1)`
+                // keeps 0 reserved as the "no output yet" sentinel.
+                let now = base.elapsed().as_millis() as u64;
+                last_output.store(now.max(1), Ordering::Relaxed);
                 let chunk = buf[..n].to_vec();
                 if let Ok(mut sb) = scrollback.lock() {
                     sb.push(&chunk);
@@ -402,12 +478,63 @@ fn reader_loop(
         }
     }
 
+    // Stop tracking activity — but only if the map still points to *our* atomic
+    // (a restart with the same id may have replaced it; don't drop the new one).
+    if let Ok(mut map) = activity.lock() {
+        if matches!(map.get(&id), Some(a) if Arc::ptr_eq(a, last_output)) {
+            map.remove(&id);
+        }
+    }
+
     let code = child
         .lock()
         .ok()
         .and_then(|mut child| child.wait().ok())
         .map(|status| status.exit_code() as i32);
     let _ = events.send(SessionEvent::Exited { id, code });
+}
+
+/// Derives each session's busy/idle state from output activity (#42) and emits a
+/// `State` event on every transition (debounced — never per tick). Runs until the
+/// event receiver is dropped (app shutdown).
+fn monitor_loop(activity: Activity, events: Sender<SessionEvent>, base: Instant) {
+    // Last state we emitted per session, so we only send on change.
+    let mut emitted: HashMap<String, bool> = HashMap::new();
+    loop {
+        std::thread::sleep(Duration::from_millis(MONITOR_TICK_MS));
+        let now = base.elapsed().as_millis() as u64;
+        // Snapshot (id, busy) under the lock, then release it before sending.
+        let snapshot: Vec<(String, bool)> = {
+            let map = match activity.lock() {
+                Ok(map) => map,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            map.iter()
+                .map(|(id, last)| {
+                    let last_ms = last.load(Ordering::Relaxed);
+                    let busy = last_ms != 0 && now.saturating_sub(last_ms) < BUSY_WINDOW_MS;
+                    (id.clone(), busy)
+                })
+                .collect()
+        };
+        // Forget sessions that are gone (killed/exited) so a reused id starts fresh.
+        let live: HashSet<&str> = snapshot.iter().map(|(id, _)| id.as_str()).collect();
+        emitted.retain(|id, _| live.contains(id.as_str()));
+        for (id, busy) in &snapshot {
+            if emitted.get(id) != Some(busy) {
+                emitted.insert(id.clone(), *busy);
+                if events
+                    .send(SessionEvent::State {
+                        id: id.clone(),
+                        busy: *busy,
+                    })
+                    .is_err()
+                {
+                    return; // receiver dropped (app shutting down)
+                }
+            }
+        }
+    }
 }
 
 /// Shell out to the Zed editor to open `cwd` (best-effort, detached).
@@ -488,6 +615,7 @@ mod tests {
             match rx.recv_timeout(Duration::from_secs(5)) {
                 Ok(SessionEvent::Output { bytes, .. }) => output.extend(bytes),
                 Ok(SessionEvent::Exited { code, .. }) => break code,
+                Ok(SessionEvent::State { .. }) => {}
                 Err(_) => panic!("timed out waiting for session events"),
             }
         };
@@ -547,6 +675,33 @@ mod tests {
             mgr.kill_session(&info.id),
             Err(SessionError::SessionNotFound(_))
         ));
+    }
+
+    #[test]
+    fn busy_state_tracks_output_then_goes_idle() {
+        let (mgr, rx) = manager();
+        // Emit once, then stay alive but quiet well past BUSY_WINDOW_MS, so the
+        // monitor must report busy → idle while the session is still running.
+        mgr.spawn_program("sh", &["-c", "printf 'tick'; sleep 1.2"], &tmp(), None)
+            .expect("spawn sh");
+
+        let mut saw_busy = false;
+        let mut saw_idle_after_busy = false;
+        let deadline = Instant::now() + Duration::from_secs(4);
+        while Instant::now() < deadline && !saw_idle_after_busy {
+            match rx.recv_timeout(Duration::from_millis(250)) {
+                Ok(SessionEvent::State { busy: true, .. }) => saw_busy = true,
+                Ok(SessionEvent::State { busy: false, .. }) if saw_busy => {
+                    saw_idle_after_busy = true;
+                }
+                _ => {}
+            }
+        }
+        assert!(saw_busy, "expected a busy state once output flowed");
+        assert!(
+            saw_idle_after_busy,
+            "expected an idle state once output went quiet"
+        );
     }
 
     #[test]

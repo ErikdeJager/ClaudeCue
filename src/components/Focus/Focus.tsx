@@ -4,6 +4,7 @@ import { Copy, ExternalLink, PanelRight } from "lucide-react";
 import { listMarkdownFiles } from "../../ipc";
 import { repoName } from "../../paths";
 import { repoColor, useStore } from "../../store";
+import BusyIndicator from "../BusyIndicator/BusyIndicator";
 import DiffInspector from "../DiffInspector/DiffInspector";
 import MarkdownViewer from "../MarkdownViewer/MarkdownViewer";
 import Terminal from "../Terminal/Terminal";
@@ -91,11 +92,13 @@ function Focus() {
   const openInZed = useStore((s) => s.openInZed);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
   const repoColors = useStore((s) => s.repoColors);
+  const sessionBusy = useStore((s) => s.sessionBusy);
 
   const [activeTab, setActiveTab] = useState("diff");
 
   const session = sessions.find((x) => x.id === selectedId);
   const branch = session ? (branches[session.repoPath] ?? "") : "";
+  const busy = session ? (sessionBusy[session.id] ?? false) : false;
   // Repo color identity (#35), shown as the toolbar badge + a subtle top rule so
   // Focus matches the sidebar/Overview color for this repo (#37).
   const color = session ? repoColor(session.repoPath, repoColors) : undefined;
@@ -132,6 +135,7 @@ function Focus() {
               </span>
               <Copy size={13} strokeWidth={1.5} />
             </button>
+            {busy && <BusyIndicator />}
             <div className={styles.spacer} />
             <button
               type="button"

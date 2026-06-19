@@ -12,6 +12,7 @@ import { repoColor, useStore } from "../../store";
 import type { OverviewPanel, SessionView } from "../../types";
 // The Focus inspector's diff component is already parameterized by { repoPath,
 // active }, so the Overview diff panel (#39) reuses it directly — one source.
+import BusyIndicator from "../BusyIndicator/BusyIndicator";
 import DiffInspector from "../DiffInspector/DiffInspector";
 import EmptyState from "../EmptyState/EmptyState";
 import MarkdownViewer from "../MarkdownViewer/MarkdownViewer";
@@ -67,6 +68,7 @@ interface SessionCardProps {
   color: string;
   groupStart: boolean;
   selected: boolean;
+  busy: boolean;
   onSelect: () => void;
   onExpand: () => void;
   onOpenInZed: () => void;
@@ -79,6 +81,7 @@ function SessionCard({
   color,
   groupStart,
   selected,
+  busy,
   onSelect,
   onExpand,
   onOpenInZed,
@@ -100,6 +103,12 @@ function SessionCard({
   );
   const actions = (
     <>
+      {/* Busy indicator (#42), left of the card actions, only while working. */}
+      {busy && (
+        <span className={styles.headerBusy}>
+          <BusyIndicator />
+        </span>
+      )}
       <button
         type="button"
         className={styles.action}
@@ -269,6 +278,7 @@ function Overview() {
   const overviewPanels = useStore((s) => s.overviewPanels);
   const removeOverviewPanel = useStore((s) => s.removeOverviewPanel);
   const moveOverviewPanel = useStore((s) => s.moveOverviewPanel);
+  const sessionBusy = useStore((s) => s.sessionBusy);
 
   // The welcome empty state only when there's truly nothing — no agents and no
   // extra panels (a repo can have a diff/markdown panel without an agent, #39/#41).
@@ -375,6 +385,7 @@ function Overview() {
                   color={color}
                   groupStart={groupStart}
                   selected={session.id === selectedId}
+                  busy={sessionBusy[session.id] ?? false}
                   onSelect={() => select(session.id)}
                   onExpand={() => expand(session.id)}
                   onOpenInZed={() => void openInZed(session.repoPath)}

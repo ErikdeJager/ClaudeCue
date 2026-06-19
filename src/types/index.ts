@@ -78,6 +78,12 @@ export interface ExitPayload {
   code: number | null;
 }
 
+/** Payload of the `session://state` event — busy/idle (#42). */
+export interface StatePayload {
+  id: string;
+  busy: boolean;
+}
+
 // --- Frontend UI state ---
 
 export type View = "overview" | "focus";

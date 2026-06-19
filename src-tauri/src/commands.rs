@@ -24,6 +24,13 @@ pub struct ExitPayload {
     pub code: Option<i32>,
 }
 
+/// Payload for the `session://state` event — busy/idle (#42).
+#[derive(Clone, Serialize)]
+pub struct StatePayload {
+    pub id: String,
+    pub busy: bool,
+}
+
 #[tauri::command]
 pub fn spawn_session(
     manager: State<'_, SessionManager>,

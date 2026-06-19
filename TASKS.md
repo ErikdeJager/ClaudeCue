@@ -2779,9 +2779,9 @@ the agents working on it.
 
 ---
 
-### 42. [ ] Busy indicator: show when a Claude session is working (sidebar + each terminal)
+### 42. [x] Busy indicator: show when a Claude session is working (sidebar + each terminal)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -2812,26 +2812,26 @@ the output-activity heuristic below if nothing better is feasible.
 
 **Subtasks**
 
-1. [ ] Research the options above; record the chosen approach + why in the task notes.
-2. [ ] **Backend:** implement detection (baseline: last-output timestamp + debounce in
+1. [x] Research the options above; record the chosen approach + why in the task notes.
+2. [x] **Backend:** implement detection (baseline: last-output timestamp + debounce in
    `pty.rs`); emit session busy/idle state to the frontend (new event/payload in
    `commands.rs` + `lib.rs`).
-3. [ ] **Store/IPC:** route state into the store
+3. [x] **Store/IPC:** route state into the store
    (`sessionState: Record<id,'busy'|'idle'>`) via `ipc.ts`.
-4. [ ] **Sidebar indicator:** a small animated icon on each session row when busy.
-5. [ ] **Terminal-column indicator:** the same indicator on each Overview agent card
+4. [x] **Sidebar indicator:** a small animated icon on each session row when busy.
+5. [x] **Terminal-column indicator:** the same indicator on each Overview agent card
    header (and optionally Focus). Make the animation **interesting and fun** (e.g. an
    orbiting/bouncing glyph or animated Lucide icon) but **respect
    `prefers-reduced-motion`** (fall back to a static colored dot).
-6. [ ] Use the status tokens / a Catppuccin accent for busy vs idle (coordinate with
+6. [x] Use the status tokens / a Catppuccin accent for busy vs idle (coordinate with
    #33; e.g. busy → Yellow/Peach, idle → muted).
 
 **Acceptance criteria**
 
-- [ ] When a session is actively working, an animated busy indicator shows in the
+- [x] When a session is actively working, an animated busy indicator shows in the
   sidebar row and on its terminal column; it clears when idle.
-- [ ] The animation is fun but respects reduced-motion (static fallback).
-- [ ] Detection is reasonably accurate and doesn't flicker rapidly (debounced).
+- [x] The animation is fun but respects reduced-motion (static fallback).
+- [x] Detection is reasonably accurate and doesn't flicker rapidly (debounced).
 
 **Notes**
 
@@ -2843,6 +2843,34 @@ the output-activity heuristic below if nothing better is feasible.
   starts using the reserved `--status-*` tokens. That's intentional now. Keep it to a
   busy/idle indicator (no approval UI, still answered in the terminal).
 - Pairs with #36 (per-card chrome) and #33 (status colors).
+- **Done 2026-06-19.** **Chosen approach — the output-activity heuristic (option 1).**
+  Why: it needs **no `claude` config and no extra dependency**, reuses the PTY reader
+  already in `pty.rs`, and is plenty accurate for a busy/idle hint. Option 2 (per-PID
+  CPU via `sysinfo`) was rejected as a heavier new dependency for marginal gain; option
+  3 (Claude Code hooks: `UserPromptSubmit`/`Stop`/`Notification`) is the most
+  *semantically* precise but would require influencing the user's `claude` settings or a
+  local IPC endpoint — too invasive for now, **noted as a future upgrade** if the
+  heuristic proves too noisy (e.g. a TUI that redraws on a timer while idle). **Backend
+  (`pty.rs`):** each reader thread stamps a per-session **last-output millis** (`AtomicU64`,
+  monotonic `Instant` base) into a shared `activity` map; a **single monitor thread**
+  ticks every `MONITOR_TICK_MS` (200ms) and marks **busy** when output flowed within
+  `BUSY_WINDOW_MS` (700ms) — the window itself debounces the busy→idle edge — emitting a
+  new `SessionEvent::State { id, busy }` **only on transition** (never per tick). The map
+  entry is removed on kill/exit (guarded by `Arc::ptr_eq` so a restart with the same id
+  keeps its fresh atomic). **Event/store/IPC:** `commands::StatePayload` → `session://state`
+  (`lib.rs`); `ipc.ts` `onState` → store `sessionBusy: Record<id, boolean>` (the task's
+  `sessionState`, as a boolean map) via `setBusy`, cleared on `markExited`/`dropSession`.
+  **UI:** a reusable **`BusyIndicator`** (three dots bouncing in a staggered wave, the
+  Yellow `--status-awaiting` token) shows in the **sidebar row**, **each Overview agent
+  card header**, and the **Focus toolbar**; only while busy (idle renders nothing). Motion
+  uses the **global `prefers-reduced-motion` killswitch** (the bounce settles to a static
+  colored cluster). **Tests:** a backend `busy_state_tracks_output_then_goes_idle`
+  (output → busy → idle while still alive) + frontend `setBusy`/`markExited`-clears-busy.
+  **Hard gate green:** Rust `fmt`/`clippy`/`test` (33) + frontend `build`/`lint`/
+  `format:check`/`test` (45). CLAUDE.md updated (the "no status system" rule is now
+  narrowed to busy/idle). The live animation/accuracy is runtime-visual, not launched
+  headlessly; the heuristic's accuracy against the real `claude` TUI is the one thing to
+  eyeball in a GUI run (and the hooks upgrade is the fallback if it flickers).
 
 ---
 

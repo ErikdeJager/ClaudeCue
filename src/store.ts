@@ -36,6 +36,15 @@ let eventsSubscribed = false;
 // must not add a second "Session exited" toast on top of the action's toast (#32).
 const intentionalKills = new Set<string>();
 
+/** Copy of `map` without `key` — returns the same ref when `key` is absent so
+ * callers don't trigger needless re-renders. */
+function omitKey<T>(map: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in map)) return map;
+  const next = { ...map };
+  delete next[key];
+  return next;
+}
+
 function toSessionView(record: SessionRecord): SessionView {
   return {
     id: record.id,
@@ -172,6 +181,9 @@ export interface AppState {
   repoColors: Record<string, string>;
   /** Per-repo ordered list of extra (non-agent) Overview panels (#38). */
   overviewPanels: Record<string, OverviewPanel[]>;
+  /** Sessions currently working, from the output-activity heuristic (#42); an
+   * absent/false entry means idle. (The task's `sessionState`, as a boolean map.) */
+  sessionBusy: Record<string, boolean>;
   claudeMissing: boolean;
   toasts: Toast[];
   /** New session modal (rendered by #10); `newSessionRepo` optionally prefills it. */
@@ -201,6 +213,8 @@ export interface AppState {
   dropSession: (id: string) => void;
   markExited: (id: string, code: number | null) => void;
   markRunning: (id: string) => void;
+  /** Set a session's busy/idle state from the backend heuristic (#42). */
+  setBusy: (id: string, busy: boolean) => void;
   /** Clear the boot "reconnecting" flag once a session proves it's live (#30). */
   markConnected: (id: string) => void;
   setClaudeMissing: (missing: boolean) => void;
@@ -254,6 +268,7 @@ export const useStore = create<AppState>()((set, get) => ({
   branches: {},
   repoColors: {},
   overviewPanels: {},
+  sessionBusy: {},
   claudeMissing: false,
   toasts: [],
   newSessionOpen: false,
@@ -305,6 +320,7 @@ export const useStore = create<AppState>()((set, get) => ({
       sessions: s.sessions.filter((x) => x.id !== id),
       selectedId: s.selectedId === id ? null : s.selectedId,
       view: s.selectedId === id ? "overview" : s.view,
+      sessionBusy: omitKey(s.sessionBusy, id),
     })),
 
   markExited: (id, code) =>
@@ -312,7 +328,19 @@ export const useStore = create<AppState>()((set, get) => ({
       sessions: s.sessions.map((x) =>
         x.id === id ? { ...x, exitedCode: code, reconnecting: false } : x,
       ),
+      // An exited session is not working — clear any busy flag (#42).
+      sessionBusy: omitKey(s.sessionBusy, id),
     })),
+
+  setBusy: (id, busy) =>
+    set((s) => {
+      if ((s.sessionBusy[id] ?? false) === busy) return {}; // no-op, skip re-render
+      return {
+        sessionBusy: busy
+          ? { ...s.sessionBusy, [id]: true }
+          : omitKey(s.sessionBusy, id),
+      };
+    }),
 
   markRunning: (id) =>
     set((s) => ({
@@ -362,6 +390,10 @@ export const useStore = create<AppState>()((set, get) => ({
             if (get().sessions.find((x) => x.id === id)?.reconnecting) {
               get().markConnected(id);
             }
+          },
+          onState: ({ id, busy }) => {
+            // Busy/idle from the backend heuristic (#42); emitted only on change.
+            get().setBusy(id, busy);
           },
           onExited: ({ id, code }) => {
             get().markExited(id, code);

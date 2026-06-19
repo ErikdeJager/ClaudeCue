@@ -32,9 +32,15 @@ clear error if it is missing).
   (`store.rs`). A per-session reader thread pushes output to a bounded scrollback
   buffer and an `mpsc` channel.
 - **Output:** `lib.rs` forwards the channel to the `session://output` /
-  `session://exited` Tauri events. The frontend `ipc.ts` subscription routes
-  output **bytes** to `outputBus.ts` (a pub/sub the xterm `Terminal` consumes —
-  deliberately *not* React state) and lifecycle to the Zustand `store.ts`.
+  `session://exited` / `session://state` Tauri events. The frontend `ipc.ts`
+  subscription routes output **bytes** to `outputBus.ts` (a pub/sub the xterm
+  `Terminal` consumes — deliberately *not* React state) and lifecycle +
+  busy/idle to the Zustand `store.ts`.
+- **Busy indicator (#42):** a backend monitor thread (`pty.rs`) derives each
+  session's **busy/idle** from output activity (busy while bytes flowed within a
+  ~700ms window) and emits `session://state { id, busy }` on transitions only.
+  The store keeps `sessionBusy`; the `BusyIndicator` (animated dots, static under
+  reduced-motion) shows in the sidebar, Overview cards, and Focus toolbar.
 - **Input / resize:** the `Terminal` sends keystrokes to `write_stdin` and a
   `ResizeObserver` drives `resize_pty`.
 - **Persistence / resume:** records + recents survive restarts; on boot the
@@ -111,15 +117,17 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   before the agent starts. It only switches to a branch that already exists
   locally (validated backend-side) and warns before disrupting another agent
   already running in that folder. No branch creation, commits, or other writes.
-- No status system (no pills/dots/awaiting-glow/floating) and no app-rendered
-  approval UI — users answer prompts directly in the terminal.
+- No app-rendered approval UI — users answer prompts directly in the terminal.
+  (The v1 "no status system" rule was deliberately narrowed by **#42**: a single
+  **busy/idle** indicator now exists. Still no approval pills/awaiting-glow/
+  floating.)
 - No Archive (single **Remove = kill + forget**), no Skills manager, no Fork, no
   settings screen, no light mode, no multi-window, no auth.
 - No code signing / notarization (expect a Gatekeeper warning on first open).
 
-> Status colors exist as *reserved* design tokens but are intentionally unused in
-> v1. The original design spec and prototype are preserved in git history
-> (commit `b02efd8`).
+> Status colors were *reserved* design tokens, unused in v1; **#42** starts using
+> `--status-awaiting` (Yellow) for the busy indicator. The original design spec
+> and prototype are preserved in git history (commit `b02efd8`).
 
 ## Conventions
 

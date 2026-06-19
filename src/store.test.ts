@@ -32,6 +32,7 @@ beforeEach(() => {
     branches: {},
     repoColors: {},
     overviewPanels: {},
+    sessionBusy: {},
     claudeMissing: false,
     toasts: [],
     newSessionOpen: false,
@@ -100,6 +101,25 @@ describe("app store", () => {
     useStore.getState().markExited("s1", 1);
     expect(useStore.getState().sessions[0]?.reconnecting).toBe(false);
     expect(useStore.getState().sessions[0]?.exitedCode).toBe(1);
+  });
+
+  it("setBusy tracks and clears a session's working state (#42)", () => {
+    useStore.getState().setBusy("s1", true);
+    expect(useStore.getState().sessionBusy.s1).toBe(true);
+    // Idle deletes the key rather than storing false.
+    useStore.getState().setBusy("s1", false);
+    expect(useStore.getState().sessionBusy.s1).toBeUndefined();
+    // A redundant update keeps the same map reference (no needless re-render).
+    useStore.getState().setBusy("s2", true);
+    const ref = useStore.getState().sessionBusy;
+    useStore.getState().setBusy("s2", true);
+    expect(useStore.getState().sessionBusy).toBe(ref);
+  });
+
+  it("markExited clears a busy flag (an exited session isn't working) (#42)", () => {
+    useStore.setState({ sessions: [session("s1")], sessionBusy: { s1: true } });
+    useStore.getState().markExited("s1", 0);
+    expect(useStore.getState().sessionBusy.s1).toBeUndefined();
   });
 
   it("setOverviewRepoFilter toggles, switches, and clears (#34)", () => {

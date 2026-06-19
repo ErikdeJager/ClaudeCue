@@ -49,6 +49,9 @@ pub fn run() {
                         SessionEvent::Exited { id, code } => {
                             handle.emit("session://exited", commands::ExitPayload { id, code })
                         }
+                        SessionEvent::State { id, busy } => {
+                            handle.emit("session://state", commands::StatePayload { id, busy })
+                        }
                     };
                 }
             });

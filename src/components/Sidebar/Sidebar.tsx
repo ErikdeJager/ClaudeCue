@@ -11,6 +11,7 @@ import {
   useStore,
 } from "../../store";
 import type { SessionView } from "../../types";
+import BusyIndicator from "../BusyIndicator/BusyIndicator";
 import ViewSwitch from "../ViewSwitch/ViewSwitch";
 import styles from "./Sidebar.module.css";
 
@@ -19,6 +20,8 @@ interface SessionRowProps {
   /** Primary label: the (deduped) branch, or folder name for a non-git repo. */
   label: string;
   selected: boolean;
+  /** The session is currently working (#42). */
+  busy: boolean;
   onSelect: () => void;
   onRemove: () => void;
 }
@@ -27,6 +30,7 @@ function SessionRow({
   session,
   label,
   selected,
+  busy,
   onSelect,
   onRemove,
 }: SessionRowProps) {
@@ -38,6 +42,13 @@ function SessionRow({
           <span className={styles.rowSecondary}>{session.name}</span>
         )}
       </button>
+      {/* Busy indicator (#42): always visible while working; the Remove ghost
+          shows on hover to its right. */}
+      {busy && (
+        <span className={styles.rowBusy}>
+          <BusyIndicator />
+        </span>
+      )}
       <button
         type="button"
         className={styles.remove}
@@ -74,6 +85,7 @@ function Sidebar() {
   const setRepoColor = useStore((s) => s.setRepoColor);
   const overviewPanels = useStore((s) => s.overviewPanels);
   const addOverviewPanel = useStore((s) => s.addOverviewPanel);
+  const sessionBusy = useStore((s) => s.sessionBusy);
 
   // Right-click repo context menu (#31/#35), anchored at the cursor. `menuMode`
   // switches between the item list, the destructive Forget confirm, and the
@@ -222,6 +234,7 @@ function Sidebar() {
                   // noUncheckedIndexedAccess and is never reached at runtime.
                   label={rowLabels[i] ?? baseLabel}
                   selected={session.id === selectedId}
+                  busy={sessionBusy[session.id] ?? false}
                   onSelect={() => select(session.id)}
                   onRemove={() => void removeSession(session.id)}
                 />

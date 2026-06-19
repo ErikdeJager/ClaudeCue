@@ -152,7 +152,15 @@
 .actions {
   display: flex;
   flex-shrink: 0;
+  align-items: center;
   gap: 2px;
+}
+
+/* Busy indicator (#42) sitting left of an agent card's action buttons. */
+.headerBusy {
+  display: flex;
+  align-items: center;
+  padding-right: var(--space-4);
 }
 
 .action {

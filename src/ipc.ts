@@ -12,6 +12,7 @@ import type {
   OutputPayload,
   OverviewPanel,
   SessionRecord,
+  StatePayload,
   WorkingDiff,
 } from "./types";
 
@@ -98,9 +99,11 @@ export const checkoutBranch = (cwd: string, branch: string) =>
 export interface SessionEventHandlers {
   onOutput: (payload: OutputPayload) => void;
   onExited: (payload: ExitPayload) => void;
+  /** Busy/idle transition for a session (#42). */
+  onState: (payload: StatePayload) => void;
 }
 
-/** Subscribe to the per-session output/exit events. Returns an unlisten fn. */
+/** Subscribe to the per-session output/exit/state events. Returns an unlisten fn. */
 export async function subscribeSessionEvents(
   handlers: SessionEventHandlers,
 ): Promise<UnlistenFn> {
@@ -112,8 +115,12 @@ export async function subscribeSessionEvents(
     "session://exited",
     (event) => handlers.onExited(event.payload),
   );
+  const unlistenState = await listen<StatePayload>("session://state", (event) =>
+    handlers.onState(event.payload),
+  );
   return () => {
     unlistenOutput();
     unlistenExited();
+    unlistenState();
   };
 }
