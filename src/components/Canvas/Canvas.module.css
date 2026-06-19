@@ -340,3 +340,77 @@
   right: 0;
   width: 30%;
 }
+
+/* --- Detached canvas windows (#84) --- */
+
+/* Pop-out / focus-window button on a tab — sits between the label and ×, styled
+   like .tabClose but a touch smaller for the 13px icon. */
+.tabPopOut {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.tabPopOut:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* A tab whose canvas is open in its own window: dimmed, with the pop-out (now
+   "focus window") button accented so it reads as the live affordance. */
+.tabDetached .tabLabel {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.tabDetached .tabPopOut {
+  color: var(--accent);
+}
+
+/* Note shown in a panel / canvas whose PTYs are rendered in another window. */
+.detachedNote {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+}
+
+.detachedText {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.detachedBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-12);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-button);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.detachedBtn:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}

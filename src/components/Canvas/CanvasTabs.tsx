@@ -16,22 +16,32 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, X } from "lucide-react";
+import { ExternalLink, Plus, X } from "lucide-react";
 
 import { useStore } from "../../store";
 import type { CanvasTab } from "../../types";
 import styles from "./Canvas.module.css";
 
+// How far a tab must be dragged out of the strip (vertically) to tear off into
+// its own window (#84). True cross-window drag isn't native to the webview
+// (wry#648), so this is a pragmatic gesture: pull a tab down/away and release.
+const TEAROFF_THRESHOLD_PX = 50;
+
 /**
  * One canvas tab (#58): click to select, double-click to rename inline (Enter
  * commits, Escape cancels, blur commits), × to close. The tab is a dnd-kit
  * sortable item so the strip reorders by dragging — reusing the #43 pattern. A
- * small activation distance keeps the click (select) working.
+ * small activation distance keeps the click (select) working. A pop-out button
+ * opens the canvas in its own window (#84); when detached, the tab is marked and
+ * its label/pop-out button raise that window instead.
  */
 function Tab({ tab, active }: { tab: CanvasTab; active: boolean }) {
   const selectCanvas = useStore((s) => s.selectCanvas);
   const closeCanvas = useStore((s) => s.closeCanvas);
   const renameCanvas = useStore((s) => s.renameCanvas);
+  const popOutCanvas = useStore((s) => s.popOutCanvas);
+  const focusCanvasWindow = useStore((s) => s.focusCanvasWindow);
+  const detached = useStore((s) => s.detachedCanvasIds.includes(tab.id));
 
   const [editing, setEditing] = useState(false);
   const {
@@ -50,7 +60,7 @@ function Tab({ tab, active }: { tab: CanvasTab; active: boolean }) {
   return (
     <div
       ref={setNodeRef}
-      className={`${styles.tab} ${active ? styles.tabActive : ""} ${isDragging ? styles.tabDragging : ""}`}
+      className={`${styles.tab} ${active ? styles.tabActive : ""} ${detached ? styles.tabDetached : ""} ${isDragging ? styles.tabDragging : ""}`}
       style={style}
       role="tab"
       aria-selected={active}
@@ -81,15 +91,30 @@ function Tab({ tab, active }: { tab: CanvasTab; active: boolean }) {
         <button
           type="button"
           className={styles.tabLabel}
-          onClick={() => selectCanvas(tab.id)}
+          // A detached tab's PTYs live in its window (#84): clicking raises that
+          // window rather than selecting it as the (non-rendered) active tab.
+          onClick={() =>
+            detached ? focusCanvasWindow(tab.id) : selectCanvas(tab.id)
+          }
           onDoubleClick={() => setEditing(true)}
-          title={tab.name}
+          title={detached ? `${tab.name} (in window)` : tab.name}
           {...attributes}
           {...listeners}
         >
           {tab.name}
         </button>
       )}
+      <button
+        type="button"
+        className={styles.tabPopOut}
+        onClick={() =>
+          detached ? focusCanvasWindow(tab.id) : popOutCanvas(tab.id)
+        }
+        title={detached ? "Focus window" : "Open in new window"}
+        aria-label={detached ? "Focus canvas window" : "Open canvas in window"}
+      >
+        <ExternalLink size={13} strokeWidth={1.5} />
+      </button>
       <button
         type="button"
         className={styles.tabClose}
@@ -108,12 +133,14 @@ function Tab({ tab, active }: { tab: CanvasTab; active: boolean }) {
  * an empty canvas, drag-to-reorder. Its own nested DndContext (like the Overview
  * sortable #43) so tab drags don't clash with the app-level drag-into-canvas
  * context; only the Canvas view mounts at a time, so targets never overlap.
+ * Dragging a tab out of the strip tears it off into its own window (#84).
  */
 function CanvasTabs() {
   const canvases = useStore((s) => s.canvases);
   const activeCanvasId = useStore((s) => s.activeCanvasId);
   const addCanvas = useStore((s) => s.addCanvas);
   const reorderCanvases = useStore((s) => s.reorderCanvases);
+  const popOutCanvas = useStore((s) => s.popOutCanvas);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -123,8 +150,16 @@ function CanvasTabs() {
   );
 
   const onDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    const { active, over, delta } = event;
+    // Tear-off (#84): a tab dropped outside the strip (no reorder target) and
+    // pulled away vertically pops out into its own window. The vertical threshold
+    // keeps a horizontal reorder that snapped back from triggering it.
+    if (!over || over.id === active.id) {
+      if (Math.abs(delta.y) > TEAROFF_THRESHOLD_PX) {
+        popOutCanvas(String(active.id));
+      }
+      return;
+    }
     const ids = canvases.map((c) => c.id);
     const oldIndex = ids.indexOf(String(active.id));
     const newIndex = ids.indexOf(String(over.id));

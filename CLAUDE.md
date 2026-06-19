@@ -6,9 +6,11 @@ running and managing many live `claude` CLI sessions at once.
 ## What this app is
 
 An **Overview** "agent wall" of real terminals, a **Canvas** split-panel workspace
-(with file, **git-diff**, and terminal viewers), and a repo-grouped **sidebar**. Each session is a
-**real PTY running `claude`** — ClaudeCue provides the window chrome, navigation,
-persistence, and git-reading; the terminals come from the Claude Code CLI itself.
+(with file, **git-diff**, and terminal viewers), and a repo-grouped **sidebar**. A
+Canvas tab can **pop out into its own native window** for multi-monitor use (#84).
+Each session is a **real PTY running `claude`** — ClaudeCue provides the window
+chrome, navigation, persistence, and git-reading; the terminals come from the
+Claude Code CLI itself.
 
 `claude` is assumed to be installed and authenticated on `PATH` (the app surfaces a
 clear error if it is missing).
@@ -98,6 +100,30 @@ clear error if it is missing).
   resize via **react-resizable-panels**, panels close. The Overview wall and the tab
   strip keep their own nested sortable contexts (#43/#58) — only one view mounts at a
   time, so targets never clash.
+- **Detached canvas windows (#84):** a Canvas tab can open in its **own native
+  window** for multi-monitor use, via a **pop-out button** on the tab or a **drag
+  tear-off** (drag a tab out of the strip). The button/tear-off call Rust
+  `open_canvas_window(id,title)`, which creates a `WebviewWindow` labelled
+  `canvas-<id>` loading the **canvas-only route** `index.html?canvas=<id>`
+  (`windowContext.ts` reads the param → `IS_MAIN_WINDOW` / `WINDOW_LABEL`;
+  `CanvasWindow` renders the shared `Canvas/CanvasSurface` with no sidebar/Overview/
+  tabs). Each window is its **own document** — its own store, `outputBus`, and #18
+  terminal pool — and Tauri session events are **global**, so a detached window's
+  pool renders the same backend PTYs. **One PTY renders in one window at a time**
+  (the #18 width constraint): the pure `computeSessionOwners(canvases, detachedIds)`
+  assigns each session to exactly one window (a detached canvas claims its sessions,
+  else `"main"`); Overview cards + Canvas panels show a **`DetachedNote`** ("running
+  in a separate window" + Focus) instead of a terminal when another window owns it,
+  and each window's `reconcileTerminals` keeps only owned PTYs (dispose-in-one /
+  create-in-the-other, reversed on re-dock). **Cross-window sync:** `set_canvases`
+  persists then broadcasts `canvas://changed` (the **main** window is authoritative
+  for `activeId`; a detached window's write merges only the `canvases` array);
+  opening/closing a window broadcasts `canvas://windows` (the detached id set). The
+  main tab strip marks detached tabs ("in window"), ⌘1–9 (#76) and a detached-tab
+  click **`focus_canvas_window`** (raise) instead of switching, and **closing a
+  detached window re-docks** its canvas (its `Destroyed` handler re-broadcasts the
+  set; the main window reclaims the PTYs). Detached windows are **per-session** — not
+  restored on relaunch (capability `canvas-*` in `capabilities/default.json`).
 
 ## Layout
 
@@ -106,17 +132,21 @@ clear error if it is missing).
 ├── index.html              # Vite entry
 ├── src/                    # Frontend (React + TS)
 │   ├── main.tsx            # React bootstrap (loads fonts + tokens + global CSS)
-│   ├── App.tsx             # App shell: sidebar + Overview/Canvas (native title bar)
+│   ├── App.tsx             # Root: main shell (sidebar + Overview/Canvas) OR a
+│   │                       #   detached CanvasWindow, by window identity (#84)
 │   ├── store.ts            # Zustand store (state + cross-cutting actions)
 │   ├── ipc.ts              # Typed Tauri command/event wrappers
 │   ├── outputBus.ts        # Per-session output pub/sub (bytes kept out of store)
 │   ├── paths.ts            # Shared path helpers (repoName, sessionLabel)
-│   ├── useKeyboardNav.ts   # Global keyboard shortcuts (#24/#76/#77)
+│   ├── windowContext.ts    # Window identity (#84): main vs canvas-<id>, ownership helpers
+│   ├── ownership.ts        # useSessionOwners hook — which window renders each PTY (#84)
+│   ├── useKeyboardNav.ts   # Global keyboard shortcuts (#24/#76/#77/#84)
 │   ├── components/         # React components (CSS Module alongside each):
-│   │                       #   Sidebar, Overview, Canvas, Terminal,
-│   │                       #   FileViewer, FilePicker, DiffInspector,
-│   │                       #   BusyIndicator, Checkbox, NewSessionModal, Toaster,
-│   │                       #   ViewSwitch, ClaudeMissing, EmptyState
+│   │                       #   Sidebar, Overview, Canvas (+ CanvasSurface),
+│   │                       #   CanvasWindow (#84), Terminal, FileViewer, FilePicker,
+│   │                       #   DiffInspector, DetachedNote (#84), BusyIndicator,
+│   │                       #   Checkbox, NewSessionModal, Toaster, ViewSwitch,
+│   │                       #   ClaudeMissing, EmptyState
 │   ├── styles/             # tokens.css (design tokens) + global.css (reset/base)
 │   └── types/              # Shared TS types (backend-mirrored models)
 ├── src-tauri/              # Rust backend (Tauri)
@@ -170,7 +200,12 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   **busy/idle** indicator now exists. Still no approval pills/awaiting-glow/
   floating.)
 - No Archive (single **Remove = kill + forget**), no Skills manager, no Fork, no
-  settings screen, no light mode, no multi-window, no auth.
+  settings screen, no light mode, no auth.
+- **Multi-window** is now supported for **Canvas tabs only** (#84 — reverses the v1
+  single-window rule): a canvas can open in its own native window (pop-out button +
+  drag tear-off) for multi-monitor use. Detached windows are **per-session** (not
+  restored on relaunch); Overview and individual panels do **not** pop out, and a
+  single PTY is never shown in two windows at once (see the architecture note).
 - No code signing / notarization (expect a Gatekeeper warning on first open).
 
 > Status colors were *reserved* design tokens, unused in v1; **#42** put them to use —
@@ -215,7 +250,11 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   `trafficLightPosition`, and there is no custom `Titlebar` component or
   `data-tauri-drag-region` (the earlier overlay chrome from #3 was removed). The
   webview content area sits cleanly below the native bar, so the app shell starts
-  at the top of the content area (no reserved top strip).
+  at the top of the content area (no reserved top strip). **Detached canvas windows
+  (#84)** use the same native chrome; they're created from Rust
+  (`open_canvas_window`) with the label `canvas-<id>` and a `?canvas=<id>` route, so
+  no JS window-create permission is needed — only the `canvas-*` capability so the
+  new window can invoke commands + listen to events.
 - **Builds & distribution:** `npm run tauri build` produces a local **unsigned**
   macOS `.app`/`.dmg` (Gatekeeper warns on first open — no code signing /
   notarization). There is **no in-app auto-update and no release pipeline**: the
@@ -235,10 +274,9 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
 
 ## Tasks
 
-Work is tracked in `TASKS.md`. **Nearly the whole backlog has shipped** (#1–#83 and
-#85–#87; only **#84** is still open) — completed tasks are condensed into an
-**Implemented (completed tasks)** summary at the top (one line each, grouped by theme),
-and the `## Tasks` body holds only the open task(s); per-task detail for completed work
-lives in git history. New tasks, when added, go in the `## Tasks` section in
-`TASKS-TEMPLATE.md` format with `Depends on:` prerequisites. The `(#N)` provenance
-markers throughout this doc index back to that summary + git history.
+Work is tracked in `TASKS.md`. **#1–#87 have shipped** — completed tasks are
+condensed into an **Implemented (completed tasks)** summary at the top (one line each,
+grouped by theme), with full per-task detail in git history; newer open tasks (#88+)
+live in the `## Tasks` body. New tasks go there in `TASKS-TEMPLATE.md` format with
+`Depends on:` prerequisites. The `(#N)` provenance markers throughout this doc index
+back to that summary + git history.

@@ -13,6 +13,8 @@ import {
   applyCanvasDrop,
   payloadToContent,
 } from "./components/Canvas/canvasDrop";
+import { computeSessionOwners } from "./components/Canvas/canvasTree";
+import CanvasWindow from "./components/CanvasWindow/CanvasWindow";
 import ClaudeMissing from "./components/ClaudeMissing/ClaudeMissing";
 import NewSessionModal from "./components/NewSessionModal/NewSessionModal";
 import Overview from "./components/Overview/Overview";
@@ -21,6 +23,7 @@ import { reconcileTerminals } from "./components/Terminal/terminalPool";
 import Toaster from "./components/Toaster/Toaster";
 import { useStore } from "./store";
 import { useKeyboardNav } from "./useKeyboardNav";
+import { IS_MAIN_WINDOW, ownedHere } from "./windowContext";
 
 /**
  * Application shell: a sidebar region (#9) and the main content area, which
@@ -34,11 +37,13 @@ import { useKeyboardNav } from "./useKeyboardNav";
  * tree into the workspace. The Overview wall keeps its own nested sortable
  * context (#43); the two never both have live targets (one view mounts at a time).
  */
-function App() {
+function MainApp() {
   const view = useStore((s) => s.view);
   const claudeMissing = useStore((s) => s.claudeMissing);
   const sessions = useStore((s) => s.sessions);
   const overviewPanels = useStore((s) => s.overviewPanels);
+  const canvases = useStore((s) => s.canvases);
+  const detachedCanvasIds = useStore((s) => s.detachedCanvasIds);
   const init = useStore((s) => s.init);
   const [dragActive, setDragActive] = useState(false);
 
@@ -62,8 +67,14 @@ function App() {
       .flat()
       .filter((p) => p.kind === "terminal")
       .map((p) => p.id);
-    reconcileTerminals([...sessions.map((s) => s.id), ...terminalIds]);
-  }, [sessions, overviewPanels]);
+    // A PTY rendered in a detached canvas window (#84) is owned by that window —
+    // drop it from this window's pool so it isn't rendered/resized in two places.
+    const owners = computeSessionOwners(canvases, detachedCanvasIds);
+    const active = [...sessions.map((s) => s.id), ...terminalIds].filter((id) =>
+      ownedHere(owners, id),
+    );
+    reconcileTerminals(active);
+  }, [sessions, overviewPanels, canvases, detachedCanvasIds]);
 
   const onDragEnd = (event: DragEndEvent) => {
     setDragActive(false);
@@ -100,6 +111,15 @@ function App() {
       <NewSessionModal />
     </div>
   );
+}
+
+/**
+ * Root: the full app shell in the main window, or the canvas-only view in a
+ * detached canvas window (#84). Window identity is fixed for a window's lifetime
+ * (derived from its URL), so this branch is stable — hooks never run conditionally.
+ */
+function App() {
+  return IS_MAIN_WINDOW ? <MainApp /> : <CanvasWindow />;
 }
 
 export default App;

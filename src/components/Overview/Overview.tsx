@@ -19,11 +19,14 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { mergeRepoOrder, repoColor, useStore } from "../../store";
+import { useSessionOwners } from "../../ownership";
 import { repoName, sessionLabel } from "../../paths";
 import type { OverviewPanel, SessionView } from "../../types";
+import { ownedHere } from "../../windowContext";
 // The Focus inspector's diff component is already parameterized by { repoPath,
 // active }, so the Overview diff panel (#39) reuses it directly — one source.
 import BusyIndicator from "../BusyIndicator/BusyIndicator";
+import DetachedNote from "../DetachedNote/DetachedNote";
 import DiffInspector from "../DiffInspector/DiffInspector";
 import EmptyState from "../EmptyState/EmptyState";
 import FileViewer from "../FileViewer/FileViewer";
@@ -116,6 +119,10 @@ interface SessionCardProps {
   groupStart: boolean;
   selected: boolean;
   busy: boolean;
+  /** True when this window renders the PTY; false when it's in a detached
+   * canvas window (#84) and this card shows a "running in a window" note. */
+  owned: boolean;
+  ownerLabel?: string;
   onSelect: () => void;
   onCopyResume: () => void;
   onRemove: () => void;
@@ -128,6 +135,8 @@ function SessionCard({
   groupStart,
   selected,
   busy,
+  owned,
+  ownerLabel,
   onSelect,
   onCopyResume,
   onRemove,
@@ -184,7 +193,11 @@ function SessionCard({
       actions={actions}
       onClickBody={onSelect}
     >
-      <Terminal sessionId={session.id} />
+      {owned ? (
+        <Terminal sessionId={session.id} />
+      ) : (
+        <DetachedNote ownerLabel={ownerLabel} />
+      )}
     </PanelColumn>
   );
 }
@@ -295,6 +308,9 @@ function Overview() {
   const removeOverviewPanel = useStore((s) => s.removeOverviewPanel);
   const reorderOverview = useStore((s) => s.reorderOverview);
   const sessionBusy = useStore((s) => s.sessionBusy);
+  // PTY ownership across windows (#84): an agent shown in a detached canvas window
+  // renders there, not on this wall — its card shows a note instead.
+  const owners = useSessionOwners();
 
   // Drag with a small activation distance so clicking the handle doesn't start a
   // drag; keyboard sensor makes reordering accessible (#43).
@@ -451,6 +467,8 @@ function Overview() {
                         groupStart={groupStart}
                         selected={session.id === selectedId}
                         busy={sessionBusy[session.id] ?? false}
+                        owned={ownedHere(owners, session.id)}
+                        ownerLabel={owners[session.id]}
                         onSelect={() => select(session.id)}
                         onCopyResume={() =>
                           void copyToClipboard(

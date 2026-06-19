@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, Window};
 
 use crate::git::{self, BranchList, WorkingDiff};
 use crate::pty::{SessionError, SessionManager};
@@ -31,6 +31,14 @@ pub struct ExitPayload {
 pub struct StatePayload {
     pub id: String,
     pub busy: bool,
+}
+
+/// Payload for the `canvas://windows` event (#84): the canvas ids that currently
+/// have a detached window open. Every window listens so the main tab strip can
+/// mark detached tabs and each window can recompute terminal ownership.
+#[derive(Clone, Serialize)]
+pub struct CanvasWindowsPayload {
+    pub detached: Vec<String>,
 }
 
 #[tauri::command]
@@ -318,12 +326,117 @@ pub fn get_canvases(store: State<'_, Store>) -> serde_json::Value {
     store.canvases()
 }
 
-/// Replace the multi-canvas tab state (#58) and persist.
+/// Replace the multi-canvas tab state (#58) and persist, then broadcast
+/// `canvas://changed` so every window (main + detached canvas windows, #84) stays
+/// in sync. The **main** window is authoritative for the active tab: a write from
+/// a detached window (which edits only its own canvas's layout) keeps the persisted
+/// `activeId` and replaces just the `canvases` array, so a detached layout edit
+/// can't hijack which tab the main window shows.
 #[tauri::command]
-pub fn set_canvases(store: State<'_, Store>, state: serde_json::Value) -> Result<(), SessionError> {
+pub fn set_canvases(
+    app: AppHandle,
+    window: Window,
+    store: State<'_, Store>,
+    state: serde_json::Value,
+) -> Result<(), SessionError> {
+    let final_state = if window.label() == "main" {
+        state
+    } else {
+        let mut current = store.canvases();
+        match (current.as_object_mut(), state.get("canvases")) {
+            (Some(obj), Some(list)) => {
+                obj.insert("canvases".to_string(), list.clone());
+                current
+            }
+            // No prior object (shouldn't happen — main migrates first): fall back.
+            _ => state,
+        }
+    };
     store
-        .set_canvases(state)
-        .map_err(|e| SessionError::Io(e.to_string()))
+        .set_canvases(final_state.clone())
+        .map_err(|e| SessionError::Io(e.to_string()))?;
+    let _ = app.emit("canvas://changed", final_state);
+    Ok(())
+}
+
+/// The canvas ids that currently have a detached window (#84) — derived from the
+/// live window labels (`canvas-<id>`), optionally excluding one label (used when a
+/// window is closing and may still appear in the registry).
+fn detached_canvas_ids(app: &AppHandle, exclude: Option<&str>) -> Vec<String> {
+    app.webview_windows()
+        .keys()
+        .filter(|label| Some(label.as_str()) != exclude)
+        .filter_map(|label| label.strip_prefix("canvas-").map(str::to_string))
+        .collect()
+}
+
+/// Tell every window which canvases are detached (#84).
+fn broadcast_canvas_windows(app: &AppHandle, exclude: Option<&str>) {
+    let _ = app.emit(
+        "canvas://windows",
+        CanvasWindowsPayload {
+            detached: detached_canvas_ids(app, exclude),
+        },
+    );
+}
+
+/// Open (or focus, if already open) a detached window showing one canvas (#84).
+/// The window loads a canvas-only route (`index.html?canvas=<id>`) under the label
+/// `canvas-<id>`; closing it re-docks the canvas by re-broadcasting the (now
+/// smaller) detached set. Created from Rust, so no JS window-create permission is
+/// needed — only the `canvas-*` capability that lets the new window talk back.
+#[tauri::command]
+pub fn open_canvas_window(app: AppHandle, id: String, title: String) -> Result<(), SessionError> {
+    let label = format!("canvas-{id}");
+    if let Some(existing) = app.get_webview_window(&label) {
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+    let url = format!("index.html?canvas={id}");
+    let window = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
+        .title(title)
+        .inner_size(1000.0, 760.0)
+        .min_inner_size(640.0, 480.0)
+        .build()
+        .map_err(|e| SessionError::Io(e.to_string()))?;
+    // Re-dock on close: when this window is destroyed, re-broadcast the detached
+    // set (excluding this label) so the main window reclaims the canvas + terminals.
+    let on_close = app.clone();
+    let closing = label.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+            broadcast_canvas_windows(&on_close, Some(&closing));
+        }
+    });
+    broadcast_canvas_windows(&app, None);
+    Ok(())
+}
+
+/// Focus an already-detached canvas window (#84) — used by ⌘-jump (#76) and a
+/// click on a detached tab. Returns false if no such window exists.
+#[tauri::command]
+pub fn focus_canvas_window(app: AppHandle, id: String) -> bool {
+    match app.get_webview_window(&format!("canvas-{id}")) {
+        Some(window) => window.set_focus().is_ok(),
+        None => false,
+    }
+}
+
+/// Close a detached canvas window (#84) — used when its canvas tab is closed in
+/// the main window, so the window self-closes (its `Destroyed` handler re-docks).
+#[tauri::command]
+pub fn close_canvas_window(app: AppHandle, id: String) {
+    if let Some(window) = app.get_webview_window(&format!("canvas-{id}")) {
+        let _ = window.close();
+    }
+}
+
+/// The currently-detached canvas ids (#84). A window fetches this on startup since
+/// it may have missed the `canvas://windows` broadcast that fired before it began
+/// listening.
+#[tauri::command]
+pub fn list_canvas_windows(app: AppHandle) -> Vec<String> {
+    detached_canvas_ids(&app, None)
 }
 
 /// `#` followed by 3/4/6/8 hex digits.

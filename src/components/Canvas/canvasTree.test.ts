@@ -4,9 +4,11 @@ import type { CanvasContent, CanvasNode } from "../../types";
 import {
   appendLeaf,
   collectLeaves,
+  computeSessionOwners,
   leafIds,
   leafRects,
   removeLeaf,
+  sessionIdsInLayout,
   spatialNeighbor,
   splitLeaf,
   updateSizes,
@@ -14,6 +16,11 @@ import {
 
 const ph: CanvasContent = { kind: "placeholder" };
 const leaf = (id: string): CanvasNode => ({ type: "leaf", id, content: ph });
+const agentLeaf = (id: string, sessionId: string): CanvasNode => ({
+  type: "leaf",
+  id,
+  content: { kind: "agent", sessionId },
+});
 
 describe("canvas BSP tree (#46)", () => {
   it("splits a leaf to the right into a row split (existing first)", () => {
@@ -128,5 +135,48 @@ describe("canvas spatial navigation (#76)", () => {
     expect(spatialNeighbor(grid, "tl", "up")).toBeNull();
     expect(spatialNeighbor(leaf("solo"), "solo", "right")).toBeNull();
     expect(spatialNeighbor(grid, "missing", "right")).toBeNull();
+  });
+});
+
+describe("multi-window terminal ownership (#84)", () => {
+  it("lists agent/terminal session ids in a layout (ignoring file/diff)", () => {
+    const tree: CanvasNode = {
+      type: "split",
+      id: "s1",
+      dir: "row",
+      sizes: [50, 50],
+      a: agentLeaf("p1", "sess-a"),
+      b: {
+        type: "leaf",
+        id: "p2",
+        content: { kind: "file", repoPath: "/r", file: "README.md" },
+      },
+    };
+    expect(sessionIdsInLayout(tree)).toEqual(["sess-a"]);
+    expect(sessionIdsInLayout(null)).toEqual([]);
+  });
+
+  it("assigns sessions in detached canvases to their window; others to main", () => {
+    const canvases = [
+      { id: "c1", layout: agentLeaf("p1", "sess-a") },
+      { id: "c2", layout: agentLeaf("p2", "sess-b") },
+    ];
+    // c2 detached → its session is owned by canvas-c2; sess-a stays on main (absent).
+    const owners = computeSessionOwners(canvases, ["c2"]);
+    expect(owners["sess-b"]).toBe("canvas-c2");
+    expect(owners["sess-a"]).toBeUndefined();
+    // Nothing detached → every session owned by main (empty map).
+    expect(computeSessionOwners(canvases, [])).toEqual({});
+  });
+
+  it("gives a session shared across detached canvases to the first one", () => {
+    const canvases = [
+      { id: "c1", layout: agentLeaf("p1", "shared") },
+      { id: "c2", layout: agentLeaf("p2", "shared") },
+    ];
+    // Both detached: stable first-wins (canvas order) so windows agree on owner.
+    expect(computeSessionOwners(canvases, ["c1", "c2"]).shared).toBe(
+      "canvas-c1",
+    );
   });
 });

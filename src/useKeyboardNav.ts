@@ -16,13 +16,15 @@
 import { useEffect } from "react";
 
 import { adjacentSessionId, useStore } from "./store";
+import { IS_MAIN_WINDOW } from "./windowContext";
 
 export function useKeyboardNav(): void {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // ⌘N / Ctrl+N — open the new-session flow from anywhere (#26). Intercept
       // before the webview's default (new window) and before xterm; no-op when
-      // the flow is already open.
+      // the flow is already open. Swallowed but inert in a detached canvas window
+      // (#84) — it has no sidebar / new-session UI.
       if (
         (e.metaKey || e.ctrlKey) &&
         !e.shiftKey &&
@@ -31,14 +33,16 @@ export function useKeyboardNav(): void {
       ) {
         e.preventDefault();
         e.stopPropagation();
-        const { newSessionOpen, openNewSession } = useStore.getState();
-        if (!newSessionOpen) openNewSession();
+        if (IS_MAIN_WINDOW) {
+          const { newSessionOpen, openNewSession } = useStore.getState();
+          if (!newSessionOpen) openNewSession();
+        }
         return;
       }
 
       // ⌘\ — toggle the main view between Overview and Canvas (#77). ⌘-based, so
       // it never reaches a focused claude/terminal; inert while the new-session
-      // modal is open. Distinct from ⌘N and the Canvas ⌘1–9 / Shift+arrows (#76).
+      // modal is open, and in a detached canvas window (#84 — no Overview).
       if (
         (e.metaKey || e.ctrlKey) &&
         !e.shiftKey &&
@@ -46,16 +50,17 @@ export function useKeyboardNav(): void {
         e.key === "\\"
       ) {
         const state = useStore.getState();
-        if (state.newSessionOpen) return;
+        if (!IS_MAIN_WINDOW || state.newSessionOpen) return;
         e.preventDefault();
         e.stopPropagation();
         state.setView(state.view === "overview" ? "canvas" : "overview");
         return;
       }
 
-      // ⌘1 … ⌘9 — jump to canvas N, Canvas view only (#76). Safe over a focused
-      // claude session: ⌘+number never reaches the PTY. Skipped while the
-      // new-session modal is open so its own ⌘1–9 recents (#61/#66) aren't taken.
+      // ⌘1 … ⌘9 — jump to canvas N (main window, Canvas view only, #76). Safe over
+      // a focused claude session: ⌘+number never reaches the PTY. Skipped while
+      // the new-session modal is open so its own ⌘1–9 recents (#61/#66) aren't
+      // taken. If canvas N is detached (#84), raise its window instead of switching.
       if (
         (e.metaKey || e.ctrlKey) &&
         !e.shiftKey &&
@@ -63,11 +68,23 @@ export function useKeyboardNav(): void {
         /^[1-9]$/.test(e.key)
       ) {
         const state = useStore.getState();
-        if (state.view !== "canvas" || state.newSessionOpen) return;
+        if (
+          !IS_MAIN_WINDOW ||
+          state.view !== "canvas" ||
+          state.newSessionOpen
+        ) {
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         const canvas = state.canvases[Number(e.key) - 1];
-        if (canvas) state.selectCanvas(canvas.id);
+        if (canvas) {
+          if (state.detachedCanvasIds.includes(canvas.id)) {
+            state.focusCanvasWindow(canvas.id);
+          } else {
+            state.selectCanvas(canvas.id);
+          }
+        }
         return;
       }
 
@@ -86,8 +103,9 @@ export function useKeyboardNav(): void {
       // Don't navigate while the new-session modal/popover is open (#27).
       if (state.newSessionOpen) return;
 
-      // Canvas: Shift+arrows move the keyboard-focused panel spatially (#76).
-      if (state.view === "canvas") {
+      // Canvas: Shift+arrows move the keyboard-focused panel spatially (#76). A
+      // detached canvas window (#84) is always canvas-spatial (it has no Overview).
+      if (state.view === "canvas" || !IS_MAIN_WINDOW) {
         e.preventDefault();
         e.stopPropagation();
         const dir =

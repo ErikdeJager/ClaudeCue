@@ -89,6 +89,39 @@ export function collectLeaves(tree: CanvasNode | null): CanvasLeaf[] {
   return [...collectLeaves(tree.a), ...collectLeaves(tree.b)];
 }
 
+/** The PTY session ids referenced by a layout's agent/terminal leaves (#84) —
+ * the sessions whose terminal a window must render (and own) for that canvas. */
+export function sessionIdsInLayout(tree: CanvasNode | null): string[] {
+  return collectLeaves(tree)
+    .filter((l) => l.content.kind === "agent" || l.content.kind === "terminal")
+    .map((l) => l.content.sessionId)
+    .filter((id): id is string => typeof id === "string");
+}
+
+/**
+ * Which window owns each PTY session (#84). A `claude`/shell PTY is a full-screen
+ * TUI sized for one width, so it must render in exactly **one** window (the #18
+ * constraint). A **detached** canvas (one with an open window) claims the sessions
+ * in its layout; the first detached canvas to reference a session wins (stable by
+ * canvas order); every other session is owned by `"main"` (absent from the map).
+ * Pure — every window computes the same map from the synced canvases + detached
+ * set, so they agree on who renders what without extra coordination.
+ */
+export function computeSessionOwners(
+  canvases: { id: string; layout: CanvasNode | null }[],
+  detachedCanvasIds: Iterable<string>,
+): Record<string, string> {
+  const detached = new Set(detachedCanvasIds);
+  const owners: Record<string, string> = {};
+  for (const canvas of canvases) {
+    if (!detached.has(canvas.id)) continue;
+    for (const sessionId of sessionIdsInLayout(canvas.layout)) {
+      if (!(sessionId in owners)) owners[sessionId] = `canvas-${canvas.id}`;
+    }
+  }
+  return owners;
+}
+
 /**
  * Append a new leaf to the right of the whole canvas — used when content is
  * added without a specific drop target (e.g. the repo menu's "Open diff in

@@ -42,8 +42,8 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> The backlog has almost entirely shipped — only the still-open **#84** remains (in
-> **## Tasks** below). Completed tasks are condensed here — number, title, and one line
+> Tasks #1–#87 have shipped; newer open tasks (#88+) are in **## Tasks** below.
+> Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
 > This is the running record of what ClaudeCue has shipped.
@@ -177,6 +177,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 - #86 Re-homed the "copy resume command" button (#28) onto every agent header in Overview & Canvas, after Focus removal (#75) took its old home.
 - #87 Removed the "Open in Zed" button and all its logic — UI, store action, IPC wrapper, Tauri command, and the `pty.rs` spawn (shared binary-lookup helpers kept for `claude`).
 
+**Multi-window canvases (#84).** Canvas tabs detach into their own native window.
+
+- #84 Open a canvas in its own window (multi-monitor) — pop-out button on the tab + drag tear-off; a canvas-only `?canvas=<id>` window (`CanvasWindow` over the shared `CanvasSurface`) with its own terminal pool over the shared backend PTYs; pure `computeSessionOwners` keeps one PTY in one window (the other shows a `DetachedNote`); cross-window sync via `canvas://changed` / `canvas://windows`; ⌘1–9 + a detached-tab click raise the window (`focus_canvas_window`); re-dock on close; per-session (not restored on relaunch). Reverses the v1 single-window rule.
+
 ---
 
 ## Design reference (dark theme only)
@@ -213,115 +217,10 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#83 and #85–#87 are complete — see **Implemented (completed tasks)** above for
-the index, and git history for full per-task detail. The one open task (**#84**) follows.
-New work goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md)
-format (next number: **#88**), with its `Depends on:` prerequisites.
-
----
-
-### 84. [ ] Open a canvas in its own window (multi-monitor) — pop-out button + drag tear-off
-
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
-**Depends on:** none
-**Created:** 2026-06-19
-
-**Description**
-
-Let the user **open a Canvas tab (#58) in its own native window**, so they can put a different
-canvas on each monitor. Triggered two ways (per the requester): a **pop-out button/menu** on the
-tab (reliable) **and** a **drag-the-tab-out tear-off** gesture (browser-style). The
-canvas-jump keybind (⌘1–9, #76) should **focus the detached window** if that canvas has been
-popped out. Detached windows are **per-session** (not remembered across restarts).
-
-**This reverses the v1 "no multi-window" decision** (CLAUDE.md) — update the docs.
-
-**Research conclusions (Tauri 2):**
-- Multi-window is natively supported — `WebviewWindow` (JS) / `WebviewWindowBuilder` (Rust),
-  `set_focus()` to raise a window (use it for the ⌘-jump-to-detached-canvas), and positioning
-  for multi-monitor placement. Requires the `core:webview:allow-create-webview-window`
-  capability. (Sources: Tauri WebviewWindow API; "Creating Windows in Tauri".)
-- **Tab tear-off (drag a tab out to spawn a window) is NOT native** to Tauri — HTML drag-drop
-  doesn't cross window bounds; it's a known feature request. So implement the **button first**
-  (reliable), then the tear-off as a **custom** gesture (track the pointer past the window edge
-  via Tauri window/cursor position; on release outside, create the window there and remove the
-  tab from the main strip). Flag tear-off as the fragile/higher-effort part. (Sources:
-  tauri#3906, wry#648.)
-- **Terminals can't move across windows** — xterm instances are per-document (the #18 pool
-  lives in one window's DOM). A detached canvas must render its agents in the **new window's own
-  terminal pool**, connected to the **same backend PTYs** (`SessionManager` is shared) via Tauri
-  events. A single `claude` PTY should render in **one window at a time** (the #18 width/TUI
-  constraint): popping out = dispose those terminals in the main window and create + replay
-  scrollback in the new window (and the reverse on re-dock); `resize_pty` is driven by whichever
-  window currently shows the terminal.
-
-**Pieces:**
-- **Secondary window** = a **canvas-only** view (the BSP layout + tab name, minimal chrome — no
-  sidebar/Overview), reusing the Canvas renderer; loaded via a param/route (e.g.
-  `?canvas=<id>`) with a unique window label (`canvas-<id>`).
-- **Cross-window state sync:** the canvas layout + session list must stay consistent across
-  windows — route mutations through the backend and broadcast change events (Tauri events) so
-  every window updates (or each window re-reads on the relevant event). (Largest architectural
-  lift.)
-- **Window↔canvas registry (backend):** track which canvas lives in which window so ⌘-jump can
-  `set_focus()` the right window, and the main tab strip can mark a canvas as "detached."
-- **⌘-jump (#76) integration:** ⌘N where canvas N is detached → `set_focus()` its window instead
-  of switching the main view.
-- **Main tab strip:** a detached canvas's tab shows it's in a window (grayed / "in window"
-  marker); **closing the detached window re-docks** the canvas back into the main strip.
-- **No persistence:** detached windows close on quit; relaunch starts single-window (all
-  canvases in the main window).
-
-Out of scope: persisting detached windows across restarts (per-session, chosen); popping out
-Overview or individual panels (canvases only); showing the same PTY in two windows at once.
-
-**Subtasks**
-
-1. [ ] Capability + window creation: add `core:webview:allow-create-webview-window`; create a
-   `WebviewWindow` rendering a **canvas-only** route for a given canvas id (unique label);
-   focus it if it already exists.
-2. [ ] Pop-out **button** (+ context-menu item) on the Canvas tab (`CanvasTabs`, #58) → open /
-   focus that canvas's window.
-3. [ ] Per-window terminals: the detached window has its own terminal pool subscribing to the
-   shared PTYs' events; the main window stops rendering those agents (one PTY → one window;
-   dispose+replay on move/re-dock); `resize_pty` from the showing window.
-4. [ ] Cross-window state sync (mutations via backend + broadcast events) + a window↔canvas
-   registry; mark detached canvases in the main tab strip; re-dock on window close.
-5. [ ] ⌘-jump (#76): focus the detached window when its canvas is targeted.
-6. [ ] Drag **tear-off**: dragging a tab out of the window spawns its window at the drop
-   location (custom; build after the button works). Flag as fragile per the research.
-7. [ ] Docs: update CLAUDE.md (no longer single-window-only).
-
-**Acceptance criteria**
-
-- [ ] A canvas tab can be opened in its own window via a pop-out button (and via dragging the
-  tab out); it renders that canvas (BSP layout + live agents) in the new window.
-- [ ] Two canvases can be shown on two monitors simultaneously, each interactive; an agent's
-  terminal works in the detached window (typing/output) and is not double-rendered in the main
-  window.
-- [ ] ⌘N for a detached canvas focuses its window (raises it) rather than switching the main
-  view; the main tab strip marks the canvas as detached.
-- [ ] Closing a detached window re-docks its canvas into the main window; state stays consistent
-  across windows (closing a panel in one reflects everywhere).
-- [ ] Detached windows are not restored on relaunch (per-session); the app still builds/lints
-  and CLAUDE.md no longer says single-window-only.
-
-**Notes**
-
-- Decisions (from the requester, after research): both a pop-out button and drag tear-off;
-  per-session (no persistence); ⌘-jump focuses a detached canvas's window.
-- Builds on the now-shipped **#76** (the ⌘1–9 canvas-jump this extends to `set_focus` a detached window).
-  Coordinate with #77 (⌘\ view toggle — inert in a canvas-only secondary window) and #79
-  (sidebar click → canvas focus should focus the detached window when its canvas is popped out).
-- Big architectural change (multi-window + per-window terminal pools + cross-window state) and a
-  reversal of the v1 single-window rule — likely the largest task in the backlog; consider
-  phasing (button + core multi-window first; tear-off second).
-- Key code: `src-tauri/tauri.conf.json` + `capabilities/` (window-create permission),
-  `src-tauri/src/lib.rs` (window management, event targeting), `src/components/Canvas/*`
-  (canvas-only window view, `CanvasTabs` pop-out + tear-off), `src/components/Terminal/terminalPool.ts`
-  (per-window pool), `src/ipc.ts` / `src/outputBus.ts` (per-window event routing), `src/store.ts`
-  (cross-window sync, window↔canvas registry), `src/useKeyboardNav.ts` (⌘-jump → focus window),
-  `CLAUDE.md` (multi-window).
+Tasks #1–#87 are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. The open tasks (#88+) follow. New work goes
+here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
+its `Depends on:` prerequisites.
 
 ---
 

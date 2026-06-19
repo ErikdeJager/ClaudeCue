@@ -107,9 +107,26 @@ export const getCanvasLayout = () =>
 export const getCanvases = () =>
   invoke<PersistedCanvases | null>("get_canvases");
 
-/** Persist the multi-canvas tab state (#58). */
+/** Persist the multi-canvas tab state (#58). The backend broadcasts
+ * `canvas://changed` so other windows (#84) stay in sync. */
 export const setCanvases = (state: PersistedCanvases) =>
   invoke<void>("set_canvases", { state });
+
+/** Open (or focus, if already open) a detached window for canvas `id` (#84). */
+export const openCanvasWindow = (id: string, title: string) =>
+  invoke<void>("open_canvas_window", { id, title });
+
+/** Raise the detached window for canvas `id` (#84); false if none is open. */
+export const focusCanvasWindow = (id: string) =>
+  invoke<boolean>("focus_canvas_window", { id });
+
+/** Close the detached window for canvas `id` (#84) — it re-docks on close. */
+export const closeCanvasWindow = (id: string) =>
+  invoke<void>("close_canvas_window", { id });
+
+/** Canvas ids that currently have a detached window (#84); fetched on startup
+ * since a just-opened window may have missed the `canvas://windows` broadcast. */
+export const listCanvasWindows = () => invoke<string[]>("list_canvas_windows");
 
 /** Repo-relative viewable (text-ish) files in a repo (file viewer, #44). */
 export const listFiles = (repo: string) =>
@@ -167,5 +184,32 @@ export async function subscribeSessionEvents(
     unlistenOutput();
     unlistenExited();
     unlistenState();
+  };
+}
+
+export interface CanvasEventHandlers {
+  /** The canvas tab set changed in some window (#84) — re-apply the new list. */
+  onCanvasesChanged: (state: PersistedCanvases) => void;
+  /** The set of detached canvas windows changed (#84). */
+  onWindowsChanged: (detachedCanvasIds: string[]) => void;
+}
+
+/** Subscribe to cross-window canvas sync events (#84): `canvas://changed`
+ * (tab/layout edits in any window) and `canvas://windows` (a detached window
+ * opened/closed). Returns an unlisten fn. */
+export async function subscribeCanvasEvents(
+  handlers: CanvasEventHandlers,
+): Promise<UnlistenFn> {
+  const unlistenChanged = await listen<PersistedCanvases>(
+    "canvas://changed",
+    (event) => handlers.onCanvasesChanged(event.payload),
+  );
+  const unlistenWindows = await listen<{ detached: string[] }>(
+    "canvas://windows",
+    (event) => handlers.onWindowsChanged(event.payload.detached),
+  );
+  return () => {
+    unlistenChanged();
+    unlistenWindows();
   };
 }
