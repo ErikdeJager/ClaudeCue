@@ -175,7 +175,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 Tasks #1–#63 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. New work goes here as a fresh `### N.` entry
-in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#85**), with its
+in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format (next number: **#86**), with its
 `Depends on:` prerequisites.
 
 ---
@@ -1627,3 +1627,34 @@ Overview or individual panels (canvases only); showing the same PTY in two windo
   (per-window pool), `src/ipc.ts` / `src/outputBus.ts` (per-window event routing), `src/store.ts`
   (cross-window sync, window↔canvas registry), `src/useKeyboardNav.ts` (⌘-jump → focus window),
   `CLAUDE.md` (multi-window).
+
+---
+
+### 85. [ ] Canvas tab — make the × close button slightly bigger
+
+**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+The × close button on a Canvas tab (#58) is a little small / hard to hit. Make it **slightly
+bigger**. It's `.tabClose` in `Canvas.module.css` (currently `width`/`height: 16px`) holding a
+`<X size={12}>` icon (`CanvasTabs.tsx`). Bump both modestly — e.g. the hit area to ~18–20px and
+the icon to ~14px (tune to taste; keep it *slightly* bigger, not dominating — the tab's add (+)
+button is 24px for reference). Keep the existing hover treatment, tokens, and alignment within
+the tab.
+
+Out of scope: other × buttons (sidebar row remove, panel close, Overview card ×) — only the
+Canvas tab close.
+
+**Acceptance criteria**
+
+- [ ] The Canvas tab's × close button is visibly a bit larger and easier to click (bigger hit
+  area + icon) than before, without overwhelming the tab.
+- [ ] Only the Canvas tab close changes; hover / alignment / tokens preserved.
+
+**Notes**
+
+- Key code: `src/components/Canvas/Canvas.module.css` (`.tabClose`, ~line 86 — `width`/`height:
+  16px`), `src/components/Canvas/CanvasTabs.tsx` (the `<X size={12}>` icon, ~line 100).
