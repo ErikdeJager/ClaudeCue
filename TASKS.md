@@ -3105,7 +3105,7 @@ that content there.
 ### 48. [ ] Iteration pass 3 — UI visual polish & design-system consistency (UI-focused)
 
 **Status:** Not started
-**Depends on:** #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #44, #45, #46, #47 _(all current open tasks — this iteration runs only after the entire existing backlog is complete)_
+**Depends on:** #23, #24, #25, #26, #27, #28, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #44, #45, #46, #47, #50, #51, #52, #53, #54 _(all current open tasks — this iteration runs only after the entire existing backlog is complete)_
 **Created:** 2026-06-19
 
 **Description**
@@ -3252,3 +3252,251 @@ regressed.
   self-review practice (open-ended "what would you improve?", adversarial weakness-listing,
   contract-style non-negotiables). Together #48 + #49 are the UI/UX iteration of the
   #16/#17 polish series, covering all of #18–#47.
+
+---
+
+### 50. [ ] Overview selected-agent border: use the repo color + make it thinner & subtler
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Refine the selected-agent highlight in Overview (built in #23/#36). Today the selected
+card draws a **2px `--accent` frame** (`.cardSelected::after { border: 2px solid
+var(--accent) }` in `Overview.module.css`) plus an accent-dim header tint. Two changes:
+
+1. The highlight should use the **repo's custom color** (#35, `repoColor(path)`), not the
+   global accent — so the selection frame matches the agent's repo identity/badge.
+2. Make the border **thinner and more subtle** — a gentle indicator, not a demanding 2px
+   accent frame.
+
+**Subtasks**
+
+1. [ ] Drive the selected frame color from the repo color (inline style / CSS custom
+   property, since it's dynamic per repo) instead of `var(--accent)`.
+2. [ ] Reduce the border weight (e.g. 2px → 1px) and soften it (a lower-opacity tint of
+   the repo color) so it's subtle, not demanding; reconsider the `--accent-dim` header
+   tint similarly (quiet, tasteful).
+3. [ ] Keep it layout-shift-free (the existing `::after` overlay) and ensure it reads
+   clearly across different repo colors over the terminal background.
+
+**Acceptance criteria**
+
+- [ ] The selected agent's border is the repo's color (matching its badge), not the global
+  accent.
+- [ ] The border is visibly thinner/subtler than the current 2px accent frame while still
+  clearly indicating selection.
+- [ ] No layout shift; reads well across different repo colors.
+
+**Notes**
+
+- Files: `src/components/Overview/Overview.tsx` + `Overview.module.css` (`.cardSelected`),
+  `src/store.ts` (`repoColor`/`repoColors` from #35). Refines #23 (border) + #36 (badges);
+  both done. The repo color is the only dynamic value — inject via inline style / CSS var.
+
+---
+
+### 51. [ ] Resizable Focus inspector (drag to expand/minimize) + responsive content
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+In **Focus mode only**, the right-side inspector panel (diff #13, markdown #40, and future
+tabs) should be **resizable by dragging its edge** so the user can expand or shrink it, and
+its **content must be responsive** — the markdown view, diff view, and any other panels
+reflow/rescale as the width changes. Today they can't: the inspector is pinned to a fixed
+360px and `.inspectorInner` is hard-set to `width: 360px` *specifically so content does not
+reflow mid-slide*. That trade-off must be replaced with a fluid, resizable panel.
+
+**Subtasks**
+
+1. [ ] Add a **drag handle** on the inspector's left edge to resize its width (sensible
+   min/max bounds; smooth, pointer-based). Focus inspector only — not Overview/Canvas
+   columns.
+2. [ ] Make `.inspectorInner` **fluid** (`width: 100%`) instead of fixed 360px so content
+   reflows with the panel; reconcile with the open/close slide so opening still animates to
+   the user's chosen width.
+3. [ ] **Persist** the chosen inspector width and restore it on launch (sensible default).
+4. [ ] Ensure **all inspector content is responsive**: the markdown viewer (#40) reflows
+   (wrap, tables/images fit, code blocks scroll within the panel), the diff view (#13
+   unified/split) adapts, and the tab strip stays usable at narrow and wide widths. Future
+   tabs (e.g. universal file viewer #44) inherit this responsive container.
+
+**Acceptance criteria**
+
+- [ ] The Focus inspector can be dragged wider/narrower within bounds, and the width
+  persists across restarts.
+- [ ] Markdown and diff content reflow responsively as the panel resizes (no clipped/
+  fixed-360px content); the tab strip stays usable.
+- [ ] Open/close still animates; Overview/Canvas are unaffected.
+
+**Notes**
+
+- Files: `src/components/Focus/Focus.tsx` + `Focus.module.css` (`.inspector` /
+  `.inspectorOpen` / `.inspectorInner` — currently fixed `width: 360px`),
+  `src/components/DiffInspector/*`, `src/components/MarkdownViewer/*`, `src/store.ts`
+  (persist width). Builds on #12/#13/#40 (done). Could reuse `react-resizable-panels`
+  (already proposed for Canvas #46) or a small custom edge drag handle — prefer the
+  lightest fit for a single edge.
+
+---
+
+### 52. [ ] Custom checkbox component (replace native checkboxes app-wide)
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Replace native `<input type="checkbox">` elements with a **custom, on-system Checkbox
+component**, used everywhere a checkbox appears. The known interactive checkbox today is the
+**branch-switch confirmation** in the new-session popover (`NewSessionModal.tsx` — the
+"this may disrupt the running agent" acknowledgement from #27). The custom checkbox should
+match the design tokens (Catppuccin #33) with clear checked / unchecked / hover /
+focus-visible / disabled states.
+
+**Subtasks**
+
+1. [ ] Build a reusable `Checkbox` (e.g. `src/components/Checkbox/*`): a styled,
+   **accessible** control — proper labeling, keyboard toggle (Space), visible
+   `:focus-visible`, checked/disabled (and indeterminate if useful) states — built on a
+   visually-hidden native input (for a11y) with a custom box, or a full ARIA checkbox.
+   On-system tokens only. Simple API (`checked`, `onChange`, `label`, `disabled`).
+2. [ ] Replace the native checkbox in `NewSessionModal.tsx` (the #27 branch-switch confirm)
+   with the new component.
+3. [ ] **Audit for any other native checkboxes** (grep `type="checkbox"`) and replace them.
+4. [ ] **Markdown task-list checkboxes** (`MarkdownViewer.module.css` styles
+   `.markdown input[type="checkbox"]` — GFM `- [ ]` items from react-markdown) are
+   **read-only rendered file content**, not app controls: leave them non-interactive, but
+   optionally restyle to visually match the custom checkbox (don't make them edit the file).
+
+**Acceptance criteria**
+
+- [ ] A reusable, accessible, on-system `Checkbox` exists and is used for the branch-switch
+  confirmation (and any other app checkboxes).
+- [ ] No interactive native `type="checkbox"` controls remain in the app UI.
+- [ ] Markdown task-list checkboxes still render (read-only), visually consistent.
+
+**Notes**
+
+- Files: new `src/components/Checkbox/*`, `src/components/NewSessionModal/*` (uses it),
+  `src/components/MarkdownViewer/MarkdownViewer.module.css` (task-list styling). Keep a real
+  input under the hood or full ARIA — the #49 accessibility pass will check this. Reuse this
+  component for every future checkbox.
+
+---
+
+### 53. [ ] Redefine the "start a new agent" model — focused UI/UX redesign
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Holistically **redefine the new-session ("start a new agent") experience from a UI/UX
+perspective** — the most important entry action in the app. The underlying **function
+already works** (#27: folder pick, recents, branch auto-detect, `git checkout`, the
+destructive-branch confirmation, spawn); **do not change behavior/backend** — only rethink
+and improve the *interaction model* and visuals. (This consolidates the earlier "move the
+popover" idea into a proper redesign.)
+
+Direction:
+
+- **Placement & motion:** the new-session UI should appear **top-left, expanding from the
+  New session button** (as if the button itself opens up), with a **fun expand animation**
+  from the button (transform/opacity, 60fps; reduced-motion → simple fade). This
+  **supersedes #27's bottom-left placement.**
+- **Redefine the model:** carefully re-examine and improve *how* a user starts an agent —
+  the steps, ordering, hierarchy, defaults, discoverability, and how branches/recents are
+  presented — to minimize friction and make the common path obvious. Treat all entry points
+  as one coherent model: the top New session button, ⌘N (#26), the per-repo **+**, and the
+  context-menu "New session" (#54).
+
+**Method (UI/UX only — function is fixed):** inventory the current flow, identify friction
+against UX heuristics (recognition over recall, minimal steps, sensible defaults, visible
+status, error prevention for the destructive checkout), then redefine and implement the
+improved model. Think carefully and choose the best interaction shape (expanding panel vs
+guided mini-flow vs inline form) — justify the choice in the notes.
+
+**Subtasks**
+
+1. [ ] Audit the current new-session UX (#27); write down the friction points + the
+   redefined model (what changes and why) before building.
+2. [ ] **Placement/motion:** re-anchor to top-left, expanding from the New session button,
+   with a fun animation (reduced-motion fallback).
+3. [ ] **Flow redesign:** improve the internal steps/hierarchy — folder + recents, branch
+   detection/selection presentation, optional name, and the destructive-checkout
+   confirmation — into a short, obvious, low-friction path with good defaults and clear
+   status. Keep autofocus + Enter-to-create; Escape / outside-click to close.
+4. [ ] Make all entry points (top button, ⌘N #26, per-repo +, context-menu New session #54)
+   open the same redefined model consistently.
+5. [ ] Keep all #27 functionality intact (branches, checkout, warning, spawn) — UI/UX only.
+
+**Acceptance criteria**
+
+- [ ] The start-a-new-agent flow is visibly redesigned: top-left, expanding from the New
+  session button with a fun animation (reduced-motion → fade).
+- [ ] The interaction model is clearly improved (fewer/clearer steps, good defaults, obvious
+  common path) and consistent across all entry points.
+- [ ] No behavior/backend change; all #27 functionality still works.
+
+**Notes**
+
+- Files: `src/components/NewSessionModal/*` (reworked/possibly renamed), `src/components/
+  Sidebar/Sidebar.tsx` (button is the visual origin; per-repo + and context-menu entry),
+  `src/store.ts` (`newSessionOpen`/`newSessionRepo`). **Supersedes #27's bottom-left
+  placement** (function from #27 stays). Coordinates with #26 (button/⌘N), #52 (the confirm
+  now uses the custom checkbox), and #54 (context-menu "New session"). Focused UX redesign —
+  document the chosen model + rationale; revisited again in the #49 UX pass.
+
+---
+
+### 54. [ ] Repo context menu: "New session" as the first item + red/danger styling for destructive actions
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-19
+
+**Description**
+
+Refine the repo/folder right-click context menu (introduced in #31, which also hosts Change
+color #35, Open diff viewer #39, Open markdown viewer #41). Two changes:
+
+1. Add **"New session"** (start a session in this repo) as the **very first** menu item.
+   Even though the inline **+** button exists, having it in the context menu is expected and
+   convenient — it runs the same new-session-in-this-repo action.
+2. **Mark destructive actions** (notably **Forget** from #31) with a clear **red / danger**
+   treatment so they're obviously dangerous (red text/icon; ideally a separator grouping
+   destructive items apart from neutral ones).
+
+**Subtasks**
+
+1. [ ] Add "New session" as the **first** context-menu item → triggers the same
+   new-session-in-this-repo flow as the inline **+** (the redefined model from #53/#27).
+2. [ ] Apply a **danger style** (red — the Catppuccin Red / `--status-error` token from #33)
+   to destructive items (Forget), visually distinct from neutral items.
+3. [ ] Order the menu sensibly: **New session** (first) → neutral items (Change color #35,
+   Open diff viewer #39, Open markdown viewer #41) → separator → **Forget** (danger, last).
+4. [ ] Keep the menu on-system and accessible (keyboard navigable, focus-visible; dismiss on
+   Escape / outside click).
+
+**Acceptance criteria**
+
+- [ ] The repo context menu lists "New session" first and starts a session in that repo.
+- [ ] Forget (and any destructive action) is clearly styled as dangerous (red), set apart
+  from neutral items.
+- [ ] Menu remains on-system, keyboard-accessible, and consistent.
+
+**Notes**
+
+- Files: `src/components/Sidebar/Sidebar.tsx` (+ css) — the #31 context menu; reuse the
+  per-repo new-session action (`openNewSession(repo)` / spawn) and the Red token (#33).
+  Coordinates with #31 (Forget), #35/#39/#41 (other menu items). Some neutral items may not
+  exist yet if their tasks are open — order/group around whatever items are present.
