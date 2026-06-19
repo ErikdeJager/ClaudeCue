@@ -85,8 +85,10 @@
 
 .tabClose {
   display: flex;
-  width: 16px;
-  height: 16px;
+  /* Slightly bigger hit area so it's easier to click (#85) — still well under
+     the 24px add (+) button so it doesn't dominate the tab. */
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;

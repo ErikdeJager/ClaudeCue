@@ -97,7 +97,7 @@ function Tab({ tab, active }: { tab: CanvasTab; active: boolean }) {
         title="Close canvas"
         aria-label={`Close ${tab.name}`}
       >
-        <X size={12} strokeWidth={1.5} />
+        <X size={14} strokeWidth={1.5} />
       </button>
     </div>
   );

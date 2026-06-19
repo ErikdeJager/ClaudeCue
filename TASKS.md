@@ -1646,9 +1646,9 @@ Overview or individual panels (canvases only); showing the same PTY in two windo
 
 ---
 
-### 85. [ ] Canvas tab — make the × close button slightly bigger
+### 85. [x] Canvas tab — make the × close button slightly bigger
 
-**Status:** Not started · _(Not started | In progress | Blocked | Done)_
+**Status:** Done · _(Not started | In progress | Blocked | Done)_
 **Depends on:** none
 **Created:** 2026-06-19
 
@@ -1666,9 +1666,9 @@ Canvas tab close.
 
 **Acceptance criteria**
 
-- [ ] The Canvas tab's × close button is visibly a bit larger and easier to click (bigger hit
+- [x] The Canvas tab's × close button is visibly a bit larger and easier to click (bigger hit
   area + icon) than before, without overwhelming the tab.
-- [ ] Only the Canvas tab close changes; hover / alignment / tokens preserved.
+- [x] Only the Canvas tab close changes; hover / alignment / tokens preserved.
 
 **Notes**
 
