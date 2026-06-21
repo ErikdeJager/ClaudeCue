@@ -604,6 +604,18 @@ fn is_hex_color(value: &str) -> bool {
     }
 }
 
+/// True for an `http`/`https` URL containing no control/whitespace characters
+/// (#109). The scheme check stops an escape-crafted terminal link from opening an
+/// arbitrary scheme (`file:`, `javascript:`, …) or local file; rejecting
+/// control/whitespace is defense in depth on top of `open` already receiving the
+/// URL as a single non-shell argument. The scheme is matched case-insensitively
+/// per RFC 3986.
+fn is_http_url(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    let has_scheme = lower.starts_with("http://") || lower.starts_with("https://");
+    has_scheme && !value.chars().any(|c| c.is_control() || c.is_whitespace())
+}
+
 #[tauri::command]
 pub fn current_branch(cwd: String) -> String {
     git::current_branch(cwd)
@@ -747,6 +759,26 @@ pub fn open_data_folder(store: State<'_, Store>) -> Result<(), SessionError> {
     Ok(())
 }
 
+/// Open an `http`/`https` URL in the user's default browser (#109) — a ⌘-click on a
+/// linkified terminal URL routes here. Mirrors the `open_data_folder` OS-open
+/// precedent: macOS `open <url>` already respects the default browser. Only
+/// `http`/`https` is accepted (so an escape-crafted terminal link can't open another
+/// scheme or a local file), and `open` runs **without a shell**
+/// (`Command::new("open").arg(url)`), so there is no shell-injection vector.
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), SessionError> {
+    if !is_http_url(&url) {
+        return Err(SessionError::Io(format!(
+            "refusing to open non-http(s) URL `{url}`"
+        )));
+    }
+    std::process::Command::new("open")
+        .arg(&url)
+        .spawn()
+        .map_err(|e| SessionError::Io(e.to_string()))?;
+    Ok(())
+}
+
 /// The ClaudeCue app version (#100 Settings → About), from the crate version.
 #[tauri::command]
 pub fn app_version() -> String {
@@ -769,5 +801,31 @@ pub fn claude_version() -> Option<String> {
         None
     } else {
         Some(text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_url_accepts_http_and_https() {
+        assert!(is_http_url("http://localhost:5173"));
+        assert!(is_http_url("https://example.com/path?q=1#frag"));
+        // Scheme is case-insensitive (RFC 3986).
+        assert!(is_http_url("HTTPS://Example.com"));
+    }
+
+    #[test]
+    fn http_url_rejects_other_schemes_and_malformed() {
+        assert!(!is_http_url("file:///etc/passwd"));
+        assert!(!is_http_url("mailto:a@b.com"));
+        assert!(!is_http_url("javascript:alert(1)"));
+        // Bare host:port (no scheme) is out of scope (#109).
+        assert!(!is_http_url("localhost:3000"));
+        assert!(!is_http_url(""));
+        // Defense in depth: no control/whitespace characters.
+        assert!(!is_http_url("https://example.com/a b"));
+        assert!(!is_http_url("https://example.com/\nmalicious"));
     }
 }

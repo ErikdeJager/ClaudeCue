@@ -44,7 +44,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> The backlog has fully shipped (#1–#108).
+> The backlog has fully shipped (#1–#109).
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -265,6 +265,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #108 Made the left sidebar **drag-resizable**: a thin right-edge handle (pointer-capture drag, `col-resize`, accent-dim on hover; double-click resets) sets its width, clamped to **[180, 560]** (default 260) and **persisted** across restarts — a dedicated Rust `sidebar_width` value with its own `get` / `set` commands (separate from the #100 Settings blob so the modal draft can't clobber a drag); the width restores + re-clamps on boot, with a debounced persist during the drag. Main-window only; the main content reflows via the existing flex layout.
 
+**Clickable links in terminals (#109).**
+
+- #109 Made `http`/`https` URLs printed in terminals **⌘-clickable** to open in the user's **default browser** — both agent `claude` PTYs **and** plain shell terminal panels (#72), since the single persistent terminal pool (`terminalPool.ts`) owns them all, so the change is one addition in `createHost()`. Loads a `WebLinksAddon` (`@xterm/addon-web-links`) whose custom `activate` handler opens **only on a ⌘-click** (`event.metaKey`) — a plain click is left to the terminal/TUI (drag-to-select, `claude`'s own mouse handling) — routing through a new **dependency-free** Rust `open_url(url)` command (registered in `lib.rs`, typed IPC `openUrl`) that **rejects any non-`http`/`https` scheme** and shells out to macOS `open <url>` **without a shell** (no injection), mirroring the `open_data_folder` precedent (no opener/shell plugin, no new capability). Only `http`/`https` is linkified (bare `host:port`, `file://`, `mailto:`, other schemes are out of scope); the scheme check (`is_http_url`) is unit-tested. Hover/⌘-click runtime behavior is best-effort (xterm rendering isn't unit-testable).
+
 ---
 
 ## Design reference (dark theme only)
@@ -301,7 +305,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#108 are complete — see **Implemented (completed tasks)** above for the index,
+Tasks #1–#109 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. Open tasks are listed below. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
@@ -314,89 +318,6 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 109. [ ] Clickable links in terminals — ⌘-click a URL to open it in the default browser
-
-**Status:** Not started
-**Depends on:** none
-**Created:** 2026-06-21
-
-**Description**
-
-Inside terminals, a user should be able to **⌘-click an `http`/`https` URL printed in
-the output to open it in their default browser** — so dev-server URLs
-(`http://localhost:5173`), pull-request / CI links, docs, etc. that `claude` or a shell
-command prints are one click away instead of a copy-paste. This applies to **both**
-terminal kinds — agent `claude` PTYs **and** plain shell terminal panels (#72) — because
-both are owned by the single persistent terminal pool (`src/components/Terminal/terminalPool.ts`),
-so the change is made **once** in `createHost()` and lights up everywhere a terminal
-renders (Overview cards, Canvas panels, and detached canvas windows #84).
-
-**Activation — ⌘-click only.** Hovering a URL underlines it and shows a pointer cursor,
-but only a **⌘-click** opens it. A plain click is left to the terminal/TUI so it doesn't
-clash with drag-to-select text or `claude`'s own mouse handling — `claude` is a
-full-screen TUI that can enable mouse reporting, and a modifier-click is both the
-macOS / VS Code / iTerm convention and the standard way to bypass app mouse capture.
-
-**Link scope — `http`/`https` only.** Only `http` and `https` URLs are linkified.
-Bare `host:port` (e.g. `localhost:3000` with no scheme), `file://`, `mailto:`, and other
-schemes are **not** linkified in this task, and the backend opener **rejects anything that
-isn't `http`/`https`** — so a program emitting an escape-crafted link can't make the app
-open an arbitrary scheme or local file.
-
-**Opening mechanism.** Mirror the existing OS-open precedent `open_data_folder`
-(`src-tauri/src/commands.rs`): a new dependency-free Rust command `open_url(url)` that
-validates the scheme is `http`/`https` and then shells out to macOS `open <url>` via
-`std::process::Command` (no shell involved → no injection). `open <url>` already respects
-the user's **default** browser. This keeps the plugin-free approach — no
-`@tauri-apps/plugin-opener` / shell plugin and no new capability permission.
-
-**Frontend detection.** Add the standard `@xterm/addon-web-links` and load a
-`WebLinksAddon` in `createHost()` alongside `FitAddon` / `WebglAddon`, with a custom
-`activate(event, uri)` handler that opens **only** when `event.metaKey` is set, via the
-new IPC `openUrl(uri)` (instead of the addon's default `window.open`).
-
-**Subtasks**
-
-1. [ ] **Backend command.** Add `open_url(url: String)` in `src-tauri/src/commands.rs`
-   (mirroring `open_data_folder`): parse the URL, accept only `http`/`https` scheme (else
-   return a `SessionError`), then `std::process::Command::new("open").arg(url).spawn()`.
-   Register it in the `invoke_handler` in `src-tauri/src/lib.rs`.
-2. [ ] **IPC wrapper.** Add a typed `openUrl(url: string)` to `src/ipc.ts`.
-3. [ ] **Terminal linkify.** Add `@xterm/addon-web-links` to `package.json`; in
-   `terminalPool.ts createHost()` load a `WebLinksAddon` whose `activate` handler opens
-   on `event.metaKey` only, calling `openUrl(uri)`; dispose it in `host.dispose` like the
-   other addons.
-4. [ ] **Verify** in an agent terminal and a shell terminal panel (#72), across Overview
-   and Canvas (detached window best-effort).
-
-**Acceptance criteria**
-
-- [ ] An `http`/`https` URL printed in an agent terminal underlines on hover, and a
-      **⌘-click** opens it in the default browser.
-- [ ] The same works in a plain shell terminal panel (#72).
-- [ ] A plain (non-⌘) click does **not** open the link — text selection and TUI mouse
-      behavior are unaffected.
-- [ ] Non-`http(s)` text (bare `host:port`, `file://`, other schemes) is not opened; the
-      backend `open_url` rejects any non-`http`/`https` URL.
-- [ ] `npm run build`, `npm run lint`, `npm test`, `cargo clippy`, and
-      `cargo test` pass; `cargo fmt` is clean.
-
-**Notes**
-
-- Both terminal kinds share the pool, so this is a single change in `createHost()`
-  (`terminalPool.ts`) — no per-call-site work and no change to `Terminal.tsx`.
-- Default browser is implicit in macOS `open <url>`; no browser selection UI.
-- `open` is invoked without a shell (`Command::new("open").arg(url)`), so there's no
-  shell-injection vector; the `http`/`https` scheme check guards against escape-crafted
-  links to dangerous schemes/files.
-- **Out of scope (possible follow-ups):** bare `host:port` linkification, `file://` /
-  `mailto:` links, a Settings toggle to disable terminal links, and any hover tooltip
-  beyond the underline.
-- **Depends on: none** — the terminal pool (#18), the typed IPC layer, and the
-  `open_data_folder` OS-open precedent all already exist (#1–#108 shipped).
 
 ---
 

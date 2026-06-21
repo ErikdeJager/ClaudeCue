@@ -147,6 +147,7 @@ pub fn run() {
             commands::set_sidebar_width,
             commands::clear_recents,
             commands::open_data_folder,
+            commands::open_url,
             commands::app_version,
             commands::claude_version,
         ])

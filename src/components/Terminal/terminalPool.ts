@@ -19,11 +19,12 @@
 // output bus, never React state (core convention).
 
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
-import { resizePty, sessionScrollback, writeStdin } from "../../ipc";
+import { openUrl, resizePty, sessionScrollback, writeStdin } from "../../ipc";
 import { onSessionOutput } from "../../outputBus";
 import { IS_MAIN_WINDOW } from "../../windowContext";
 import { terminalsToDispose } from "./poolReconcile";
@@ -158,6 +159,17 @@ function createHost(sessionId: string): TerminalHost {
     }
   }
 
+  // Clickable http/https links (#109). Hover underlines a URL; the custom activate
+  // handler opens it only on a ⌘-click (event.metaKey) — a plain click is left to
+  // the terminal/TUI (drag-to-select, claude's own mouse handling). Opening goes
+  // through the backend `open_url`, which rejects any non-http(s) scheme, instead
+  // of the addon's default `window.open`. Shared by every terminal kind (agent +
+  // shell #72) since the pool owns them all.
+  const webLinks = new WebLinksAddon((event, uri) => {
+    if (event.metaKey) void openUrl(uri).catch(() => {});
+  });
+  term.loadAddon(webLinks);
+
   const safeFit = () => {
     try {
       fit.fit();
@@ -234,6 +246,7 @@ function createHost(sessionId: string): TerminalHost {
     observer.disconnect();
     unsubscribe();
     dataSub.dispose();
+    webLinks.dispose();
     webgl?.dispose();
     term.dispose();
     container.remove();

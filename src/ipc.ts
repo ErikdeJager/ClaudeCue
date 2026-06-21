@@ -210,6 +210,9 @@ export const setSidebarWidth = (width: number) =>
 export const clearRecents = () => invoke<void>("clear_recents");
 /** Reveal the app-data folder (where sessions.json lives) in Finder (#100). */
 export const openDataFolder = () => invoke<void>("open_data_folder");
+/** Open an http/https URL in the default browser (#109) — ⌘-click on a linkified
+ * terminal URL. The backend rejects any non-http(s) scheme. */
+export const openUrl = (url: string) => invoke<void>("open_url", { url });
 /** ClaudeCue version, and claude's version (best-effort) (#100 Settings → About). */
 export const appVersion = () => invoke<string>("app_version");
 export const claudeVersion = () => invoke<string | null>("claude_version");
