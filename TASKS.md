@@ -473,3 +473,229 @@ it — staying on-system (token-driven) rather than hardcoding 10px.
   reads too tight in practice.
 - Pure CSS / token change — no TS or Rust. **Depends on: none** (all touched code exists;
   unrelated to #109 / #110).
+
+---
+
+### 112. [ ] Activity indicator — a third "finished / needs input" state (yellow), distinct from never-active gray
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-21
+
+**Description**
+
+Today the agent activity indicator (`BusyIndicator`, #42/#55/#71/#88/#95) has **two**
+states driven by one boolean `sessionBusy[id]`: a calm gray `--status-idle` dot (idle) and
+a blue `--status-running` dot with a sweeping shimmer (busy). There's no way to tell, at a
+glance on the agent wall, the difference between an agent that has **never done anything**
+and one that **just finished a turn and is now waiting for you** — both read as the same
+gray.
+
+Add a **third state** so the dot tells that story:
+
+- **Gray (fresh / never active)** — `--status-idle`, exactly as today. Shown from the
+  moment a session is created until its first activity.
+- **Blue (working)** — `--status-running` with the existing shimmer, unchanged.
+- **Yellow (finished / needs input)** — `--status-awaiting` (`#f9e2af`), a **solid dot
+  with a soft glow** (mirroring the busy dot's `box-shadow` glow), **no animation/shimmer**.
+  Shown once an agent has been active and has gone idle again.
+
+State machine per session: **gray → (first activity) → blue → (idle) → yellow → (active
+again) → blue → yellow → …**. Yellow never reverts to gray; only going busy again (blue)
+leaves it, and finishing returns it to yellow.
+
+**Trigger — "any activity" (decided):** a session leaves gray on its **first** busy=true
+transition (any activity, *not* gated on user input). claude prints a startup banner on
+spawn, which the busy heuristic counts as activity (`inp == 0` → any recent output counts,
+`pty.rs monitor_loop`), so in practice a brand-new agent shows gray only until its first
+output (sub-second), then blue, then yellow — the user accepted this tradeoff over an
+input-gated rule. Gray is therefore effectively the truly-fresh, no-output-yet moment.
+
+**Persist across restarts (decided):** "has been active" survives an app restart. A session
+that had been active in a previous run shows **yellow immediately on boot** (it resumes
+"reconnecting" → idle, not gray). This needs a persisted backend flag, not just frontend
+state.
+
+This deliberately extends the busy/idle indicator with an "awaiting" color — narrowing the
+v1 "no awaiting-glow" rule the same way #42 narrowed "no status system." It is **not** an
+approval pill / floating glow; it's a third color on the existing dot.
+
+**Scope:** the `BusyIndicator` component + its render sites (`Sidebar.tsx`,
+`Overview.tsx`), the store's activity tracking, and a new persisted `has_been_active` field
+threaded Rust → IPC → store. **Out of scope:** any "mark as seen / acknowledge" interaction
+(yellow clears only by the agent going busy again); a true "awaiting input" detection (we
+can't distinguish "finished" from "literally at an input prompt" — yellow means "was
+active, now idle", covering both); changing the busy heuristic itself; Canvas (the dot isn't
+rendered there today).
+
+**Subtasks**
+
+1. [ ] **Backend persisted flag.** Add `has_been_active: bool` (`#[serde(default)]`, default
+   false) to `PersistedSession` (`store.rs`); add a persist-once setter (e.g.
+   `mark_session_active(id)` that flips false→true and saves, no-op if already true).
+2. [ ] **Set it on first busy.** In `lib.rs`'s `SessionEvent::State` handler, when
+   `busy == true`, call the setter so the flag is recorded the first time the session works.
+   (Idempotent — only the false→true write persists.)
+3. [ ] **Thread to the frontend.** Add `has_been_active?: boolean` to TS `SessionRecord`,
+   `hasBeenActive?: boolean` to `SessionView`, and map it in the record→view conversion
+   (mirroring `auto_name` → `autoName`).
+4. [ ] **Live store tracking.** Track "active at least once this session" in the store so
+   the dot turns yellow the instant a turn ends, without a reload: seed it from each
+   session's persisted `hasBeenActive` on load (`refresh`), and set it true in
+   `setBusy(id, true)`. Clear it with the other per-session state on session removal/forget
+   (alongside `sessionBusy`).
+5. [ ] **Three-state component.** Give `BusyIndicator` a three-state input (e.g. a
+   `state: "fresh" | "busy" | "settled"` prop, or `busy` + `hasBeenActive` booleans it
+   derives from): busy → blue shimmer (unchanged); else has-been-active → yellow solid +
+   glow; else gray (unchanged). Update the `aria-label`/`title` per state ("Working…" /
+   "Finished — needs input" / "Idle").
+6. [ ] **CSS.** Add a `.settled` (yellow) rule in `BusyIndicator.module.css`:
+   `--status-awaiting` fill + a soft `box-shadow` glow like `.busy::before`, **no `::after`
+   shimmer / no animation**. Keep the fixed 14px slot / 10px dot (#95) so there's still zero
+   layout shift between states.
+7. [ ] **Wire the call sites.** Pass the new state at both usages — `Sidebar.tsx:201` and
+   `Overview.tsx:201` (SessionCard/SessionRow `busy={…}`) — from `sessionBusy` + the new
+   live flag.
+8. [ ] Tests + checks: extend a store unit test for the gray→blue→yellow transition and that
+   yellow persists/seed-from-record works; keep Rust store tests green (add one for
+   `has_been_active` round-tripping). Run `npm run build`, `npm run lint`, `npm test`,
+   `npm run format:check`, and the Rust build / `cargo test` / clippy.
+
+**Acceptance criteria**
+
+- [ ] A newly created agent shows **gray** until its first activity, then **blue** while
+      working.
+- [ ] When an agent that has worked goes idle, its dot is **yellow** (`--status-awaiting`),
+      not gray — a solid dot with a soft glow, no shimmer/animation.
+- [ ] Sending a new message turns it **blue** again, and it returns to **yellow** when the
+      turn ends.
+- [ ] **Yellow survives an app restart:** a previously-active session shows yellow right
+      after boot (reconnecting → idle), never reverting to gray.
+- [ ] All three states appear consistently in both the **sidebar rows** and the **Overview
+      cards**; the dot's footprint (14px slot) never shifts between states.
+- [ ] Under `prefers-reduced-motion` / Settings reduce-motion: blue stays a solid glowing
+      dot (as today) and yellow is likewise solid — both clearly distinct from gray.
+- [ ] `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, and the Rust
+      build / `cargo test` / clippy all pass.
+
+**Notes**
+
+- Decisions (from the user): third color = **yellow `--status-awaiting`** (reads as "needs
+  your input," vs. green "done"); **persist across restarts**; **solid dot + soft glow, no
+  animation**; trigger = **any activity, not input-gated**.
+- Reserved tokens already exist (`tokens.css`): `--status-awaiting #f9e2af`,
+  `--status-done #a6e3a1` — use awaiting.
+- "Needs input" is a semantic label, not a detection: the indicator means "was active, now
+  idle." If the sub-second gray flash on spawn (from claude's startup banner) ever bothers,
+  the one-line fallback is to **input-gate** the trigger — flip the flag only on a busy=true
+  transition where `last_input != 0` (the monitor already has `inp`) — keeping a
+  never-touched agent gray. Considered and declined for now.
+- Verified anchors: `src/components/BusyIndicator/BusyIndicator.tsx` + `.module.css`;
+  `src/store.ts` (`sessionBusy`, `setBusy`, `refresh`, per-session cleanup);
+  `src/components/Sidebar/Sidebar.tsx:201` + `Overview/Overview.tsx:201`;
+  `src/types/index.ts` (`SessionRecord`, `SessionView`); `src-tauri/src/store.rs`
+  (`PersistedSession`); `src-tauri/src/commands.rs` (`list_sessions`);
+  `src-tauri/src/lib.rs` (`SessionEvent::State` handler); `src-tauri/src/pty.rs`
+  (`monitor_loop`, the busy heuristic — unchanged).
+
+---
+
+### 113. [ ] Collapsible sidebar folders — a repo-color disclosure triangle (replaces the color dot), sized to the activity icon
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-21
+
+**Description**
+
+Each sidebar folder header currently shows an **8px repo-color circle** (`.repoDot`,
+`Sidebar.tsx:754` / `.module.css:200`) — the per-repo color identity (#35) — as a
+non-interactive `<span>` inside the `.repoTitle` filter button. Folders are
+**non-collapsible** by design (#34).
+
+Replace that circle with a **repo-colored triangular disclosure arrow** that makes folders
+**collapsible**: it points **right (▶) when collapsed** and **down (▼) when expanded**, is
+**filled with the repo's identity color** (#35), and is **sized to match the activity
+icon** — the `BusyIndicator` footprint (#95: a ~10px glyph in a ~14px slot, vs. the current
+8px) so it lines up with the agent rows' activity dots.
+
+This reverses the **non-collapsible** part of #34 while **keeping** its click-to-filter: the
+header gets **two independent controls** — the **triangle toggles collapse**, and the
+**repo name still filters Overview** (#34/#68, unchanged). Collapsing a folder hides
+**all** its child rows — its session rows, nested worktree agents (#74), and its non-agent
+items (file/diff/terminal viewers, scheduled sessions) — while the header and its session
+**count** stay visible. State is **persisted across restarts** via a dedicated Rust store
+value (mirroring #108's `sidebar_width`), kept separate from the Settings blob so a Settings
+draft can't clobber it.
+
+**Out of scope:** Overview/Canvas (sidebar-only change; Canvas non-agent panel dots #95 are
+untouched); the repo context menu / New session; any change to which agents run or to the
+pooled terminals (sidebar rows aren't terminals, so hiding them is purely visual). Default
+state is **expanded**; only a user toggle collapses.
+
+**Subtasks**
+
+1. [ ] **Backend persistence.** Add a persisted `collapsed_repos: Vec<String>` value to
+   `store.rs` with `get_collapsed_repos` / `set_collapsed_repos` commands, registered in
+   `lib.rs` — mirroring the #108 `sidebar_width` pattern, separate from the Settings blob.
+2. [ ] **IPC.** Add typed `getCollapsedRepos` / `setCollapsedRepos` wrappers in `ipc.ts`.
+3. [ ] **Store.** Add `collapsedRepos` state (set/record of collapsed repo paths) + a
+   `toggleRepoCollapsed(repo)` action; seed it from the persisted value on boot
+   (`init`/`refresh`); persist on every toggle.
+4. [ ] **Markup split.** In `Sidebar.tsx`, pull the indicator out of the `.repoTitle` filter
+   button into its **own toggle `<button>`** (a sibling before the name button) that renders
+   the repo-colored triangle, calls `toggleRepoCollapsed`, and carries `aria-expanded` + an
+   aria-label (e.g. "Collapse/Expand {repo}"). Leave the name button's Overview-filter
+   behavior (#34) intact.
+5. [ ] **Conditional render.** When a repo is collapsed, skip rendering its child rows —
+   session rows, nested worktree agents (#74), and non-agent items
+   (file/diff/terminal/scheduled). Keep the header + `.count` visible.
+6. [ ] **CSS.** Replace `.repoDot` (circle) with a triangle filled with the repo color —
+   recommended via `clip-path` polygon on the colored box so the existing inline
+   `background: repoColor` still colors it — pointing right (▶) collapsed, rotated to down
+   (▼) when expanded (an `.expanded` modifier with `transform: rotate(90deg)`, smooth
+   transition, reduced-motion-safe). Size it to the `BusyIndicator` footprint (~14px slot /
+   ~10px glyph), replacing the 8px.
+7. [ ] **a11y + checks.** Toggle is a real, keyboard-operable button with `aria-expanded`.
+   Confirm pooled terminals are unaffected. Run `npm run build`, `npm run lint`, `npm test`,
+   `npm run format:check`, and the Rust build / `cargo test` / clippy.
+
+**Acceptance criteria**
+
+- [ ] Each folder header shows a **repo-colored triangle** (▶ collapsed / ▼ expanded) in
+      place of the old circle, filled with the repo's identity color (#35) and sized to
+      match the activity icon (~14px slot / ~10px glyph).
+- [ ] Clicking the **triangle** collapses/expands the folder: all child rows (sessions,
+      worktree agents, file/diff/terminal/scheduled items) hide when collapsed; the header +
+      session count stay visible.
+- [ ] Clicking the **repo name** still filters Overview (#34) and does **not** toggle
+      collapse — the two controls are independent.
+- [ ] Collapsed/expanded state **persists across restarts** (a collapsed folder stays
+      collapsed after relaunch), via a dedicated Rust store value separate from Settings.
+- [ ] The toggle is keyboard-operable with `aria-expanded`; the ▶↔▼ rotation respects
+      reduce-motion (no jarring spin).
+- [ ] No change to Overview/Canvas, the repo context menu, or pooled terminals.
+- [ ] `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, and the Rust
+      build / `cargo test` / clippy all pass.
+
+**Notes**
+
+- Decisions (user): **collapsible folders** (reverses the non-collapsible part of #34, keeps
+  its click-to-filter on the name); triangle **right collapsed / down expanded**, **filled
+  with the repo color**; sized to the **BusyIndicator footprint** (#95); **persisted** via a
+  dedicated Rust value (mirroring #108 `sidebar_width`), separate from the Settings blob.
+- "Same size as the activity icon" = the existing `BusyIndicator` size (#95: 10px dot in a
+  14px slot) — independent of #112, which only adds a color state and keeps that size.
+- Touches the same files as **#112** (`Sidebar.tsx` / `Sidebar.module.css`) but different
+  elements (repo-header triangle vs. agent activity dot) — **no hard dependency**; if both
+  are open, lowest-number-first (#112) then #113.
+- Recommended shape technique: `clip-path` triangle so the inline `background: repoColor`
+  keeps coloring it; a CSS border-triangle or inline SVG `<polygon fill>` are alternatives.
+- Verified anchors: `src/components/Sidebar/Sidebar.tsx` (`.repoTitle` button + `.repoDot`
+  span ~L744–758; the per-repo render loop for sessions / worktrees / items);
+  `Sidebar.module.css` (`.repoDot` L200, `.repoHeader` / `.repoTitle`); `src/store.ts`
+  (sidebar state + `init`/`refresh`); `src/ipc.ts` (mirror `getSidebarWidth` /
+  `setSidebarWidth`); `src-tauri/src/store.rs` + `commands.rs` + `lib.rs` (mirror the #108
+  `sidebar_width` get/set value).
+- Optional follow-up (not required): prune a repo's collapsed entry when the folder is
+  forgotten (#31) so a re-added folder doesn't remember a stale collapse.
