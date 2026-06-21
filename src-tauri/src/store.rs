@@ -120,6 +120,10 @@ pub struct PersistedState {
     /// `fire_at`. `default` keeps old files loading.
     #[serde(default)]
     pub schedules: Vec<ScheduledSession>,
+    /// Application settings (#100), stored opaquely as JSON — the frontend owns the
+    /// shape and supplies defaults, so an older file without it upgrades cleanly.
+    #[serde(default)]
+    pub settings: serde_json::Value,
 }
 
 /// Thread-safe persistent store backed by a JSON file.
@@ -216,6 +220,12 @@ impl Store {
         self.update(|state| state.recents.retain(|existing| existing != path))
     }
 
+    /// Clear the recents list and persist (#100 Settings → Data). Sessions are
+    /// untouched; only the recently-used folder list is emptied.
+    pub fn clear_recents(&self) -> io::Result<()> {
+        self.update(|state| state.recents.clear())
+    }
+
     /// All assigned per-repo colors (path → hex). Unassigned repos derive a
     /// default color frontend-side (#35).
     pub fn repo_colors(&self) -> HashMap<String, String> {
@@ -301,6 +311,17 @@ impl Store {
     /// Replace the multi-canvas tab state and persist (#58).
     pub fn set_canvases(&self, canvases: serde_json::Value) -> io::Result<()> {
         self.update(|state| state.canvases = canvases)
+    }
+
+    /// Application settings (#100) — opaque JSON; `null` until first written, the
+    /// frontend supplies defaults.
+    pub fn settings(&self) -> serde_json::Value {
+        self.with(|state| state.settings.clone())
+    }
+
+    /// Replace the application settings and persist (#100).
+    pub fn set_settings(&self, settings: serde_json::Value) -> io::Result<()> {
+        self.update(|state| state.settings = settings)
     }
 
     /// All pending scheduled sessions (#93).

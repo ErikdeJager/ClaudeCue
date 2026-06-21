@@ -148,9 +148,12 @@ function SessionCard({
   // set, else the branch (folder name when non-git). No subtitle, no repo dot; repo
   // color reads from the card's top band (#36). `sessionLabel` still computes the
   // subtitle (#67) — agent surfaces just don't render it.
+  // The #100 "auto-name" setting gates claude's auto-title (#97): off → the label
+  // skips the auto-name and falls straight to the branch.
+  const autoNameOn = useStore((s) => s.settings.autoName);
   const { primary } = sessionLabel(
     session.name,
-    session.autoName,
+    autoNameOn ? session.autoName : null,
     branch || repoName(session.repoPath),
   );
   // A worktree agent (#74/#96) inherits the parent repo's color, so a small text

@@ -9,6 +9,7 @@ import {
   spatialNeighbor,
   updateLeafContent,
 } from "./components/Canvas/canvasTree";
+import { applyTerminalSettings } from "./components/Terminal/terminalPool";
 import * as ipc from "./ipc";
 import { emitSessionOutput } from "./outputBus";
 import { repoName } from "./paths";
@@ -21,6 +22,7 @@ import type {
   ScheduledSession,
   SessionRecord,
   SessionView,
+  Settings,
   Toast,
   ToastTone,
   View,
@@ -217,6 +219,40 @@ export function repoColor(
   return REPO_PALETTE[idx] ?? REPO_PALETTE[0] ?? "#cba6f7";
 }
 
+/**
+ * Default application settings (#100). The frontend owns these, so an older
+ * persisted file without a `settings` blob upgrades cleanly. `accentColor: ""`
+ * means "use the default `--accent` token" (Peach).
+ */
+export const DEFAULT_SETTINGS: Settings = {
+  terminalFontSize: 12.5,
+  terminalLineHeight: 1.2,
+  terminalCursorBlink: true,
+  accentColor: "",
+  reduceMotion: false,
+  defaultView: "overview",
+  confirmDestructive: true,
+  autoName: true,
+};
+
+/** Merge a persisted (possibly partial / null) settings blob over the defaults so
+ * missing or newly-added keys take their default (#100). */
+export function mergeSettings(
+  raw: Partial<Settings> | null | undefined,
+): Settings {
+  return { ...DEFAULT_SETTINGS, ...(raw ?? {}) };
+}
+
+/** Apply the imperative side-effects of settings (#100): the terminal options to
+ * the live pool. (Appearance / Behavior effects are added by their follow-ups.) */
+function applySettingsEffects(s: Settings): void {
+  applyTerminalSettings({
+    fontSize: s.terminalFontSize,
+    lineHeight: s.terminalLineHeight,
+    cursorBlink: s.terminalCursorBlink,
+  });
+}
+
 /** A clicked sidebar item — an agent/terminal (by PTY id) or a file/diff panel
  * (by repo path + file). Matched against Canvas leaves for view-aware nav (#79). */
 type SidebarItem = {
@@ -317,6 +353,10 @@ export interface AppState {
   scheduleMode: boolean;
   /** Pending scheduled sessions (#93), newest-first; main window only. */
   schedules: ScheduledSession[];
+  /** Application settings (#100), merged with defaults on load. */
+  settings: Settings;
+  /** Whether the Settings modal is open (#100). */
+  settingsOpen: boolean;
 
   // --- Sync reducers ---
   setView: (view: View) => void;
@@ -347,6 +387,8 @@ export interface AppState {
   /** Open the modal in schedule mode (#93). */
   openSchedule: (repo?: string) => void;
   closeNewSession: () => void;
+  /** Open/close the Settings modal (#100). */
+  setSettingsOpen: (open: boolean) => void;
 
   // --- Async / cross-cutting actions ---
   init: () => Promise<void>;
@@ -354,6 +396,8 @@ export interface AppState {
   refreshBranches: () => Promise<void>;
   /** Assign a repo's color (optimistic + persisted) (#35). */
   setRepoColor: (path: string, color: string) => Promise<void>;
+  /** Apply + persist application settings (#100) and run their side-effects. */
+  saveSettings: (settings: Settings) => Promise<void>;
   /** Add / close / reorder a repo's extra Overview panels (optimistic + persisted, #38). */
   addOverviewPanel: (
     repoPath: string,
@@ -528,8 +572,11 @@ export const useStore = create<AppState>()((set, get) => ({
   newSessionRepo: null,
   scheduleMode: false,
   schedules: [],
+  settings: DEFAULT_SETTINGS,
+  settingsOpen: false,
 
   setView: (view) => set({ view }),
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
   // Selection is decoupled from the view (#22): selecting only highlights. The
   // sidebar ViewSwitch is the only thing that changes the view (#75).
   select: (id) => set({ selectedId: id }),
@@ -785,7 +832,7 @@ export const useStore = create<AppState>()((set, get) => ({
     // Repo colors + Overview panel layouts load independently so a failure here
     // doesn't block sessions.
     try {
-      const [colors, panels, order, files, canvas, canvasesState] =
+      const [colors, panels, order, files, canvas, canvasesState, rawSettings] =
         await Promise.all([
           ipc.listRepoColors(),
           ipc.listOverviewPanels(),
@@ -793,7 +840,12 @@ export const useStore = create<AppState>()((set, get) => ({
           ipc.listOpenFiles(),
           ipc.getCanvasLayout(),
           ipc.getCanvases(),
+          ipc.getSettings(),
         ]);
+      // Settings (#100): merge the persisted blob over the defaults and apply its
+      // side-effects (live terminal options) before the first paint.
+      const settings = mergeSettings(rawSettings);
+      applySettingsEffects(settings);
       // Multi-canvas (#58): use the persisted tabs; else migrate the old single
       // canvas_layout into "Canvas 1"; else start with one empty canvas. Persist
       // the migrated shape once so the new field becomes the source of truth.
@@ -856,6 +908,7 @@ export const useStore = create<AppState>()((set, get) => ({
         overviewOrder: order,
         canvases,
         activeCanvasId,
+        settings,
       });
       // Terminal items can't resume (#72): respawn a fresh shell for each
       // persisted terminal panel under its repo so the item is usable after a
@@ -903,6 +956,17 @@ export const useStore = create<AppState>()((set, get) => ({
       await ipc.setRepoColor(path, color);
     } catch {
       // Persist failed (e.g. outside Tauri); the local color stays for the session.
+    }
+  },
+
+  saveSettings: async (settings) => {
+    // Apply optimistically + run side-effects (live terminals, #100), then persist.
+    set({ settings });
+    applySettingsEffects(settings);
+    try {
+      await ipc.setSettings(settings);
+    } catch {
+      // Persist failed (e.g. outside Tauri); the change stays for the session.
     }
   },
 

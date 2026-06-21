@@ -139,6 +139,12 @@ pub fn run() {
             commands::list_branches,
             commands::checkout_branch,
             commands::compare_branches,
+            commands::get_settings,
+            commands::set_settings,
+            commands::clear_recents,
+            commands::open_data_folder,
+            commands::app_version,
+            commands::claude_version,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

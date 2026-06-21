@@ -49,6 +49,34 @@ interface TerminalHost {
 const hosts = new Map<string, TerminalHost>();
 let parking: HTMLDivElement | null = null;
 
+/** Live xterm options (#100): applied to new terminals at creation and to every
+ * pooled terminal when the user saves Settings. Defaults match the original
+ * hard-coded values, so behavior is unchanged until a setting is saved. */
+let currentTerminalSettings = {
+  fontSize: 12.5,
+  lineHeight: 1.2,
+  cursorBlink: true,
+};
+
+/**
+ * Apply the Settings terminal options (#100) to every live pooled terminal and to
+ * any created later. xterm `options` are mutable; a debounced refit follows the
+ * metric change so `claude`'s TUI repaints at the new cell size.
+ */
+export function applyTerminalSettings(s: {
+  fontSize: number;
+  lineHeight: number;
+  cursorBlink: boolean;
+}): void {
+  currentTerminalSettings = { ...s };
+  for (const host of hosts.values()) {
+    host.term.options.fontSize = s.fontSize;
+    host.term.options.lineHeight = s.lineHeight;
+    host.term.options.cursorBlink = s.cursorBlink;
+    host.scheduleResize();
+  }
+}
+
 function cssToken(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement)
     .getPropertyValue(name)
@@ -89,9 +117,9 @@ function createHost(sessionId: string): TerminalHost {
       "--mono",
       '"JetBrains Mono", ui-monospace, "SF Mono", monospace',
     ),
-    fontSize: 12.5,
-    lineHeight: 1.2,
-    cursorBlink: true,
+    fontSize: currentTerminalSettings.fontSize,
+    lineHeight: currentTerminalSettings.lineHeight,
+    cursorBlink: currentTerminalSettings.cursorBlink,
     allowProposedApi: true,
     theme: {
       background: cssToken("--terminal-bg", "#11111b"),

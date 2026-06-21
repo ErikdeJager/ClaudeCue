@@ -18,6 +18,7 @@ import type {
   ScheduleErrorPayload,
   ScheduleFiredPayload,
   SessionRecord,
+  Settings,
   StatePayload,
   WorkingDiff,
 } from "./types";
@@ -193,6 +194,20 @@ export const updateSchedule = (
   name: string | null,
   at: number,
 ) => invoke<void>("update_schedule", { id, prompt, name, at });
+
+/** Application settings (#100): an opaque persisted blob the store merges with its
+ * TS defaults (so an older file with no `settings` upgrades cleanly). */
+export const getSettings = () =>
+  invoke<Partial<Settings> | null>("get_settings");
+export const setSettings = (settings: Settings) =>
+  invoke<void>("set_settings", { settings });
+/** Clear the recents list (#100 Settings → Data). */
+export const clearRecents = () => invoke<void>("clear_recents");
+/** Reveal the app-data folder (where sessions.json lives) in Finder (#100). */
+export const openDataFolder = () => invoke<void>("open_data_folder");
+/** ClaudeCue version, and claude's version (best-effort) (#100 Settings → About). */
+export const appVersion = () => invoke<string>("app_version");
+export const claudeVersion = () => invoke<string | null>("claude_version");
 
 export interface SessionEventHandlers {
   onOutput: (payload: OutputPayload) => void;

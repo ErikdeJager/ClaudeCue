@@ -1,0 +1,242 @@
+/* Settings modal (#100). Centered over a dimmed scrim; a left section nav and a
+   right content pane, mirroring the app's modal language (NewSessionModal). */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16);
+  background: var(--scrim);
+}
+
+.dialog {
+  display: flex;
+  width: min(640px, 100%);
+  max-height: min(520px, 90vh);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-window);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-popover);
+}
+
+.dialog:focus {
+  outline: none;
+}
+
+/* Left: title + section tabs. */
+.sections {
+  display: flex;
+  width: 168px;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-12) var(--space-8);
+  border-right: 1px solid var(--border-hairline);
+  background: var(--bg-sidebar);
+}
+
+.title {
+  margin: 0 0 var(--space-8);
+  padding: 0 var(--space-6);
+  color: var(--text-primary);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.sectionTab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-meta);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.sectionTab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sectionActive,
+.sectionActive:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+/* Right: the active section's controls + the action row. */
+.pane {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-16);
+  overflow-y: auto;
+  padding: var(--space-20);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.fieldLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--text-primary);
+  font-size: var(--fs-meta);
+}
+
+.fieldValue {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+}
+
+.range {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.checkRow {
+  font-size: var(--fs-meta);
+}
+
+/* Data & About. */
+.dataSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.dataButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  align-self: flex-start;
+  padding: var(--space-6) var(--space-12);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.dataButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.dataButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--border-hairline);
+}
+
+.aboutRow {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-meta);
+}
+
+.aboutRow dt {
+  color: var(--text-muted);
+}
+
+.aboutRow dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+}
+
+/* Action row: Reset (left), Cancel / Save (right). */
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-20);
+  border-top: 1px solid var(--border-hairline);
+  background: var(--bg-panel);
+}
+
+.actionsRight {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.resetButton,
+.cancelButton {
+  padding: var(--space-6) var(--space-12);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.resetButton:hover,
+.cancelButton:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.saveButton {
+  padding: var(--space-6) var(--space-16);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.saveButton:hover {
+  background: var(--accent-hover);
+}

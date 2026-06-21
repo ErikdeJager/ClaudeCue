@@ -92,11 +92,13 @@ function LeafPanel({
   // Agent panels (#95) render only their primary label (name if set, else branch) —
   // a single line, no subtitle and no repo dot (see below). File/diff/terminal panels
   // keep their filename/"Diff" title + repo·branch context + dot.
+  // The #100 "auto-name" setting gates claude's auto-title (#97); off → branch.
+  const autoNameOn = useStore((s) => s.settings.autoName);
   const agentLabel =
     content.kind === "agent"
       ? sessionLabel(
           session?.name,
-          session?.autoName,
+          autoNameOn ? session?.autoName : null,
           branch || repoName(repoPath),
         )
       : null;

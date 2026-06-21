@@ -7,6 +7,7 @@ import {
   FileText,
   GitBranch,
   Plus,
+  Settings as SettingsIcon,
   Terminal as TerminalIcon,
   X,
 } from "lucide-react";
@@ -167,7 +168,13 @@ function SessionRow({
   // Agent label (#95): a single line showing only the primary — the custom name if
   // set, else the branch (deduped `label`, folder name when non-git). `sessionLabel`
   // still computes the subtitle (#67); the row just doesn't render it.
-  const { primary } = sessionLabel(session.name, session.autoName, label);
+  // The #100 "auto-name" setting gates claude's auto-title (#97); off → branch.
+  const autoNameOn = useStore((s) => s.settings.autoName);
+  const { primary } = sessionLabel(
+    session.name,
+    autoNameOn ? session.autoName : null,
+    label,
+  );
 
   return (
     <div
@@ -472,6 +479,7 @@ function Sidebar() {
   const renameSession = useStore((s) => s.renameSession);
   const openNewSession = useStore((s) => s.openNewSession);
   const openSchedule = useStore((s) => s.openSchedule);
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const schedules = useStore((s) => s.schedules);
   const cancelSchedule = useStore((s) => s.cancelSchedule);
   const refreshBranches = useStore((s) => s.refreshBranches);
@@ -860,6 +868,21 @@ function Sidebar() {
             </div>
           );
         })}
+      </div>
+
+      {/* Footer (#100): a thin bottom bar pinned below the scrolling repo list,
+          laid out (a flex row) to hold more quick-action icons later. For now it
+          holds the Settings gear. */}
+      <div className={styles.footer}>
+        <button
+          type="button"
+          className={styles.footerButton}
+          onClick={() => setSettingsOpen(true)}
+          title="Settings"
+          aria-label="Settings"
+        >
+          <SettingsIcon size={16} strokeWidth={1.5} />
+        </button>
       </div>
 
       {menu && (

@@ -128,6 +128,37 @@ export interface NamePayload {
 
 export type View = "overview" | "canvas";
 
+/**
+ * Application settings (#100), persisted as an opaque blob through the Rust store
+ * (`set_settings`) with these **frontend-owned defaults**, so an older
+ * `sessions.json` without a `settings` key upgrades cleanly. The Settings modal
+ * edits a draft of this and applies it on Save. Fields are grouped by section; not
+ * every section is wired yet (Appearance / Behavior land in follow-ups), but the
+ * shape is complete so those are purely additive.
+ */
+export interface Settings {
+  // Terminal
+  /** xterm font size in px (10–16). */
+  terminalFontSize: number;
+  /** xterm line height multiplier (1.0–1.8). */
+  terminalLineHeight: number;
+  /** xterm cursor blink. */
+  terminalCursorBlink: boolean;
+  // Appearance (wired by a follow-up)
+  /** Accent color hex from `REPO_PALETTE`, or "" to use the default token. */
+  accentColor: string;
+  /** Force reduced motion beyond the OS setting. */
+  reduceMotion: boolean;
+  // Behavior (wired by a follow-up)
+  /** View shown on launch. */
+  defaultView: View;
+  /** Confirm destructive Sidebar actions (Remove / Kill all / Close all). */
+  confirmDestructive: boolean;
+  // Sessions
+  /** Use claude's `ai-title` (#97) for unnamed agents; off → the branch label. */
+  autoName: boolean;
+}
+
 // --- Canvas (#46): a recursive binary split-panel (BSP) layout tree ---
 
 /** What a Canvas leaf shows. #46 uses `kind: "placeholder"`; #47 adds real

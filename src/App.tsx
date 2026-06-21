@@ -18,6 +18,7 @@ import CanvasWindow from "./components/CanvasWindow/CanvasWindow";
 import ClaudeMissing from "./components/ClaudeMissing/ClaudeMissing";
 import NewSessionModal from "./components/NewSessionModal/NewSessionModal";
 import Overview from "./components/Overview/Overview";
+import Settings from "./components/Settings/Settings";
 import Sidebar from "./components/Sidebar/Sidebar";
 import { reconcileTerminals } from "./components/Terminal/terminalPool";
 import Toaster from "./components/Toaster/Toaster";
@@ -109,6 +110,7 @@ function MainApp() {
       </DndContext>
       <Toaster />
       <NewSessionModal />
+      <Settings />
     </div>
   );
 }

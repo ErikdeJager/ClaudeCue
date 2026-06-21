@@ -675,3 +675,72 @@ fn worktree_path(store: &Store, repo: &str, branch: &str) -> Result<PathBuf, Ses
         .join(repo_id)
         .join(sanitize_seg(branch)))
 }
+
+// --- Application settings (#100) ---
+
+/// The persisted application settings blob (#100) — opaque JSON; `null` until the
+/// frontend first saves (which writes its TS-side defaults).
+#[tauri::command]
+pub fn get_settings(store: State<'_, Store>) -> serde_json::Value {
+    store.settings()
+}
+
+/// Replace the application settings (#100) and persist.
+#[tauri::command]
+pub fn set_settings(
+    store: State<'_, Store>,
+    settings: serde_json::Value,
+) -> Result<(), SessionError> {
+    store
+        .set_settings(settings)
+        .map_err(|e| SessionError::Io(e.to_string()))
+}
+
+/// Clear the recents list (#100 Settings → Data) and persist. Running sessions are
+/// untouched — only the recently-used folder list is emptied.
+#[tauri::command]
+pub fn clear_recents(store: State<'_, Store>) -> Result<(), SessionError> {
+    store
+        .clear_recents()
+        .map_err(|e| SessionError::Io(e.to_string()))
+}
+
+/// Reveal the app-data directory (where `sessions.json` lives) in Finder (#100
+/// Settings → Data). macOS `open`; creates the dir first so it always succeeds.
+#[tauri::command]
+pub fn open_data_folder(store: State<'_, Store>) -> Result<(), SessionError> {
+    let dir = store
+        .data_dir()
+        .ok_or_else(|| SessionError::Io("no app data directory".to_string()))?;
+    let _ = std::fs::create_dir_all(dir);
+    std::process::Command::new("open")
+        .arg(dir)
+        .spawn()
+        .map_err(|e| SessionError::Io(e.to_string()))?;
+    Ok(())
+}
+
+/// The ClaudeCue app version (#100 Settings → About), from the crate version.
+#[tauri::command]
+pub fn app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// `claude --version` (#100 Settings → About). Best-effort: `None` if the CLI is
+/// missing or errors, so the UI just omits the line.
+#[tauri::command]
+pub fn claude_version() -> Option<String> {
+    let output = std::process::Command::new("claude")
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
