@@ -373,3 +373,72 @@ terminals are left alone — consistent with `closeAllItems`, which also doesn't
   cancellation.
 - Canvas references are intentionally untouched (matches #91). Schedules are tied to a folder
   by `cwd` only (no worktree linkage today), so cancellation keys on `cwd === repoPath`.
+
+---
+
+### 107. [ ] Changing the accent color doesn't update hover / dim / on-accent tokens (button hover stays Peach)
+
+**Status:** Not started
+**Depends on:** none _(builds on shipped #102 Appearance/accent, #100 Settings, #33/#35 tokens — all complete)_
+**Created:** 2026-06-21
+
+**Description**
+
+After choosing a non-default **accent color** in Settings → Appearance (#102), **button hover
+still shows the original orange (Catppuccin Peach)** instead of the chosen color — bad UX. The
+same applies to other accent-derived surfaces (selected rows / dim backgrounds).
+
+Root cause: `applySettingsEffects` (`src/store.ts:259`) overrides **only** `--accent` on
+`:root` when a custom accent is set (`root.style.setProperty("--accent", s.accentColor)`); it
+never touches the **derived** accent tokens defined in `src/styles/tokens.css`:
+`--accent-hover` (button/control hover + active states — used in **6** CSS modules),
+`--accent-dim` (selected-row / dim accent backgrounds — **5** modules), and `--accent-fg`
+(readable text/icons **on** the accent fill — **8** modules). Those keep their hard-coded
+Peach values, so hover stays orange (the reported symptom), dim backgrounds stay orange-tinted,
+and on-accent text contrast could break for a dark accent.
+
+Fix: when a custom accent is applied, also set `--accent-hover`, `--accent-dim`, and
+`--accent-fg` derived from the chosen color; when the accent is cleared (default `""`),
+`removeProperty` all of them (mirroring today's `--accent` clear) so the Catppuccin defaults
+stand. Derivation approach is the implementer's choice:
+- **Runtime-compute from the hex** — `--accent-hover` = a lightened shade, `--accent-dim` =
+  the hex as `rgba(...)` at ~0.14 alpha (matching the default), `--accent-fg` = black/white by
+  the color's luminance for contrast; or
+- **A per-palette map** keyed on `REPO_PALETTE` (`store.ts:183` — the picker's fixed Catppuccin
+  swatch set, #102/#35), giving exact on-brand companion shades.
+
+Scope: the user reported **hover**, but the single root cause affects `--accent-dim` and
+`--accent-fg` too, so the fix covers **all** accent-derived tokens (fixing hover alone would
+leave dim/fg wrong). `--accent-fg` is contrast-safety: today's `REPO_PALETTE` is all light
+pastels, so dark fg already reads — keep it correct rather than regress it.
+
+Out of scope: the accent picker UI itself (#102, works) and the existing `--accent` override
+(works); unrelated `--status-*` and `--syn-accent` tokens.
+
+**Subtasks**
+
+1. [ ] Provide the accent companions for a chosen color — a small hex→{hover, dim, fg} helper
+   (lighten / rgba-at-0.14 / luminance-based fg), or a `REPO_PALETTE`-keyed lookup.
+2. [ ] In `applySettingsEffects`, when `s.accentColor` is set, also `setProperty` for
+   `--accent-hover`, `--accent-dim`, and `--accent-fg`; when it's `""`, `removeProperty` all
+   three (alongside the existing `--accent` clear) so defaults stand.
+3. [ ] Verify across the app: pick each palette accent and confirm button hover/active, the
+   selected-row / dim accent backgrounds, and text-on-accent all track the chosen color;
+   reset-to-default restores the Peach hover/dim/fg; reduce-motion + terminal settings
+   unaffected.
+
+**Acceptance criteria**
+
+- [ ] Choosing a custom accent updates button hover/active color everywhere (no residual
+  orange), plus dim/selected accent backgrounds and on-accent text/icons.
+- [ ] Resetting the accent to default restores the Catppuccin Peach hover/dim/fg.
+- [ ] On-accent text stays readable for the chosen accent (fg correct for the palette).
+- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
+
+**Notes**
+
+- Derived-token reach (why `--accent`-only is visibly incomplete): `--accent-hover` 6 files,
+  `--accent-dim` 5 files, `--accent-fg` 8 files.
+- The picker is the fixed Catppuccin `REPO_PALETTE`, so a per-palette map is viable; runtime
+  derivation also covers any future free-hex input. Both apply on Save + boot via
+  `applySettingsEffects` (already DOM-guarded for the test env).
