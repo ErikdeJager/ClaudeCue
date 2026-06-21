@@ -600,9 +600,9 @@ rendered there today).
 
 ---
 
-### 113. [ ] Collapsible sidebar folders — a repo-color disclosure triangle (replaces the color dot), sized to the activity icon
+### 113. [x] Collapsible sidebar folders — a repo-color disclosure triangle (replaces the color dot), sized to the activity icon
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** none
 **Created:** 2026-06-21
 
@@ -635,47 +635,47 @@ state is **expanded**; only a user toggle collapses.
 
 **Subtasks**
 
-1. [ ] **Backend persistence.** Add a persisted `collapsed_repos: Vec<String>` value to
+1. [x] **Backend persistence.** Add a persisted `collapsed_repos: Vec<String>` value to
    `store.rs` with `get_collapsed_repos` / `set_collapsed_repos` commands, registered in
    `lib.rs` — mirroring the #108 `sidebar_width` pattern, separate from the Settings blob.
-2. [ ] **IPC.** Add typed `getCollapsedRepos` / `setCollapsedRepos` wrappers in `ipc.ts`.
-3. [ ] **Store.** Add `collapsedRepos` state (set/record of collapsed repo paths) + a
+2. [x] **IPC.** Add typed `getCollapsedRepos` / `setCollapsedRepos` wrappers in `ipc.ts`.
+3. [x] **Store.** Add `collapsedRepos` state (set/record of collapsed repo paths) + a
    `toggleRepoCollapsed(repo)` action; seed it from the persisted value on boot
    (`init`/`refresh`); persist on every toggle.
-4. [ ] **Markup split.** In `Sidebar.tsx`, pull the indicator out of the `.repoTitle` filter
+4. [x] **Markup split.** In `Sidebar.tsx`, pull the indicator out of the `.repoTitle` filter
    button into its **own toggle `<button>`** (a sibling before the name button) that renders
    the repo-colored triangle, calls `toggleRepoCollapsed`, and carries `aria-expanded` + an
    aria-label (e.g. "Collapse/Expand {repo}"). Leave the name button's Overview-filter
    behavior (#34) intact.
-5. [ ] **Conditional render.** When a repo is collapsed, skip rendering its child rows —
+5. [x] **Conditional render.** When a repo is collapsed, skip rendering its child rows —
    session rows, nested worktree agents (#74), and non-agent items
    (file/diff/terminal/scheduled). Keep the header + `.count` visible.
-6. [ ] **CSS.** Replace `.repoDot` (circle) with a triangle filled with the repo color —
+6. [x] **CSS.** Replace `.repoDot` (circle) with a triangle filled with the repo color —
    recommended via `clip-path` polygon on the colored box so the existing inline
    `background: repoColor` still colors it — pointing right (▶) collapsed, rotated to down
    (▼) when expanded (an `.expanded` modifier with `transform: rotate(90deg)`, smooth
    transition, reduced-motion-safe). Size it to the `BusyIndicator` footprint (~14px slot /
    ~10px glyph), replacing the 8px.
-7. [ ] **a11y + checks.** Toggle is a real, keyboard-operable button with `aria-expanded`.
+7. [x] **a11y + checks.** Toggle is a real, keyboard-operable button with `aria-expanded`.
    Confirm pooled terminals are unaffected. Run `npm run build`, `npm run lint`, `npm test`,
    `npm run format:check`, and the Rust build / `cargo test` / clippy.
 
 **Acceptance criteria**
 
-- [ ] Each folder header shows a **repo-colored triangle** (▶ collapsed / ▼ expanded) in
+- [x] Each folder header shows a **repo-colored triangle** (▶ collapsed / ▼ expanded) in
       place of the old circle, filled with the repo's identity color (#35) and sized to
       match the activity icon (~14px slot / ~10px glyph).
-- [ ] Clicking the **triangle** collapses/expands the folder: all child rows (sessions,
+- [x] Clicking the **triangle** collapses/expands the folder: all child rows (sessions,
       worktree agents, file/diff/terminal/scheduled items) hide when collapsed; the header +
       session count stay visible.
-- [ ] Clicking the **repo name** still filters Overview (#34) and does **not** toggle
+- [x] Clicking the **repo name** still filters Overview (#34) and does **not** toggle
       collapse — the two controls are independent.
-- [ ] Collapsed/expanded state **persists across restarts** (a collapsed folder stays
+- [x] Collapsed/expanded state **persists across restarts** (a collapsed folder stays
       collapsed after relaunch), via a dedicated Rust store value separate from Settings.
-- [ ] The toggle is keyboard-operable with `aria-expanded`; the ▶↔▼ rotation respects
+- [x] The toggle is keyboard-operable with `aria-expanded`; the ▶↔▼ rotation respects
       reduce-motion (no jarring spin).
-- [ ] No change to Overview/Canvas, the repo context menu, or pooled terminals.
-- [ ] `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, and the Rust
+- [x] No change to Overview/Canvas, the repo context menu, or pooled terminals.
+- [x] `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, and the Rust
       build / `cargo test` / clippy all pass.
 
 **Notes**

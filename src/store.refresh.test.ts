@@ -18,6 +18,8 @@ vi.mock("./ipc", () => ({
   setCanvases: vi.fn(),
   getSettings: vi.fn(),
   getSidebarWidth: vi.fn(),
+  getCollapsedRepos: vi.fn(),
+  setCollapsedRepos: vi.fn(),
   spawnTerminal: vi.fn(),
   listSchedules: vi.fn(),
 }));
@@ -48,6 +50,8 @@ function primeIpc(): void {
   m(ipc.setCanvases).mockResolvedValue(undefined);
   m(ipc.getSettings).mockResolvedValue(null);
   m(ipc.getSidebarWidth).mockResolvedValue(null);
+  m(ipc.getCollapsedRepos).mockResolvedValue([]);
+  m(ipc.setCollapsedRepos).mockResolvedValue(undefined);
   m(ipc.spawnTerminal).mockResolvedValue(undefined);
   m(ipc.listSchedules).mockResolvedValue([]);
 }
@@ -142,5 +146,19 @@ describe("refresh() — seeds the 'has been active' flag (#112)", () => {
     expect(active.s1).toBe(true);
     expect(active.s2).toBeUndefined();
     expect(active.s3).toBeUndefined();
+  });
+});
+
+describe("refresh() — restores collapsed sidebar folders (#113)", () => {
+  it("seeds collapsedRepos from the persisted set", async () => {
+    m(ipc.getCollapsedRepos).mockResolvedValue(["/repo/a", "/repo/c"]);
+    await useStore.getState().refresh();
+    expect(useStore.getState().collapsedRepos).toEqual(["/repo/a", "/repo/c"]);
+  });
+
+  it("defaults to all-expanded (empty) when none are persisted", async () => {
+    m(ipc.getCollapsedRepos).mockResolvedValue([]);
+    await useStore.getState().refresh();
+    expect(useStore.getState().collapsedRepos).toEqual([]);
   });
 });

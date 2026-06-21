@@ -507,6 +507,8 @@ function Sidebar() {
   const removeOverviewPanel = useStore((s) => s.removeOverviewPanel);
   const sessionBusy = useStore((s) => s.sessionBusy);
   const sessionActive = useStore((s) => s.sessionActive);
+  const collapsedRepos = useStore((s) => s.collapsedRepos);
+  const toggleRepoCollapsed = useStore((s) => s.toggleRepoCollapsed);
 
   // Right-click repo context menu (#31/#35), anchored at the cursor. `menuMode`
   // switches between the item list, the destructive Forget confirm, and the
@@ -708,6 +710,8 @@ function Sidebar() {
           );
           const isEmpty = repoSessions.length === 0;
           const isFiltered = overviewRepoFilter === repo;
+          // Collapsed folder (#113): hide its child rows; the header + count stay.
+          const isCollapsed = collapsedRepos.includes(repo);
           // Primary label = the repo's branch, or the folder name when non-git /
           // not yet known. All sessions in a group share it, so index duplicates.
           const baseLabel = (branches[repo] ?? "") || repoName(repo);
@@ -743,6 +747,22 @@ function Sidebar() {
                   setMenuMode("menu");
                 }}
               >
+                {/* Two independent header controls (#113): the repo-colored
+                    disclosure triangle toggles collapse (▶ collapsed / ▼ expanded),
+                    and the name still filters Overview (#34). */}
+                <button
+                  type="button"
+                  className={styles.repoToggle}
+                  onClick={() => toggleRepoCollapsed(repo)}
+                  aria-expanded={!isCollapsed}
+                  aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${repoName(repo)}`}
+                >
+                  <span
+                    className={`${styles.repoTriangle} ${isCollapsed ? "" : styles.repoTriangleExpanded}`}
+                    style={{ background: repoColor(repo, repoColors) }}
+                    aria-hidden
+                  />
+                </button>
                 {/* Left-click a repo title filters Overview to it (toggle);
                     right-click opens the #31 context menu. */}
                 <button
@@ -755,10 +775,6 @@ function Sidebar() {
                   title={`Filter Overview to ${repoName(repo)}`}
                   aria-pressed={isFiltered}
                 >
-                  <span
-                    className={styles.repoDot}
-                    style={{ background: repoColor(repo, repoColors) }}
-                  />
                   <span className={styles.repoName}>{repoName(repo)}</span>
                   {!isEmpty && (
                     <span className={styles.count}>{repoSessions.length}</span>
@@ -775,145 +791,157 @@ function Sidebar() {
                 </button>
               </div>
 
-              {repoSessions.map((session, i) => (
-                <SessionRow
-                  key={session.id}
-                  session={session}
-                  // rowLabels has one entry per session; fallback satisfies
-                  // noUncheckedIndexedAccess and is never reached at runtime.
-                  label={rowLabels[i] ?? baseLabel}
-                  selected={session.id === selectedId}
-                  busy={sessionBusy[session.id] ?? false}
-                  hasBeenActive={sessionActive[session.id] ?? false}
-                  onSelect={() =>
-                    selectItem({
-                      kind: "agent",
-                      id: session.id,
-                      repoPath: session.repoPath,
-                    })
-                  }
-                  onRemove={() => void removeSession(session.id)}
-                  onRename={(name) => void renameSession(session.id, name)}
-                />
-              ))}
+              {/* Child rows hide when the folder is collapsed (#113); the header
+                  above (with its count) always stays visible. */}
+              {!isCollapsed && (
+                <>
+                  {repoSessions.map((session, i) => (
+                    <SessionRow
+                      key={session.id}
+                      session={session}
+                      // rowLabels has one entry per session; fallback satisfies
+                      // noUncheckedIndexedAccess and is never reached at runtime.
+                      label={rowLabels[i] ?? baseLabel}
+                      selected={session.id === selectedId}
+                      busy={sessionBusy[session.id] ?? false}
+                      hasBeenActive={sessionActive[session.id] ?? false}
+                      onSelect={() =>
+                        selectItem({
+                          kind: "agent",
+                          id: session.id,
+                          repoPath: session.repoPath,
+                        })
+                      }
+                      onRemove={() => void removeSession(session.id)}
+                      onRename={(name) => void renameSession(session.id, name)}
+                    />
+                  ))}
 
-              {/* This repo's non-agent items (#59) — the same `overviewPanels`
+                  {/* This repo's non-agent items (#59) — the same `overviewPanels`
                   Overview shows, 1:1: file + diff viewers. A click selects/jumps
                   to the item in the current view (#79), the × removes it, and each
                   is draggable into a Canvas (file → file viewer, diff → diff). */}
-              {(overviewPanels[repo] ?? []).map((panel) =>
-                panel.kind === "diff" ? (
-                  <DiffRow
-                    key={panel.id}
-                    repoPath={repo}
-                    panelId={panel.id}
-                    selected={panel.id === selectedId}
-                    onOpen={() =>
-                      selectItem({ kind: "diff", id: panel.id, repoPath: repo })
-                    }
-                    onClose={() => void removeOverviewPanel(repo, panel.id)}
-                  />
-                ) : panel.kind === "terminal" ? (
-                  <TerminalRow
-                    key={panel.id}
-                    repoPath={repo}
-                    panelId={panel.id}
-                    selected={panel.id === selectedId}
-                    onOpen={() =>
-                      selectItem({
-                        kind: "terminal",
-                        id: panel.id,
-                        repoPath: repo,
-                      })
-                    }
-                    onClose={() => void removeOverviewPanel(repo, panel.id)}
-                  />
-                ) : panel.file ? (
-                  <FileRow
-                    key={panel.id}
-                    repoPath={repo}
-                    file={panel.file}
-                    selected={panel.id === selectedId}
-                    onOpen={() =>
-                      selectItem({
-                        kind: "file",
-                        id: panel.id,
-                        repoPath: repo,
-                        file: panel.file,
-                      })
-                    }
-                    onClose={() => void removeOverviewPanel(repo, panel.id)}
-                  />
-                ) : null,
-              )}
-
-              {/* Pending scheduled sessions for this repo (#93): name/branch +
-                  fire time + cancel. Non-draggable, no rich panel (that's #94). */}
-              {schedules
-                .filter((s) => s.cwd === repo)
-                .map((s) => (
-                  <ScheduleRow
-                    key={s.id}
-                    schedule={s}
-                    selected={s.id === selectedId}
-                    onOpen={() =>
-                      selectItem({
-                        kind: "scheduled",
-                        id: s.id,
-                        repoPath: s.cwd,
-                      })
-                    }
-                    onCancel={() => void cancelSchedule(s.id)}
-                  />
-                ))}
-
-              {/* Isolated worktrees (#74), nested under their parent repo: each
-                  worktree folder is a sub-group (branch + "worktree" badge) with
-                  its agent(s). Their repo_path is the worktree, not this repo. */}
-              {worktreePaths.map((wt) => {
-                const wtAgents = worktreeAgents.filter(
-                  (s) => s.repoPath === wt,
-                );
-                const wtBranch = (branches[wt] ?? "") || repoName(wt);
-                const wtLabels = dedupeBranchLabels(
-                  wtAgents.map(() => wtBranch),
-                );
-                return (
-                  <div key={wt} className={styles.worktreeGroup}>
-                    <div className={styles.worktreeHeader} title={wt}>
-                      <GitBranch
-                        size={12}
-                        strokeWidth={1.5}
-                        className={styles.worktreeIcon}
-                        aria-hidden
-                      />
-                      <span className={styles.worktreeName}>{wtBranch}</span>
-                      <span className={styles.worktreeBadge}>worktree</span>
-                    </div>
-                    {wtAgents.map((session, i) => (
-                      <SessionRow
-                        key={session.id}
-                        session={session}
-                        label={wtLabels[i] ?? wtBranch}
-                        selected={session.id === selectedId}
-                        busy={sessionBusy[session.id] ?? false}
-                        hasBeenActive={sessionActive[session.id] ?? false}
-                        onSelect={() =>
+                  {(overviewPanels[repo] ?? []).map((panel) =>
+                    panel.kind === "diff" ? (
+                      <DiffRow
+                        key={panel.id}
+                        repoPath={repo}
+                        panelId={panel.id}
+                        selected={panel.id === selectedId}
+                        onOpen={() =>
                           selectItem({
-                            kind: "agent",
-                            id: session.id,
-                            repoPath: session.repoPath,
+                            kind: "diff",
+                            id: panel.id,
+                            repoPath: repo,
                           })
                         }
-                        onRemove={() => void removeSession(session.id)}
-                        onRename={(name) =>
-                          void renameSession(session.id, name)
+                        onClose={() => void removeOverviewPanel(repo, panel.id)}
+                      />
+                    ) : panel.kind === "terminal" ? (
+                      <TerminalRow
+                        key={panel.id}
+                        repoPath={repo}
+                        panelId={panel.id}
+                        selected={panel.id === selectedId}
+                        onOpen={() =>
+                          selectItem({
+                            kind: "terminal",
+                            id: panel.id,
+                            repoPath: repo,
+                          })
                         }
+                        onClose={() => void removeOverviewPanel(repo, panel.id)}
+                      />
+                    ) : panel.file ? (
+                      <FileRow
+                        key={panel.id}
+                        repoPath={repo}
+                        file={panel.file}
+                        selected={panel.id === selectedId}
+                        onOpen={() =>
+                          selectItem({
+                            kind: "file",
+                            id: panel.id,
+                            repoPath: repo,
+                            file: panel.file,
+                          })
+                        }
+                        onClose={() => void removeOverviewPanel(repo, panel.id)}
+                      />
+                    ) : null,
+                  )}
+
+                  {/* Pending scheduled sessions for this repo (#93): name/branch +
+                  fire time + cancel. Non-draggable, no rich panel (that's #94). */}
+                  {schedules
+                    .filter((s) => s.cwd === repo)
+                    .map((s) => (
+                      <ScheduleRow
+                        key={s.id}
+                        schedule={s}
+                        selected={s.id === selectedId}
+                        onOpen={() =>
+                          selectItem({
+                            kind: "scheduled",
+                            id: s.id,
+                            repoPath: s.cwd,
+                          })
+                        }
+                        onCancel={() => void cancelSchedule(s.id)}
                       />
                     ))}
-                  </div>
-                );
-              })}
+
+                  {/* Isolated worktrees (#74), nested under their parent repo: each
+                  worktree folder is a sub-group (branch + "worktree" badge) with
+                  its agent(s). Their repo_path is the worktree, not this repo. */}
+                  {worktreePaths.map((wt) => {
+                    const wtAgents = worktreeAgents.filter(
+                      (s) => s.repoPath === wt,
+                    );
+                    const wtBranch = (branches[wt] ?? "") || repoName(wt);
+                    const wtLabels = dedupeBranchLabels(
+                      wtAgents.map(() => wtBranch),
+                    );
+                    return (
+                      <div key={wt} className={styles.worktreeGroup}>
+                        <div className={styles.worktreeHeader} title={wt}>
+                          <GitBranch
+                            size={12}
+                            strokeWidth={1.5}
+                            className={styles.worktreeIcon}
+                            aria-hidden
+                          />
+                          <span className={styles.worktreeName}>
+                            {wtBranch}
+                          </span>
+                          <span className={styles.worktreeBadge}>worktree</span>
+                        </div>
+                        {wtAgents.map((session, i) => (
+                          <SessionRow
+                            key={session.id}
+                            session={session}
+                            label={wtLabels[i] ?? wtBranch}
+                            selected={session.id === selectedId}
+                            busy={sessionBusy[session.id] ?? false}
+                            hasBeenActive={sessionActive[session.id] ?? false}
+                            onSelect={() =>
+                              selectItem({
+                                kind: "agent",
+                                id: session.id,
+                                repoPath: session.repoPath,
+                              })
+                            }
+                            onRemove={() => void removeSession(session.id)}
+                            onRename={(name) =>
+                              void renameSession(session.id, name)
+                            }
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
           );
         })}
