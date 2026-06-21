@@ -442,3 +442,70 @@ Out of scope: the accent picker UI itself (#102, works) and the existing `--acce
 - The picker is the fixed Catppuccin `REPO_PALETTE`, so a per-palette map is viable; runtime
   derivation also covers any future free-hex input. Both apply on Save + boot via
   `applySettingsEffects` (already DOM-guarded for the test env).
+
+---
+
+### 108. [ ] Resizable sidebar — drag the right edge to set its width (min 180 / max 560, persisted)
+
+**Status:** Not started
+**Depends on:** none _(builds on the #9 sidebar + #100 settings/persistence infra — both complete)_
+**Created:** 2026-06-21
+
+**Description**
+
+The left **Sidebar** is a fixed `width: 260px` (`src/components/Sidebar/Sidebar.module.css:4`),
+rendered as a flex child of `.app-body` beside `<main>` (`src/App.tsx:98-100`). Make it
+**drag-resizable**: a thin draggable divider on the sidebar's **right edge** lets the user drag
+to widen / narrow it, **clamped to min 180px / max 560px**, defaulting to **260px**. The chosen
+width **persists across restarts** (restored on boot, re-clamped to the range).
+
+Approach (implementer's choice, recommended): a **custom edge drag-handle** is the most
+localized fit — a thin hit-target on the sidebar's right border that, on pointer drag, updates a
+width value (clamped) applied to the sidebar (inline width / CSS var), with the standard
+`col-resize` cursor; this avoids restructuring the app shell or the app-level dnd-kit context
+(#47) that spans the sidebar. (The existing `react-resizable-panels` (#46) could instead wrap
+`.app-body`, but it sizes in %, makes px min/max awkward, and risks the shell / DnD wiring —
+hence the custom handle is preferred.)
+
+Persistence: store the width as a **dedicated persisted value** (mirroring how recents /
+canvases persist via their own IPC), **not** inside the #100 Settings blob — the Settings modal
+applies a modal-local draft on Save, which could overwrite a mid-session drag. On boot, read +
+clamp the value; if absent, use 260.
+
+Scope:
+
+- **Main window only** — the detached `CanvasWindow` (#84) has no sidebar.
+- The min keeps the sidebar fully usable (repo names + New / Schedule buttons); **no
+  collapse / hide** (out of scope — the min width keeps it visible).
+
+Out of scope: collapsing / hiding the sidebar; resizing anything else (Canvas already resizes
+via #46); any change to the detached window.
+
+**Subtasks**
+
+1. [ ] Add a draggable resize handle on the sidebar's right edge (thin hit-target, `col-resize`
+   cursor, accent on hover / drag) that updates the sidebar width on pointer drag.
+2. [ ] Clamp the width to **[180, 560]** and apply it to the sidebar (replace the hard-coded
+   `width: 260px` with the dynamic value; keep 260 as the default).
+3. [ ] Persist the width as a dedicated value (its own store field + IPC get / set, like
+   recents) and restore + clamp it on boot.
+4. [ ] Ensure the drag is smooth (pointer capture) and the rest of the layout (main content,
+   Overview / Canvas) reflows correctly at every width; main-window only.
+5. [ ] (Optional) Double-click the handle to reset to 260.
+
+**Acceptance criteria**
+
+- [ ] Dragging the sidebar's right edge resizes it live; the width is clamped to 180–560px and
+  cannot go beyond either bound.
+- [ ] The chosen width survives an app restart (restored, re-clamped on boot).
+- [ ] The main content area (Overview / Canvas) reflows to the remaining space at every width.
+- [ ] The sidebar stays usable at the min and doesn't break layout at the max; detached canvas
+  windows are unaffected.
+- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
+
+**Notes**
+
+- Today's fixed width lives at `Sidebar.module.css:4` (`width: 260px`); `.app-body` (flex) is in
+  `src/styles/global.css`.
+- Persisted separately from the #100 Settings blob to avoid the Settings-modal draft clobbering
+  a mid-session drag (per decision).
