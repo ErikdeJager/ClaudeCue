@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> The backlog has fully shipped (#1–#103).
+> The backlog has fully shipped (#1–#104).
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -243,6 +243,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #103 Wired the **Behavior** section of the Settings modal (#100), completing its five sections: a **Default view on launch** segmented choice (Overview / Canvas) — applied once at boot in the store's `init` (main window only, so a mid-session view change is never overridden) — and a **Confirm destructive actions** toggle (default on) gating the Sidebar repo menu's three confirm steps (Forget folder / Kill all agents / Close all items — the `menuMode` state machine): off → the action runs immediately, on → the confirm sub-view shows (#91). Frontend-only; the `defaultView` / `confirmDestructive` fields + persistence already existed (#100).
 
+**Detached canvas window — panel content scrolls (#104).**
+
+- #104 Fixed overflowing panel content being **clipped with no scrollbar** in a detached canvas window (#84): the window wrapper `.body` (`CanvasWindow.module.css`) was a plain block, so the shared `CanvasSurface` `.area` (`flex: 1; min-height: 0; overflow: hidden`) had no bounded height — it grew to content height and each panel's internal scroller never engaged. Made `.body` a **flex column** (mirroring the main window's `.canvas` wrapper) so the height chain cascades and long FileViewer / diff / code content scrolls. CSS-only; the main-window Canvas was already correct.
+
 ---
 
 ## Design reference (dark theme only)
@@ -279,7 +283,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#103 are complete — see **Implemented (completed tasks)** above for the index,
+Tasks #1–#104 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. **Open tasks are listed below.** New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
@@ -292,67 +296,6 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 104. [ ] Detached canvas window: panel content scrolls instead of being clipped
-
-**Status:** Not started
-**Depends on:** none _(#84 detached canvas windows and #98 detached-window rendering are both complete)_
-**Created:** 2026-06-21
-
-**Description**
-
-When a canvas is popped out into its own window (#84), overflowing panel content is
-**clipped and cannot be scrolled** — e.g. a long markdown file in a `FileViewer` is cut
-off at the window's bottom edge with no scrollbar. The same panel scrolls correctly in
-the main-window Canvas, so the defect is specific to the detached window.
-
-Root cause: the detached window's wrapper `.body` in
-`src/components/CanvasWindow/CanvasWindow.module.css` is a plain block
-(`position: relative; flex: 1; min-height: 0`) — **not** a flex container. The shared
-`CanvasSurface` renders its root `.area` (`src/components/Canvas/Canvas.module.css`) with
-`flex: 1; min-height: 0; overflow: hidden`, which only resolves to a definite, bounded
-height when its parent is a flex column. Under `.body` (a block), `.area`'s `flex: 1` is
-inert, so it grows to content height; `.panel { height: 100% }` then collapses to content
-height, the FileViewer's own `overflow-y: auto` never engages, and the overgrown content
-is clipped (`overflow: hidden`) with no scrollbar. The **main window works** because its
-wrapper `.canvas` (`Canvas.module.css`) already is `display: flex; flex-direction: column`
-— exactly what `.body` lacks.
-
-Fix: make `.body` mirror `.canvas` by adding `display: flex; flex-direction: column`. The
-height chain then cascades and each panel's internal scroller (FileViewer markdown/raw,
-DiffInspector, etc.) regains its bounded height. This is a container-level fix above
-`CanvasSurface`, so it restores scrolling for **all** overflowing panel content in detached
-windows — markdown is just the reported symptom.
-
-Out of scope: any change to the shared `CanvasSurface`/`.area` or to `FileViewer` (they are
-correct and unchanged); the main-window Canvas (already correct).
-
-**Subtasks**
-
-1. [ ] In `src/components/CanvasWindow/CanvasWindow.module.css`, add
-   `display: flex; flex-direction: column;` to the `.body` rule so it matches the main
-   window's `.canvas` wrapper.
-2. [ ] Manually verify in a detached canvas window: a long markdown file scrolls within its
-   panel (not clipped); confirm the same for a long raw/code file and a large diff.
-3. [ ] Confirm the main-window Canvas is visually unchanged, and `npm run build` /
-   `npm run lint` pass.
-
-**Acceptance criteria**
-
-- [ ] In a detached canvas window, a `FileViewer` panel whose content overflows shows a
-  scrollbar and scrolls to the end (no content clipped at the window's bottom).
-- [ ] Other overflowing panel types (raw/code file, diff) also scroll in a detached window.
-- [ ] The main-window Canvas behaves exactly as before.
-- [ ] `npm run build` and `npm run lint` pass.
-
-**Notes**
-
-- Builds on #84 (detached canvas windows) and #98 (detached window renders its panels) —
-  both already shipped, so no open dependency.
-- CSS-only fix; no automated test (the Vitest suite covers pure logic, not CSS height
-  chains — verification is manual, per decision).
 
 ---
 

@@ -28,6 +28,12 @@
 
 .body {
   position: relative;
+  /* A flex column (mirroring the main window's `.canvas` wrapper) so the shared
+     CanvasSurface `.area` (flex: 1; min-height: 0) gets a bounded height — without
+     this, `.area` grows to content height and each panel's internal scroller never
+     engages, so overflowing content is clipped with no scrollbar (#104). */
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   min-width: 0;
