@@ -16,6 +16,13 @@ use serde::{Deserialize, Serialize};
 /// Maximum number of recent working directories retained.
 const RECENTS_CAP: usize = 12;
 
+/// serde default for a record's `agent` (#101): older records (written before the
+/// field existed) load as Claude, preserving today's behavior. Matches
+/// `agents::DEFAULT_AGENT_ID`.
+fn default_agent() -> String {
+    "claude".to_string()
+}
+
 /// A persisted session record.
 ///
 /// `id` is ClaudeCue's own session id; `claude_session_id` is the id handed to
@@ -39,6 +46,11 @@ pub struct PersistedSession {
     /// Defaulted so older records (without the field) still deserialize.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_name: Option<String>,
+    /// The coding agent this session runs (#101): `"claude"` (the default for older
+    /// records), `"codex"`, …. Each session keeps its own agent so it always
+    /// resumes / behaves with the CLI it was started with.
+    #[serde(default = "default_agent")]
+    pub agent: String,
 }
 
 /// A user-added Overview panel (a non-agent column), persisted per repo (#38).
@@ -79,6 +91,9 @@ pub struct ScheduledSession {
     pub prompt: Option<String>,
     pub fire_at: u64,
     pub created_at: u64,
+    /// The coding agent to launch (#101); defaults to `"claude"` for older records.
+    #[serde(default = "default_agent")]
+    pub agent: String,
 }
 
 /// The on-disk shape of the persistence file.
@@ -419,6 +434,7 @@ mod tests {
             created_at: 0,
             worktree_parent: None,
             auto_name: None,
+            agent: default_agent(),
         }
     }
 
@@ -438,6 +454,7 @@ mod tests {
             prompt: None,
             fire_at,
             created_at: 0,
+            agent: default_agent(),
         }
     }
 

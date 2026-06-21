@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> The backlog has fully shipped (#1–#100).
+> The backlog has fully shipped (#1–#101).
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -231,6 +231,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #100 Added an application **Settings** screen (reverses the v1 "no settings screen" rule, as #84 reversed multi-window). A new **thin footer row** pins to the bottom of the sidebar (hairline-topped, laid out for more quick actions) with a **⚙ gear** opening a centered **Settings modal** — scrim + focus-trap + Escape, a left section nav + content pane, a modal-local **draft** applied only on **Save** (Cancel / Escape / scrim discard; + "Reset to defaults"). Settings persist through the Rust store as an opaque `settings` blob (`get_settings` / `set_settings`), merged over **TS-side defaults** so an older `sessions.json` upgrades cleanly. Wired sections: **Terminal** (font size / line height / cursor blink → applied to the **live** pooled xterms + new ones via `terminalPool.applyTerminalSettings`), **Sessions** (auto-name toggle gating #97's `ai-title` label across sidebar / Overview / Canvas), and **Data & About** (open data folder, clear recents, app + `claude` versions — backend `open_data_folder` / `clear_recents` / `app_version` / `claude_version`). **Appearance** (accent + reduce-motion) → #102, **Behavior** (default view + confirm-destructive) → #103.
 
+**Pluggable coding-agent CLI — abstraction + persistence (#101, part 1).**
+
+- #101 Made the coding-agent CLI **pluggable** (part 1 of 2): a new `AgentSpec` abstraction (`src-tauri/src/agents.rs`) — a built-in catalog describing each agent's binary + how it spawns / resumes / seeds a session + capability flags (resume / auto-name / install-hint) — with the **`claude`** spec preserving today's exact flags (`--session-id <uuid>`, `--resume <uuid>`, positional prompt). Each session/schedule now **records its own `agent`** (`PersistedSession` / `ScheduledSession`, serde-default `"claude"`; TS `SessionRecord` / `SessionView` / `ScheduledSession` mirrors + record→view mapping). The spawn/resume **path is generalized off the `"claude"` literal**: `pty.rs` (`spawn_session` / `spawn_session_with_prompt` / `resume_session`) resolves the spec's `binary_name` + arg builders, and `commands.rs` (`spawn_session` / `spawn_worktree_agent` / `create_schedule` / `fire_due_schedules`) + the `lib.rs` boot-resume loop thread the agent (default Claude, stored on the record, resumed with the **stored** agent). **Claude is still the only agent and behaves identically** (verified). Codex spec + Settings "Agent" select + resume-capability gating + missing-binary / auto-name / UI-copy generalization → #104.
+
 ---
 
 ## Design reference (dark theme only)
@@ -267,7 +271,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#100 are complete — see **Implemented (completed tasks)** above for the index,
+Tasks #1–#101 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. Open tasks are listed below. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
@@ -280,144 +284,6 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 101. [ ] Pluggable coding-agent CLI — select Claude Code or Codex (extensible)
-
-**Status:** Not started
-**Depends on:** #100
-**Created:** 2026-06-21
-
-**Description**
-
-Today every agent PTY hardcodes the `claude` CLI. Make the coding agent **pluggable** so a
-user can choose, in Settings, which CLI new agents run — **Claude Code** or **Codex** for
-now, with the design open to **more agents later**. Every entry point that currently assumes
-`claude` becomes agent-driven.
-
-**The abstraction (`AgentSpec` + a built-in catalog).** Introduce a per-agent spec — a new
-Rust module `src-tauri/src/agents.rs` and a mirrored TS catalog (`src/agents.ts`) —
-describing everything that differs per agent:
-- `id` (`"claude"`, `"codex"`), `display_name`, `binary_name` (looked up on PATH);
-- `spawn_args(session_id, prompt?) -> Vec<String>` — how to start a session + seed an
-  optional prompt;
-- `supports_resume` + `resume_args(session_id) -> Vec<String>`;
-- `supports_auto_name` (claude reads its `ai-title` log #97; codex can't);
-- `install_hint` (for the missing-binary screen).
-
-A built-in catalog (`claude`, `codex`) is the single source of truth — adding an agent later
-is a new catalog entry, not scattered edits. **Claude's spec preserves today's exact
-behavior** (`--session-id <uuid>`, `--resume <uuid>`, positional prompt). **Codex's spec
-must be verified against the real `codex` CLI at implementation** — its command, whether it
-accepts an app-chosen session id, whether/how it resumes, positional-prompt support — and
-its capability flags set accordingly (same CLI-verification discipline as the claude flags,
-per CLAUDE.md Conventions).
-
-**The setting (global default, in #100's Settings screen).** Add an **"Agent"** select
-(Claude Code / Codex) to the #100 Settings modal → a persisted `selectedAgent` (default
-`claude`). **Global default only:** it sets which agent **new** sessions use; each session
-**permanently records its own agent**, so it always resumes/behaves with the CLI it was
-started with — switching the setting never affects already-running sessions.
-
-**Per-session agent (persistence).** Add an `agent` field to `PersistedSession` and
-`ScheduledSession` (Rust, `#[serde(default)]` → `"claude"` for back-compat) and the TS
-mirrors (`SessionRecord` / `SessionView` / `ScheduledSession`, default `"claude"` on read) +
-the record→view mapping. New sessions/schedules store `selectedAgent`; resume + auto-name
-read the **stored** agent. (ClaudeCue's internal session/PTY id is unchanged — the spec's
-`spawn_args` decides whether that id is passed to the CLI, e.g. claude's `--session-id`.)
-
-**Resume = capability-gated; drop non-resumable on relaunch.** For an agent whose
-`supports_resume` is false:
-- the **copy-resume** button (#28/#86, Overview + Canvas headers) is **hidden** (for
-  resumable agents it builds `<binary> --resume <id>` from the spec, not a `claude` literal);
-- **Restart** (#63) spawns a **fresh** session instead of `--resume`;
-- on **app relaunch** those sessions are **not restored** (they can't be) — only
-  resume-capable (Claude) sessions boot-resume, exactly as today.
-
-**Generalize the claude-specific surfaces:**
-- Spawn/resume call sites switch from the `"claude"` literal to the resolved spec: `pty.rs`
-  (`spawn_session` / `spawn_session_with_prompt` / `resume_session` / the shared
-  `spawn_with_id`), `commands.rs` (`spawn_session` / `spawn_worktree_agent` /
-  `create_schedule` / `fire_due_schedules`), `lib.rs` boot-resume loop.
-- **Missing-binary UI:** generalize `ClaudeMissing` → an agent-aware screen showing the
-  spec's `display_name` + `install_hint`; the store flag becomes `agentMissing` (+ which
-  agent). The Rust side is already generic (`find_on_path(binary)` → `BinaryNotFound`).
-- **Auto-name (#97):** gate the `ai-title` reader on `supports_auto_name` — run it only for
-  agents that have it (Claude); others fall back to branch/first-prompt. (#100, which this
-  depends on, already depends on #97, so the reader exists by the time this runs.)
-- **UI copy:** agent-aware placeholders/labels — NewSessionModal ("Initial prompt for
-  <agent>…"), EmptyState ("Start a <agent> session"), ScheduledPanel — from the selected
-  agent's `display_name`.
-
-**Unchanged (confirmed agent-agnostic):** the busy/idle monitor (pure output-activity
-heuristic), the PTY mechanics (portable-pty, reader, scrollback), and the plain shell
-**Terminal item** (#72, runs `$SHELL`). **No per-session agent indicator** in the UI for now
-(kept implicit — the global selector is enough).
-
-**Subtasks**
-
-1. [ ] **`AgentSpec` + catalog.** New `src-tauri/src/agents.rs` (spec + `claude` / `codex`
-   entries + `agent_spec(id)` lookup) and a mirrored TS catalog (`src/agents.ts`). Claude =
-   today's exact flags; Codex = verified against the real CLI, capabilities set accordingly.
-2. [ ] **Persistence.** Add `agent` to `PersistedSession` + `ScheduledSession` (serde
-   default `"claude"`) and the TS `SessionRecord` / `SessionView` / `ScheduledSession`
-   mirrors + the record→view mapping.
-3. [ ] **Settings "Agent" select.** Extend #100's Settings modal with an Agent section
-   (Claude Code / Codex) → persisted `selectedAgent` (default `claude`).
-4. [ ] **Spawn.** Thread the chosen agent through `commands.rs` (`spawn_session` /
-   `spawn_worktree_agent` / `create_schedule` / `fire_due_schedules`) and the `pty.rs` spawn
-   methods — resolve the spec, use `binary_name` + `spawn_args`, store the agent on the
-   record/schedule; new-session flows pass `selectedAgent`.
-5. [ ] **Resume (capability-gated).** `pty.rs` `resume_session` + `commands.rs` + the
-   `lib.rs` boot loop use the **stored** agent's spec; only resume-capable sessions
-   boot-restore (non-resumable dropped); Restart spawns fresh for non-resumable agents.
-6. [ ] **Copy-resume UI.** Overview + Canvas headers: hide for non-resumable agents; else
-   build the command from the spec.
-7. [ ] **Missing-binary UI.** Generalize `ClaudeMissing` → agent-aware (`display_name` +
-   `install_hint`); store `agentMissing` (+ agent id).
-8. [ ] **Auto-name gating (#97).** Run the `ai-title` reader only for `supports_auto_name`
-   agents; others fall back to branch/first-prompt.
-9. [ ] **UI copy.** Agent-aware placeholders/labels (NewSessionModal / EmptyState /
-   ScheduledPanel).
-10. [ ] **Verify** `npm run build`, `npm run lint`, `npm test`, `cargo test`,
-    `npm run lint:rust` clean; the Claude path behaves exactly as before; Codex selectable
-    and starts (note any capability that couldn't be runtime-verified).
-
-**Acceptance criteria**
-
-- [ ] Settings has an **Agent** select (Claude Code / Codex); the choice persists and sets
-  the agent for **new** sessions only.
-- [ ] A **Claude** session behaves exactly as today (spawn `--session-id`, boot-resume
-  `--resume`, Restart, copy-resume command, auto-name #97).
-- [ ] A **Codex** session spawns via the `codex` CLI (real flags, verified at impl); its
-  resume-only features are **gated** — copy-resume hidden, Restart starts fresh, and on
-  relaunch a non-resumable Codex session is **not** restored — without breaking Claude's
-  resume/restore.
-- [ ] Each session **remembers its own agent**: changing the setting doesn't change running
-  sessions; an existing `sessions.json` with no `agent` loads with sane defaults (`claude`),
-  no crash.
-- [ ] The missing-binary screen names the **selected agent** and its install hint when that
-  CLI isn't on PATH.
-- [ ] Adding a third agent later is a **single catalog entry** — no functional `claude`
-  literals remain at the spawn/resume/UI call sites.
-- [ ] All builds/lints/tests (frontend + Rust) pass.
-
-**Notes**
-
-- **Depends on #100** (the Agent select lives in its Settings screen); #100 already depends
-  on #97, so #97's auto-name reader exists to be gated here.
-- **Codex CLI flags are unverified** in this plan — the implementer must check the real
-  `codex` CLI (command, session-id / resume / positional-prompt support) and set the spec's
-  capabilities; if `codex` isn't available to verify, implement per its docs and flag it as
-  needing runtime verification (as #84 was). Same fragility class as the claude-flags note
-  in CLAUDE.md Conventions.
-- **Big task — may be split** along the subtask seams if it can't land in one pass (per the
-  backlog rule): e.g. (a) `AgentSpec` + persistence + spawn/resume generalization, Claude
-  still the only agent; then (b) the Codex spec + Settings select + UI generalization. Ship
-  the whole capability.
-- A later docs pass must update CLAUDE.md / README (the "always `claude`" framing, the
-  Conventions spawn/resume note, and the new agent abstraction).
 
 ---
 
@@ -515,3 +381,80 @@ effects**.
 
 - Part of the #100 Settings split — the Behavior UI + the two wirings; persistence already
   exists. The confirm mechanism is `Sidebar.tsx`'s `menuMode`, not `window.confirm`.
+
+---
+
+### 104. [ ] Pluggable coding-agent CLI — Codex spec + Settings select + UI gating (part 2)
+
+**Status:** Not started
+**Depends on:** #101
+**Created:** 2026-06-21
+
+**Description**
+
+Part 2 of #101, which shipped the `AgentSpec` abstraction + per-session `agent` persistence +
+the generalized spawn/resume path (Claude-only, behavior-preserving). Add the **second agent
+(Codex)**, the **user-facing selection**, and the **capability-gating** so a non-resumable
+agent degrades gracefully — without changing Claude's behavior.
+
+- **Codex spec** — add a `codex` entry to the Rust catalog (`agents.rs`, turning `agent_spec`
+  into a `match id`) and a **mirrored TS catalog `src/agents.ts`** (the abstraction the UI
+  reads). **Verify against the real `codex` CLI** (command, whether it accepts an app-chosen
+  session id, whether/how it resumes, positional-prompt support) and set its capability flags
+  (`binary_name`, `supports_resume`, `supports_auto_name`, `install_hint`). `codex` was **not
+  installed** when #101 part 1 landed — if still unavailable, implement per its docs and **flag
+  as needing runtime verification** (as #84 was), per CLAUDE.md Conventions.
+- **Settings "Agent" select** — add an Agent section (Claude Code / Codex) to the #100 Settings
+  modal → a persisted `selectedAgent` (a new field on the #100 `Settings` blob, default
+  `"claude"`). **Global default for new sessions only**: the spawn commands (`spawn_session` /
+  `spawn_worktree_agent` / `create_schedule`) already accept an optional `agent` (#101 part 1);
+  thread `selectedAgent` through the frontend ipc wrappers. Each session keeps its own agent.
+- **Resume capability-gating** (`supports_resume` false → Codex): the copy-resume button
+  (#28/#86, Overview + Canvas headers) is **hidden** for non-resumable agents (and built from
+  the spec — `<binary> --resume <id>` — for resumable ones); **Restart** (#63) spawns a fresh
+  session; the `lib.rs` boot loop restores **only** `supports_resume` sessions (non-resumable
+  dropped).
+- **Missing-binary UI** — generalize `ClaudeMissing` → agent-aware (the spec's `display_name`
+  + `install_hint`); store flag `agentMissing` (+ which agent). The Rust side is already
+  generic (`BinaryNotFound`).
+- **Auto-name gating (#97)** — run the `ai-title` reader only for `supports_auto_name` agents
+  (Claude); others fall back to branch / first-prompt.
+- **UI copy** — agent-aware placeholders/labels from the selected agent's `display_name`
+  (NewSessionModal "Initial prompt for <agent>…", EmptyState "Start a <agent> session",
+  ScheduledPanel).
+
+**Subtasks**
+
+1. [ ] `codex` catalog entry (Rust `agents.rs` → `match id`; TS `src/agents.ts`); capability
+   flags from the real CLI (or per docs + flagged unverified).
+2. [ ] Settings "Agent" select → persisted `selectedAgent` (#100 `Settings` blob); thread it
+   through the spawn ipc wrappers.
+3. [ ] Resume gating: copy-resume hidden / spec-built; Restart fresh for non-resumable; boot
+   loop restores only resumable sessions.
+4. [ ] Missing-binary UI agent-aware (`agentMissing` + spec `display_name` / `install_hint`).
+5. [ ] Auto-name reader gated on `supports_auto_name`.
+6. [ ] Agent-aware UI copy (NewSessionModal / EmptyState / ScheduledPanel).
+7. [ ] `npm run build`, `npm run lint`, `npm test`, `cargo test`, `npm run lint:rust` clean;
+   the Claude path unchanged; Codex selectable + starts (note any unverified capability).
+
+**Acceptance criteria**
+
+- [ ] Settings has an Agent select (Claude Code / Codex); the choice persists and sets the
+  agent for **new** sessions only; running sessions keep their own agent.
+- [ ] A Claude session behaves exactly as today (spawn / boot-resume / Restart / copy-resume /
+  auto-name #97).
+- [ ] A Codex session spawns via `codex` (real flags); its resume-only features are gated —
+  copy-resume hidden, Restart fresh, not restored on relaunch — without breaking Claude.
+- [ ] The missing-binary screen names the selected agent + its install hint.
+- [ ] Adding a third agent later is a single catalog entry — no functional `claude` literals
+  at the spawn/resume/UI call sites.
+- [ ] All builds/lints/tests (frontend + Rust) pass.
+
+**Notes**
+
+- Part 2 of the #101 split. The abstraction + persistence + generalized spawn/resume already
+  exist (#101 part 1); this adds the second agent, the selector, and the gating.
+- **Codex CLI flags are unverified** (codex wasn't installed at #101) — verify against the
+  real CLI or implement per docs + flag, per CLAUDE.md Conventions.
+- A later docs pass updates CLAUDE.md / README (the "always `claude`" framing + the agent
+  abstraction).

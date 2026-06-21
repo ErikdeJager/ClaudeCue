@@ -17,6 +17,8 @@ export interface SessionRecord {
   worktree_parent?: string | null;
   /** claude's auto-generated session title (#97); absent until captured. */
   auto_name?: string | null;
+  /** The coding agent this session runs (#101); `"claude"` for older records. */
+  agent?: string;
 }
 
 /** Typed command error (mirrors `pty::SessionError`, serialized `{ kind, message }`). */
@@ -55,6 +57,8 @@ export interface ScheduledSession {
   prompt?: string | null;
   fire_at: number;
   created_at: number;
+  /** The coding agent to launch (#101); `"claude"` for older records. */
+  agent?: string;
 }
 
 /** Payload of the `schedule://fired` event (#93): a schedule became a live session. */
@@ -233,4 +237,6 @@ export interface SessionView {
   /** claude's auto-generated title (#97): the display label for an agent with no
    * custom `name`. Refreshed as the session progresses; `name` still wins. */
   autoName?: string | null;
+  /** The coding agent this session runs (#101); `"claude"` for older records. */
+  agent?: string;
 }

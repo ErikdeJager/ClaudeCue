@@ -73,6 +73,7 @@ function toSessionView(record: SessionRecord): SessionView {
     createdAt: record.created_at,
     worktreeParent: record.worktree_parent ?? null,
     autoName: record.auto_name ?? null,
+    agent: record.agent ?? "claude",
   };
 }
 

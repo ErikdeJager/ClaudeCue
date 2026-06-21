@@ -4,6 +4,7 @@
 //! frontend talks to. The session/PTY core lives in `pty`, JSON persistence in
 //! `store`; read-only git support is added by a later task.
 
+mod agents;
 mod commands;
 mod files;
 mod git;
@@ -81,6 +82,7 @@ pub fn run() {
                         &record.claude_session_id,
                         &record.repo_path,
                         record.name.clone(),
+                        &record.agent,
                     );
                 }
             });

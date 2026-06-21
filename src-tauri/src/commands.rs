@@ -71,8 +71,12 @@ pub fn spawn_session(
     store: State<'_, Store>,
     cwd: String,
     name: Option<String>,
+    agent: Option<String>,
 ) -> Result<PersistedSession, SessionError> {
-    let info = manager.spawn_session(cwd.as_str(), name.clone())?;
+    // The coding agent for this session (#101). Until the Settings selector (the
+    // follow-up) the frontend omits it, so it defaults to Claude.
+    let agent = agent.unwrap_or_else(|| crate::agents::DEFAULT_AGENT_ID.to_string());
+    let info = manager.spawn_session(cwd.as_str(), name.clone(), &agent)?;
     let record = PersistedSession {
         id: info.id.clone(),
         claude_session_id: info.id,
@@ -81,6 +85,7 @@ pub fn spawn_session(
         created_at: now_secs(),
         worktree_parent: None,
         auto_name: None,
+        agent,
     };
     store
         .add_session(record.clone())
@@ -116,7 +121,9 @@ pub fn spawn_worktree_agent(
     store: State<'_, Store>,
     repo: String,
     branch: String,
+    agent: Option<String>,
 ) -> Result<PersistedSession, SessionError> {
+    let agent = agent.unwrap_or_else(|| crate::agents::DEFAULT_AGENT_ID.to_string());
     let dest = worktree_path(&store, &repo, &branch)?;
     // `git worktree add` fails if the folder already exists, so only add when it
     // isn't there yet — an existing folder means we reuse the worktree.
@@ -124,7 +131,7 @@ pub fn spawn_worktree_agent(
         git::worktree_add(&repo, &branch, &dest).map_err(SessionError::Git)?;
     }
     let dest_str = dest.to_string_lossy().to_string();
-    let info = manager.spawn_session(dest_str.as_str(), None)?;
+    let info = manager.spawn_session(dest_str.as_str(), None, &agent)?;
     let record = PersistedSession {
         id: info.id.clone(),
         claude_session_id: info.id,
@@ -133,6 +140,7 @@ pub fn spawn_worktree_agent(
         created_at: now_secs(),
         worktree_parent: Some(repo),
         auto_name: None,
+        agent,
     };
     store
         .add_session(record.clone())
@@ -181,6 +189,7 @@ pub fn resume_session(
         &record.claude_session_id,
         &record.repo_path,
         record.name.clone(),
+        &record.agent,
     )?;
     Ok(record)
 }
@@ -476,6 +485,7 @@ pub fn create_schedule(
     name: Option<String>,
     prompt: Option<String>,
     at: u64,
+    agent: Option<String>,
 ) -> Result<ScheduledSession, SessionError> {
     let sched = ScheduledSession {
         id: Uuid::new_v4().to_string(),
@@ -485,6 +495,7 @@ pub fn create_schedule(
         prompt: prompt.filter(|p| !p.trim().is_empty()),
         fire_at: at,
         created_at: now_secs(),
+        agent: agent.unwrap_or_else(|| crate::agents::DEFAULT_AGENT_ID.to_string()),
     };
     store
         .add_schedule(sched.clone())
@@ -547,6 +558,7 @@ pub fn fire_due_schedules(app: &AppHandle) {
             &sched.cwd,
             sched.name.clone(),
             sched.prompt.as_deref(),
+            &sched.agent,
         ) {
             Ok(info) => {
                 let record = PersistedSession {
@@ -557,6 +569,7 @@ pub fn fire_due_schedules(app: &AppHandle) {
                     created_at: now_secs(),
                     worktree_parent: None,
                     auto_name: None,
+                    agent: sched.agent.clone(),
                 };
                 let _ = store.add_session(record.clone());
                 let _ = store.touch_recent(&sched.cwd);

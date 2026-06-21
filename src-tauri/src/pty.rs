@@ -217,48 +217,51 @@ impl SessionManager {
         &self,
         cwd: impl AsRef<Path>,
         name: Option<String>,
+        agent: &str,
     ) -> Result<SessionInfo, SessionError> {
-        self.spawn_session_with_prompt(cwd, name, None)
+        self.spawn_session_with_prompt(cwd, name, None, agent)
     }
 
-    /// Spawn a new `claude` session, optionally pre-seeded with an initial
-    /// `prompt` so it boots ready (#93 scheduled sessions). The prompt is passed
-    /// **positionally** after `--session-id <id>`:
-    /// `claude --session-id <uuid> "<prompt>"`. Verified against the real CLI
-    /// (claude 2.1.x): `claude [options] [command] [prompt]` accepts a positional
-    /// prompt that starts the interactive session with it sent. An empty/blank
-    /// prompt is omitted (a plain new session).
+    /// Spawn a new session for `agent` (#101), optionally pre-seeded with an initial
+    /// `prompt` so it boots ready (#93 scheduled sessions). The agent's `AgentSpec`
+    /// supplies the binary + the args; for Claude that's `claude --session-id <uuid>
+    /// ["<prompt>"]` (the prompt passed positionally) — today's exact, CLI-verified
+    /// (claude 2.1.x) behavior, since Claude is the only agent so far. A blank prompt
+    /// is dropped (a plain new session).
     pub fn spawn_session_with_prompt(
         &self,
         cwd: impl AsRef<Path>,
         name: Option<String>,
         prompt: Option<&str>,
+        agent: &str,
     ) -> Result<SessionInfo, SessionError> {
         let id = Uuid::new_v4().to_string();
-        let mut args: Vec<&str> = vec!["--session-id", id.as_str()];
-        let trimmed = prompt.map(str::trim).filter(|p| !p.is_empty());
-        if let Some(p) = trimmed {
-            args.push(p);
-        }
-        self.spawn_with_id(id.clone(), "claude", &args, cwd.as_ref(), name)
+        let spec = crate::agents::agent_spec(agent);
+        let args = spec.spawn_args(&id, prompt);
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.spawn_with_id(id.clone(), spec.binary_name, &arg_refs, cwd.as_ref(), name)
     }
 
-    /// Resume a previously-persisted `claude` session by id (used on boot) via
-    /// `claude --resume <claude_session_id>`. Verified against the real CLI
-    /// (claude 2.1.x, #30): `--session-id` / `--resume` round-trip; resuming an
+    /// Resume a previously-persisted session by id (used on boot / Restart) using
+    /// the **stored** `agent`'s spec (#101). For Claude that's `claude --resume
+    /// <id>` — today's exact, CLI-verified (claude 2.1.x, #30) behavior: resuming an
     /// unknown id exits 1 ("No conversation found"), which the UI surfaces as a
-    /// per-session Restart rather than a fatal error.
+    /// per-session Restart rather than a fatal error. (The follow-up gates this on
+    /// the spec's `supports_resume`; Claude supports it.)
     pub fn resume_session(
         &self,
         claude_session_id: &str,
         cwd: impl AsRef<Path>,
         name: Option<String>,
+        agent: &str,
     ) -> Result<SessionInfo, SessionError> {
-        let args = ["--resume", claude_session_id];
+        let spec = crate::agents::agent_spec(agent);
+        let args = spec.resume_args(claude_session_id);
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
         self.spawn_with_id(
             claude_session_id.to_string(),
-            "claude",
-            &args,
+            spec.binary_name,
+            &arg_refs,
             cwd.as_ref(),
             name,
         )
