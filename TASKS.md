@@ -534,3 +534,33 @@ cross-window-sync changes.
 - Touches `CanvasSurface.tsx`, the same file as #95 / #96 / #97 (which edit the agent panel
   *header* / label — a different region). No functional dependency; sequencing after them
   just avoids edit churn.
+
+---
+
+### 99. [ ] Tighten the gap between the "New session" and "Schedule session" sidebar buttons
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-21
+
+**Description**
+
+The two stacked sidebar action buttons — the accent **New session** button and the ghost
+**Schedule session** button (#93) — sit **12px** apart, which reads as too loose (image
+#3). Tighten that gap to **4px** so they read as one compact cluster.
+
+The gap is entirely the New session button's bottom margin: in `Sidebar.module.css`,
+`.newButton` has `margin: var(--space-12)` (12px on all sides) and `.scheduleButton` has
+`margin: 0 var(--space-12) var(--space-12)` (top 0). Reduce only `.newButton`'s **bottom**
+margin from 12px to 4px (`var(--space-4)`) — e.g.
+`margin: var(--space-12) var(--space-12) var(--space-4)`. Leave the top/side margins and
+the Schedule button untouched, so only the inter-button gap tightens.
+
+Scope: just the New ↔ Schedule gap in `Sidebar.module.css`. The Schedule → ViewSwitch gap
+and the rest of the sidebar spacing stay as they are.
+
+**Acceptance criteria**
+
+- [ ] The vertical gap between the New session and Schedule session buttons is ~4px (down
+  from 12px); their outer/side margins and the rest of the sidebar layout are unchanged.
+- [ ] `npm run build` and `npm run lint` pass.
