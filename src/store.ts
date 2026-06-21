@@ -797,6 +797,12 @@ export const useStore = create<AppState>()((set, get) => ({
       }
     }
     await get().refresh();
+    // Default view on launch (#103): apply the saved preference once at boot (main
+    // window only). `init` runs only on mount, so a mid-session view change is never
+    // overridden (unlike `refresh`, which can re-run).
+    if (IS_MAIN_WINDOW) {
+      get().setView(get().settings.defaultView);
+    }
     // Learn the current detached-window set — a just-opened window may have missed
     // the `canvas://windows` broadcast that fired before it began listening (#84).
     try {

@@ -150,6 +150,42 @@
   border-color: var(--text-primary);
 }
 
+/* Default-view segmented control (#103). */
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+}
+
+.segment {
+  padding: var(--space-6) var(--space-16);
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.segment:hover {
+  color: var(--text-primary);
+}
+
+.segment + .segment {
+  border-left: 1px solid var(--border-strong);
+}
+
+.segmentActive,
+.segmentActive:hover {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
 /* Data & About. */
 .dataSection {
   display: flex;

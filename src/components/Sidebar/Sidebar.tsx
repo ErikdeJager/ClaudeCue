@@ -480,6 +480,7 @@ function Sidebar() {
   const openNewSession = useStore((s) => s.openNewSession);
   const openSchedule = useStore((s) => s.openSchedule);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
+  const confirmDestructive = useStore((s) => s.settings.confirmDestructive);
   const schedules = useStore((s) => s.schedules);
   const cancelSchedule = useStore((s) => s.cancelSchedule);
   const refreshBranches = useStore((s) => s.refreshBranches);
@@ -1043,7 +1044,14 @@ function Sidebar() {
                     type="button"
                     role="menuitem"
                     className={styles.menuItemDanger}
-                    onClick={() => setMenuMode("confirm-kill")}
+                    onClick={() => {
+                      // Confirm first unless the user turned confirms off (#103).
+                      if (confirmDestructive) setMenuMode("confirm-kill");
+                      else {
+                        void killAllAgents(menu.repo);
+                        closeMenu();
+                      }
+                    }}
                   >
                     Kill all agents
                   </button>
@@ -1054,8 +1062,10 @@ function Sidebar() {
                     role="menuitem"
                     className={styles.menuItemDanger}
                     onClick={() => {
-                      // Confirm only when agents are running; else clear directly.
-                      if (menuRunningAll > 0) setMenuMode("confirm-close");
+                      // Confirm only when agents are running and confirms are on
+                      // (#103); else clear directly.
+                      if (confirmDestructive && menuRunningAll > 0)
+                        setMenuMode("confirm-close");
                       else {
                         void closeAllItems(menu.repo);
                         closeMenu();
@@ -1070,8 +1080,10 @@ function Sidebar() {
                   role="menuitem"
                   className={styles.menuItemDanger}
                   onClick={() => {
-                    // Confirm first only when agents are running in this folder.
-                    if (menuRunning > 0) setMenuMode("confirm");
+                    // Confirm first only when agents are running in this folder and
+                    // confirms are on (#103).
+                    if (confirmDestructive && menuRunning > 0)
+                      setMenuMode("confirm");
                     else {
                       void forgetRepo(menu.repo);
                       closeMenu();

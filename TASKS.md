@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> The backlog has fully shipped (#1–#102).
+> The backlog has fully shipped (#1–#103).
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -239,6 +239,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #102 Wired the **Appearance** section of the Settings modal (#100): an **accent color** swatch picker over the Catppuccin palette (`REPO_PALETTE`) — the chosen hex overrides the `--accent` token on `:root` (Peach is the default, stored as `""` so the token stands) — and a **Reduce motion** toggle that forces the motion killswitch on via a `body.reduce-motion` class (mirroring the `prefers-reduced-motion` block in `global.css`). Both apply on Save + boot through the store's `applySettingsEffects` (DOM-guarded for the test env); the `accentColor` / `reduceMotion` fields + persistence already existed (#100). Behavior section → #103.
 
+**Settings — Behavior section (#103).**
+
+- #103 Wired the **Behavior** section of the Settings modal (#100), completing its five sections: a **Default view on launch** segmented choice (Overview / Canvas) — applied once at boot in the store's `init` (main window only, so a mid-session view change is never overridden) — and a **Confirm destructive actions** toggle (default on) gating the Sidebar repo menu's three confirm steps (Forget folder / Kill all agents / Close all items — the `menuMode` state machine): off → the action runs immediately, on → the confirm sub-view shows (#91). Frontend-only; the `defaultView` / `confirmDestructive` fields + persistence already existed (#100).
+
 ---
 
 ## Design reference (dark theme only)
@@ -275,8 +279,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#102 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. Open tasks are listed below. New work goes
+All tasks (#1–#103) are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. There are no open tasks. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -288,129 +292,3 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 103. [ ] Settings — Behavior section (default view + confirm destructive)
-
-**Status:** Not started
-**Depends on:** #100
-**Created:** 2026-06-21
-
-**Description**
-
-Add the **Behavior** section to the Settings modal (#100) — the other section-wiring deferred
-from #100. The `defaultView` and `confirmDestructive` fields already exist on the `Settings`
-type with defaults and persist through #100's `settings` blob; this wires their **UI +
-effects**.
-
-- **Default view on launch** — Overview / Canvas (a small two-option choice, e.g. a
-  `ViewSwitch`-style control) bound to `draft.defaultView`. Read by the store at boot: after
-  the initial `refresh`, set `view` to `settings.defaultView` (main window only; never
-  override a mid-session user change).
-- **Confirm destructive actions** (default on) — when **off**, the Sidebar repo menu's
-  destructive actions skip their confirm step. The confirm is a `menuMode` state machine in
-  `Sidebar.tsx` (`"confirm"` = Forget folder, `"confirm-kill"` = Kill all, `"confirm-close"` =
-  Close all), **not** `window.confirm`; gate each `setMenuMode("confirm…")` on
-  `settings.confirmDestructive` (off → run the action directly: `forgetRepo` / `killAllAgents`
-  / `closeAllItems`).
-
-**Subtasks**
-
-1. [ ] Add a `Behavior` entry to `Settings.tsx` (`SECTIONS` + content): a default-view choice
-   bound to `draft.defaultView`, a confirm-destructive `Checkbox` bound to
-   `draft.confirmDestructive`.
-2. [ ] Boot: in `store.ts` (`init`/`refresh`), after load apply `settings.defaultView` to
-   `view` (main window only).
-3. [ ] `Sidebar.tsx`: read `settings.confirmDestructive` and gate the three `menuMode` confirm
-   transitions (Forget / Kill all / Close all) on it.
-4. [ ] `npm run build`, `npm run lint`, and `npm test` are clean.
-
-**Acceptance criteria**
-
-- [ ] The chosen default view is shown on the next launch.
-- [ ] With confirm-destructive **off**, Forget folder / Kill all agents / Close all items run
-  immediately (no confirm sub-view); **on** (default) keeps the confirm step (#91).
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
-
-**Notes**
-
-- Part of the #100 Settings split — the Behavior UI + the two wirings; persistence already
-  exists. The confirm mechanism is `Sidebar.tsx`'s `menuMode`, not `window.confirm`.
-
----
-
-### 104. [ ] Pluggable coding-agent CLI — Codex spec + Settings select + UI gating (part 2)
-
-**Status:** Not started
-**Depends on:** #101
-**Created:** 2026-06-21
-
-**Description**
-
-Part 2 of #101, which shipped the `AgentSpec` abstraction + per-session `agent` persistence +
-the generalized spawn/resume path (Claude-only, behavior-preserving). Add the **second agent
-(Codex)**, the **user-facing selection**, and the **capability-gating** so a non-resumable
-agent degrades gracefully — without changing Claude's behavior.
-
-- **Codex spec** — add a `codex` entry to the Rust catalog (`agents.rs`, turning `agent_spec`
-  into a `match id`) and a **mirrored TS catalog `src/agents.ts`** (the abstraction the UI
-  reads). **Verify against the real `codex` CLI** (command, whether it accepts an app-chosen
-  session id, whether/how it resumes, positional-prompt support) and set its capability flags
-  (`binary_name`, `supports_resume`, `supports_auto_name`, `install_hint`). `codex` was **not
-  installed** when #101 part 1 landed — if still unavailable, implement per its docs and **flag
-  as needing runtime verification** (as #84 was), per CLAUDE.md Conventions.
-- **Settings "Agent" select** — add an Agent section (Claude Code / Codex) to the #100 Settings
-  modal → a persisted `selectedAgent` (a new field on the #100 `Settings` blob, default
-  `"claude"`). **Global default for new sessions only**: the spawn commands (`spawn_session` /
-  `spawn_worktree_agent` / `create_schedule`) already accept an optional `agent` (#101 part 1);
-  thread `selectedAgent` through the frontend ipc wrappers. Each session keeps its own agent.
-- **Resume capability-gating** (`supports_resume` false → Codex): the copy-resume button
-  (#28/#86, Overview + Canvas headers) is **hidden** for non-resumable agents (and built from
-  the spec — `<binary> --resume <id>` — for resumable ones); **Restart** (#63) spawns a fresh
-  session; the `lib.rs` boot loop restores **only** `supports_resume` sessions (non-resumable
-  dropped).
-- **Missing-binary UI** — generalize `ClaudeMissing` → agent-aware (the spec's `display_name`
-  + `install_hint`); store flag `agentMissing` (+ which agent). The Rust side is already
-  generic (`BinaryNotFound`).
-- **Auto-name gating (#97)** — run the `ai-title` reader only for `supports_auto_name` agents
-  (Claude); others fall back to branch / first-prompt.
-- **UI copy** — agent-aware placeholders/labels from the selected agent's `display_name`
-  (NewSessionModal "Initial prompt for <agent>…", EmptyState "Start a <agent> session",
-  ScheduledPanel).
-
-**Subtasks**
-
-1. [ ] `codex` catalog entry (Rust `agents.rs` → `match id`; TS `src/agents.ts`); capability
-   flags from the real CLI (or per docs + flagged unverified).
-2. [ ] Settings "Agent" select → persisted `selectedAgent` (#100 `Settings` blob); thread it
-   through the spawn ipc wrappers.
-3. [ ] Resume gating: copy-resume hidden / spec-built; Restart fresh for non-resumable; boot
-   loop restores only resumable sessions.
-4. [ ] Missing-binary UI agent-aware (`agentMissing` + spec `display_name` / `install_hint`).
-5. [ ] Auto-name reader gated on `supports_auto_name`.
-6. [ ] Agent-aware UI copy (NewSessionModal / EmptyState / ScheduledPanel).
-7. [ ] `npm run build`, `npm run lint`, `npm test`, `cargo test`, `npm run lint:rust` clean;
-   the Claude path unchanged; Codex selectable + starts (note any unverified capability).
-
-**Acceptance criteria**
-
-- [ ] Settings has an Agent select (Claude Code / Codex); the choice persists and sets the
-  agent for **new** sessions only; running sessions keep their own agent.
-- [ ] A Claude session behaves exactly as today (spawn / boot-resume / Restart / copy-resume /
-  auto-name #97).
-- [ ] A Codex session spawns via `codex` (real flags); its resume-only features are gated —
-  copy-resume hidden, Restart fresh, not restored on relaunch — without breaking Claude.
-- [ ] The missing-binary screen names the selected agent + its install hint.
-- [ ] Adding a third agent later is a single catalog entry — no functional `claude` literals
-  at the spawn/resume/UI call sites.
-- [ ] All builds/lints/tests (frontend + Rust) pass.
-
-**Notes**
-
-- Part 2 of the #101 split. The abstraction + persistence + generalized spawn/resume already
-  exist (#101 part 1); this adds the second agent, the selector, and the gating.
-- **Codex CLI flags are unverified** (codex wasn't installed at #101) — verify against the
-  real CLI or implement per docs + flag, per CLAUDE.md Conventions.
-- A later docs pass updates CLAUDE.md / README (the "always `claude`" framing + the agent
-  abstraction).

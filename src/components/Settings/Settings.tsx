@@ -9,6 +9,7 @@ import {
   Bot,
   Database,
   FolderOpen,
+  MousePointerClick,
   Palette,
   SlidersHorizontal,
   Trash2,
@@ -20,7 +21,7 @@ import type { Settings as SettingsType } from "../../types";
 import Checkbox from "../Checkbox/Checkbox";
 import styles from "./Settings.module.css";
 
-type Section = "terminal" | "appearance" | "sessions" | "data";
+type Section = "terminal" | "appearance" | "behavior" | "sessions" | "data";
 
 /** Peach — the default `--accent` token (#102). The Appearance picker maps this
  * swatch to `accentColor: ""` (no override, so the token stands). */
@@ -38,6 +39,11 @@ const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
     icon: <Palette size={15} strokeWidth={1.5} />,
   },
   {
+    id: "behavior",
+    label: "Behavior",
+    icon: <MousePointerClick size={15} strokeWidth={1.5} />,
+  },
+  {
     id: "sessions",
     label: "Sessions",
     icon: <Bot size={15} strokeWidth={1.5} />,
@@ -50,11 +56,11 @@ const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
 ];
 
 /**
- * Settings modal (#100) — part 1: the footer-gear entry point, the modal shell,
- * and the **Terminal**, **Sessions**, and **Data & About** sections. (Appearance /
- * Behavior land in follow-ups.) Reuses the app modal pattern: a dimmed scrim, a
- * focus-trap, and Escape-to-close. Edits are staged in modal-local **draft** state
- * and applied + persisted only on **Save**; **Cancel** / Escape / scrim discard.
+ * Settings modal (#100, #102, #103): the **Terminal**, **Appearance**, **Behavior**,
+ * **Sessions**, and **Data & About** sections, opened from the sidebar footer gear.
+ * Reuses the app modal pattern: a dimmed scrim, a focus-trap, and Escape-to-close.
+ * Edits are staged in modal-local **draft** state and applied + persisted only on
+ * **Save**; **Cancel** / Escape / scrim discard.
  *
  * Mounted only while open (the default export gates on the store flag), so the
  * draft re-initializes from the saved settings each time it opens.
@@ -248,6 +254,35 @@ function SettingsModal() {
                   checked={draft.reduceMotion}
                   onChange={(v) => update("reduceMotion", v)}
                   label="Reduce motion"
+                  className={styles.checkRow}
+                />
+              </>
+            )}
+
+            {section === "behavior" && (
+              <>
+                <div className={styles.field}>
+                  <span className={styles.fieldLabel}>
+                    Default view on launch
+                  </span>
+                  <div className={styles.segmented}>
+                    {(["overview", "canvas"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={`${styles.segment} ${draft.defaultView === v ? styles.segmentActive : ""}`}
+                        onClick={() => update("defaultView", v)}
+                        aria-pressed={draft.defaultView === v}
+                      >
+                        {v === "overview" ? "Overview" : "Canvas"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Checkbox
+                  checked={draft.confirmDestructive}
+                  onChange={(v) => update("confirmDestructive", v)}
+                  label="Confirm destructive actions"
                   className={styles.checkRow}
                 />
               </>
