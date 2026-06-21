@@ -94,7 +94,11 @@ function LeafPanel({
   // keep their filename/"Diff" title + repo·branch context + dot.
   const agentLabel =
     content.kind === "agent"
-      ? sessionLabel(session?.name, branch || repoName(repoPath))
+      ? sessionLabel(
+          session?.name,
+          session?.autoName,
+          branch || repoName(repoPath),
+        )
       : null;
   const titleText = agentLabel ? agentLabel.primary : panelTitle(content);
   // Agent panels (#95) drop the subtitle line; non-agent panels keep repo·branch.

@@ -15,6 +15,8 @@ export interface SessionRecord {
   created_at: number;
   /** Worktree agent (#74): the parent repo path; absent for a normal agent. */
   worktree_parent?: string | null;
+  /** claude's auto-generated session title (#97); absent until captured. */
+  auto_name?: string | null;
 }
 
 /** Typed command error (mirrors `pty::SessionError`, serialized `{ kind, message }`). */
@@ -116,6 +118,12 @@ export interface StatePayload {
   busy: boolean;
 }
 
+/** Payload of the `session://name` event (#97): claude's latest auto-title. */
+export interface NamePayload {
+  id: string;
+  name: string;
+}
+
 // --- Frontend UI state ---
 
 export type View = "overview" | "canvas";
@@ -191,4 +199,7 @@ export interface SessionView {
   /** Worktree agent (#74): the parent repo path (its `repoPath` is the isolated
    * worktree folder); absent/null for a normal agent. Drives sidebar nesting. */
   worktreeParent?: string | null;
+  /** claude's auto-generated title (#97): the display label for an agent with no
+   * custom `name`. Refreshed as the session progresses; `name` still wins. */
+  autoName?: string | null;
 }

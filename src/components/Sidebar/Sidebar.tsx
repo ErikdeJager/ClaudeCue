@@ -167,7 +167,7 @@ function SessionRow({
   // Agent label (#95): a single line showing only the primary — the custom name if
   // set, else the branch (deduped `label`, folder name when non-git). `sessionLabel`
   // still computes the subtitle (#67); the row just doesn't render it.
-  const { primary } = sessionLabel(session.name, label);
+  const { primary } = sessionLabel(session.name, session.autoName, label);
 
   return (
     <div

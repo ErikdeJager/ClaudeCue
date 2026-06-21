@@ -10,6 +10,7 @@ import type {
   BranchList,
   CanvasNode,
   ExitPayload,
+  NamePayload,
   OutputPayload,
   OverviewPanel,
   PersistedCanvases,
@@ -198,9 +199,11 @@ export interface SessionEventHandlers {
   onExited: (payload: ExitPayload) => void;
   /** Busy/idle transition for a session (#42). */
   onState: (payload: StatePayload) => void;
+  /** claude's auto-title for a session changed (#97). */
+  onName: (payload: NamePayload) => void;
 }
 
-/** Subscribe to the per-session output/exit/state events. Returns an unlisten fn. */
+/** Subscribe to the per-session output/exit/state/name events. Returns an unlisten fn. */
 export async function subscribeSessionEvents(
   handlers: SessionEventHandlers,
 ): Promise<UnlistenFn> {
@@ -215,10 +218,14 @@ export async function subscribeSessionEvents(
   const unlistenState = await listen<StatePayload>("session://state", (event) =>
     handlers.onState(event.payload),
   );
+  const unlistenName = await listen<NamePayload>("session://name", (event) =>
+    handlers.onName(event.payload),
+  );
   return () => {
     unlistenOutput();
     unlistenExited();
     unlistenState();
+    unlistenName();
   };
 }
 

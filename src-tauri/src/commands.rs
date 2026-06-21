@@ -34,6 +34,14 @@ pub struct StatePayload {
     pub busy: bool,
 }
 
+/// Payload for the `session://name` event (#97): claude's latest auto-title for a
+/// session, applied as the display label when the user hasn't set a custom name.
+#[derive(Clone, Serialize)]
+pub struct NamePayload {
+    pub id: String,
+    pub name: String,
+}
+
 /// Payload for the `canvas://windows` event (#84): the canvas ids that currently
 /// have a detached window open. Every window listens so the main tab strip can
 /// mark detached tabs and each window can recompute terminal ownership.
@@ -72,6 +80,7 @@ pub fn spawn_session(
         name,
         created_at: now_secs(),
         worktree_parent: None,
+        auto_name: None,
     };
     store
         .add_session(record.clone())
@@ -123,6 +132,7 @@ pub fn spawn_worktree_agent(
         name: None,
         created_at: now_secs(),
         worktree_parent: Some(repo),
+        auto_name: None,
     };
     store
         .add_session(record.clone())
@@ -546,6 +556,7 @@ pub fn fire_due_schedules(app: &AppHandle) {
                     name: sched.name.clone(),
                     created_at: now_secs(),
                     worktree_parent: None,
+                    auto_name: None,
                 };
                 let _ = store.add_session(record.clone());
                 let _ = store.touch_recent(&sched.cwd);

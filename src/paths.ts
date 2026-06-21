@@ -17,20 +17,22 @@ export function effectiveRepo(session: {
 }
 
 /**
- * Unified session label rule (#67). The **primary** title is the custom name
- * when set, otherwise the branch (or the folder name for a non-git folder); the
- * **subtitle** (the branch / folder name) appears **only when a custom name is
- * set**. Callers pass `branchOrFolder` already resolved — typically
- * `branches[repoPath] || repoName(repoPath)` (the sidebar passes its deduped
- * branch label).
+ * Unified session label rule (#67, extended by #97). The **primary** title is the
+ * user's custom name when set (#57), else claude's auto-title (#97), else the
+ * branch (or the folder name for a non-git folder). The **subtitle** (the branch /
+ * folder name) appears **only when a custom name is set**. Callers pass
+ * `branchOrFolder` already resolved — typically `branches[repoPath] ||
+ * repoName(repoPath)` (the sidebar passes its deduped branch label).
  */
 export function sessionLabel(
   name: string | null | undefined,
+  autoName: string | null | undefined,
   branchOrFolder: string,
 ): { primary: string; subtitle: string | null } {
   const custom = name?.trim() || null;
+  const auto = autoName?.trim() || null;
   return {
-    primary: custom || branchOrFolder,
+    primary: custom || auto || branchOrFolder,
     subtitle: custom ? branchOrFolder : null,
   };
 }

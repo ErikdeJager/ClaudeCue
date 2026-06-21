@@ -70,6 +70,7 @@ function toSessionView(record: SessionRecord): SessionView {
     name: record.name,
     createdAt: record.created_at,
     worktreeParent: record.worktree_parent ?? null,
+    autoName: record.auto_name ?? null,
   };
 }
 
@@ -335,6 +336,8 @@ export interface AppState {
   markRunning: (id: string) => void;
   /** Set a session's busy/idle state from the backend heuristic (#42). */
   setBusy: (id: string, busy: boolean) => void;
+  /** Apply claude's auto-title (#97) to a session (no-op if unchanged). */
+  setAutoName: (id: string, autoName: string | null) => void;
   /** Clear the boot "reconnecting" flag once a session proves it's live (#30). */
   markConnected: (id: string) => void;
   setClaudeMissing: (missing: boolean) => void;
@@ -573,6 +576,17 @@ export const useStore = create<AppState>()((set, get) => ({
       };
     }),
 
+  setAutoName: (id, autoName) =>
+    set((s) => {
+      const session = s.sessions.find((x) => x.id === id);
+      // No-op when the session is gone or the title is unchanged (#97), keeping
+      // the busy/idle re-render path quiet.
+      if (!session || (session.autoName ?? null) === autoName) return {};
+      return {
+        sessions: s.sessions.map((x) => (x.id === id ? { ...x, autoName } : x)),
+      };
+    }),
+
   markRunning: (id) =>
     set((s) => ({
       sessions: s.sessions.map((x) =>
@@ -633,6 +647,11 @@ export const useStore = create<AppState>()((set, get) => ({
           onState: ({ id, busy }) => {
             // Busy/idle from the backend heuristic (#42); emitted only on change.
             get().setBusy(id, busy);
+          },
+          onName: ({ id, name }) => {
+            // claude's own auto-title (#97); fills the label for an unnamed agent
+            // (a custom name #57 still wins in sessionLabel).
+            get().setAutoName(id, name);
           },
           onExited: ({ id, code }) => {
             // Session lifecycle (forget / toast / kill) is owned by the **main**

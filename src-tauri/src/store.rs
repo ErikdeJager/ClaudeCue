@@ -33,6 +33,12 @@ pub struct PersistedSession {
     /// so older records (without the field) still deserialize.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree_parent: Option<String>,
+    /// claude's own auto-generated session title (#97), captured from the session
+    /// log on busy→idle. Distinct from the user's custom `name` (#57), which still
+    /// wins for display; this only fills in for an otherwise-unnamed agent.
+    /// Defaulted so older records (without the field) still deserialize.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_name: Option<String>,
 }
 
 /// A user-added Overview panel (a non-agent column), persisted per repo (#38).
@@ -179,6 +185,17 @@ impl Store {
         self.update(|state| {
             if let Some(session) = state.sessions.iter_mut().find(|s| s.id == id) {
                 session.name = name;
+            }
+        })
+    }
+
+    /// Set (or clear with `None`) a session's auto-generated title (#97) — claude's
+    /// own session title, kept separate from the user's custom `name` (#57) so the
+    /// auto-name never clobbers a typed name. Persists; a no-op for an unknown id.
+    pub fn set_auto_name(&self, id: &str, auto_name: Option<String>) -> io::Result<()> {
+        self.update(|state| {
+            if let Some(session) = state.sessions.iter_mut().find(|s| s.id == id) {
+                session.auto_name = auto_name;
             }
         })
     }
@@ -380,6 +397,7 @@ mod tests {
             name: None,
             created_at: 0,
             worktree_parent: None,
+            auto_name: None,
         }
     }
 

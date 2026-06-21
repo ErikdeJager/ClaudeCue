@@ -150,6 +150,7 @@ function SessionCard({
   // subtitle (#67) — agent surfaces just don't render it.
   const { primary } = sessionLabel(
     session.name,
+    session.autoName,
     branch || repoName(session.repoPath),
   );
   // A worktree agent (#74/#96) inherits the parent repo's color, so a small text

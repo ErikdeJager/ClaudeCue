@@ -9,6 +9,7 @@ mod files;
 mod git;
 mod pty;
 mod store;
+mod title;
 
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -53,6 +54,15 @@ pub fn run() {
                         }
                         SessionEvent::State { id, busy } => {
                             handle.emit("session://state", commands::StatePayload { id, busy })
+                        }
+                        SessionEvent::Name { id, name } => {
+                            // Persist claude's auto-title (#97) so it shows on next
+                            // boot before the first refresh, then notify the UI. The
+                            // user's custom name (#57) is a separate field and wins.
+                            let _ = handle
+                                .state::<Store>()
+                                .set_auto_name(&id, Some(name.clone()));
+                            handle.emit("session://name", commands::NamePayload { id, name })
                         }
                     };
                 }

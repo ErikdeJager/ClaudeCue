@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -104,6 +104,13 @@ pub enum SessionEvent {
         id: String,
         busy: bool,
     },
+    /// claude's auto-generated session title changed (#97); emitted by the title
+    /// worker after a busy→idle edge when the log's `ai-title` differs from what
+    /// was last seen. The command layer persists it and notifies the UI.
+    Name {
+        id: String,
+        name: String,
+    },
 }
 
 /// Per-session activity timestamps (millis-since-`base`, 0 = none) for the busy
@@ -176,6 +183,10 @@ impl SessionManager {
     pub fn new(events: Sender<SessionEvent>) -> Self {
         let activity: Activity = Arc::new(Mutex::new(HashMap::new()));
         let base = Instant::now();
+        // The busy/idle monitor (#42) also pokes the title worker (#97) on each
+        // busy→idle edge through this side channel, so reading claude's `ai-title`
+        // (a file scan) never runs inline in the monitor's tick.
+        let (title_tx, title_rx) = std::sync::mpsc::channel::<String>();
         // A single background thread derives busy/idle from output activity and
         // emits `State` transitions (#42). It holds a `Sender` clone, so — like
         // the long-lived manager — it keeps the event channel open for the app's
@@ -183,7 +194,13 @@ impl SessionManager {
         std::thread::spawn({
             let activity = Arc::clone(&activity);
             let events = events.clone();
-            move || monitor_loop(activity, events, base)
+            move || monitor_loop(activity, events, title_tx, base)
+        });
+        // The title worker (#97) reads claude's auto-title off the hot path and
+        // emits a `Name` event when it changes.
+        std::thread::spawn({
+            let events = events.clone();
+            move || title_worker(title_rx, events)
         });
         Self {
             sessions: Mutex::new(HashMap::new()),
@@ -556,7 +573,12 @@ fn reader_loop(
 /// Derives each session's busy/idle state from output activity (#42) and emits a
 /// `State` event on every transition (debounced — never per tick). Runs until the
 /// event receiver is dropped (app shutdown).
-fn monitor_loop(activity: Activity, events: Sender<SessionEvent>, base: Instant) {
+fn monitor_loop(
+    activity: Activity,
+    events: Sender<SessionEvent>,
+    title_tx: Sender<String>,
+    base: Instant,
+) {
     // Last state we emitted per session, so we only send on change.
     let mut emitted: HashMap<String, bool> = HashMap::new();
     loop {
@@ -588,7 +610,7 @@ fn monitor_loop(activity: Activity, events: Sender<SessionEvent>, base: Instant)
         emitted.retain(|id, _| live.contains(id.as_str()));
         for (id, busy) in &snapshot {
             if emitted.get(id) != Some(busy) {
-                emitted.insert(id.clone(), *busy);
+                let was = emitted.insert(id.clone(), *busy);
                 if events
                     .send(SessionEvent::State {
                         id: id.clone(),
@@ -598,7 +620,35 @@ fn monitor_loop(activity: Activity, events: Sender<SessionEvent>, base: Instant)
                 {
                     return; // receiver dropped (app shutting down)
                 }
+                // On a busy→idle edge (a turn just ended, when claude has just
+                // (re)written its `ai-title`) poke the title worker to re-read it
+                // off the hot path (#97). A best-effort send: a dead worker never
+                // stalls the monitor tick.
+                if !*busy && was == Some(true) {
+                    let _ = title_tx.send(id.clone());
+                }
             }
+        }
+    }
+}
+
+/// Reads claude's auto-title for a session off the monitor's hot path (#97). The
+/// monitor sends a session id on each busy→idle edge; this worker reads the title
+/// (a file scan) and, only when it differs from the last title it emitted for that
+/// session, sends a `Name` event for the command layer to persist + forward. Runs
+/// until the channel closes (app shutdown).
+fn title_worker(title_rx: Receiver<String>, events: Sender<SessionEvent>) {
+    let mut last: HashMap<String, String> = HashMap::new();
+    while let Ok(id) = title_rx.recv() {
+        let Some(title) = crate::title::read_session_title(&id) else {
+            continue; // no log / no title yet (e.g. a shell terminal item) — skip
+        };
+        if last.get(&id) == Some(&title) {
+            continue; // unchanged since we last emitted — nothing to do
+        }
+        last.insert(id.clone(), title.clone());
+        if events.send(SessionEvent::Name { id, name: title }).is_err() {
+            return; // receiver dropped (app shutting down)
         }
     }
 }
@@ -669,6 +719,7 @@ mod tests {
                 Ok(SessionEvent::Output { bytes, .. }) => output.extend(bytes),
                 Ok(SessionEvent::Exited { code, .. }) => break code,
                 Ok(SessionEvent::State { .. }) => {}
+                Ok(SessionEvent::Name { .. }) => {}
                 Err(_) => panic!("timed out waiting for session events"),
             }
         };
