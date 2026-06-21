@@ -426,3 +426,125 @@ itself (the fix is *which* repo we color by, via grouping — not the hash). Pur
   `GitBranch` icon) is the reference for the badge.
 - Optional: a tiny pure helper (e.g. `effectiveRepo(session)` = `worktreeParent ??
   repoPath`) keeps the grouping / filter / color consistent and unit-testable.
+
+---
+
+### 97. [ ] Auto-name unnamed agent sessions from claude's own `ai-title`
+
+**Status:** Not started
+**Depends on:** #95, #96
+**Created:** 2026-06-21
+
+**Description**
+
+When a session has **no user-set custom name**, give it a meaningful auto-generated
+title instead of falling back to the bare branch name. The title source is **claude's
+own session title**: Claude Code writes an `{"type":"ai-title","aiTitle":"…"}` entry into
+its per-session log at `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`. Because
+ClaudeCue owns each session's UUID (`claude --session-id <uuid>`, see `pty.rs`
+`spawn_session` / `spawn_session_with_prompt`), it can locate that file and reuse the
+title — no extra `claude` process, no API cost. claude generates these titles early
+(right after the first user→assistant exchange) and they read well (real examples from
+this repo's logs: "Refactor busy icon, file picker, and canvas interface", "Implement
+task 84", "Evaluate splitting task #93 into subtasks").
+
+The auto-name **must never override a custom name** the user set via rename (#57). To
+keep the two cleanly separate, store the title in a **new `auto_name` field** distinct
+from `name`, and extend the display rule so the agent label resolves to
+**`custom || auto || branch`**.
+
+Decisions (from authoring):
+
+- **Refresh — keep it current.** Re-read the title when the agent transitions
+  busy→idle (end of a turn, when claude has just (re)written it) and update `auto_name`
+  when it changes, so the label tracks what the agent is currently doing. (The latest
+  `ai-title` in the log wins — entries are appended as the title evolves.)
+- **Appearance — identical to a custom name.** With #95 the agent label is a single line
+  rendering only `sessionLabel().primary`; an auto-name simply fills that line. No
+  italic / marker / subtitle — visually indistinguishable from a typed name.
+- **Scope — all agent sessions** with no custom name: interactive, isolated worktree
+  agents (#74), and fired scheduled sessions (#93). The reader must key off each
+  session's **actual cwd** (the worktree path for #74 agents), not just `repo_path`.
+- **Fallback — truncated first prompt.** If no `ai-title` exists yet (best-effort: not
+  every log has one), fall back to the session's first user prompt from the same log
+  (`last-prompt` / first `user` entry), trimmed to a short single line; if neither is
+  available, the existing branch fallback stands. For a fired schedule, ClaudeCue
+  already has the seeding prompt (#93) and may use it directly as the fallback without
+  reading the file.
+
+Out of scope: changing #57 rename (it keeps owning `name`); any visual distinction for
+auto-names; non-agent items (file / diff / terminal / scheduled panels — they have no
+agent title). Purely additive to the single-line label model #95 leaves in place.
+
+**Subtasks**
+
+1. [ ] **Storage.** Add `auto_name: Option<String>` to `PersistedSession` (`store.rs`,
+   `#[serde(default, skip_serializing_if = "Option::is_none")]`); mirror as
+   `auto_name: string | null` on `SessionRecord` / `SessionView` (`types/index.ts`) and
+   in the record→view mapping (`store.ts`). Persist it so a captured title shows
+   instantly on next boot before the first refresh.
+2. [ ] **Persist helper + command.** Add a `set_auto_name(id, name)` store method
+   (mirroring `rename_session` in `store.rs` — `update(|state| …)` atomic write) and a
+   `set_auto_name` Tauri command (`commands.rs`); wrap it in `ipc.ts`. It sets only
+   `auto_name`, never `name`.
+3. [ ] **Title reader (Rust).** Add a helper that, given a session id + cwd, locates the
+   claude log — glob `~/.claude/projects/*/<id>.jsonl` (UUID is globally unique → no
+   dependency on claude's path-encoding; encoded-cwd path only as an optional fast path)
+   — scans it **from the end** for the last `{"type":"ai-title","aiTitle":…}` and returns
+   it; if absent, returns the first user prompt / `last-prompt` trimmed to a short line.
+   Tolerant: missing file / unparseable lines / format drift → `None` (branch fallback).
+4. [ ] **Trigger (keep-current).** On a session's busy→idle transition (the monitor in
+   `pty.rs` `monitor_loop` / `Activity`), read the title **off the hot path** (a small
+   dedicated poll/worker, not inline in the 200ms tick); if it differs from the stored
+   `auto_name`, persist via `set_auto_name` and emit a new `SessionEvent::Name`. Wire it
+   through `lib.rs` to a `session://name` Tauri event with a payload struct
+   (`commands.rs`), following the existing `session://state` / `StatePayload` pattern.
+5. [ ] **Frontend event.** Add an `onName` handler to `subscribeSessionEvents` (`ipc.ts`)
+   and a store reducer (`store.ts`) that updates the session's `auto_name` (same shape as
+   `renameSession`'s optimistic update).
+6. [ ] **Display.** Extend `sessionLabel` (`paths.ts`) so `primary` resolves to
+   `custom || auto || branchOrFolder`. With #95 the agent surfaces already render only
+   `primary`, so the auto-name appears automatically — confirm the sidebar `SessionRow`,
+   Overview `SessionCard`, and Canvas agent panels each pass `auto_name` into
+   `sessionLabel`.
+7. [ ] **Verify** `npm run build`, `npm run lint`, `npm test`, and `cargo test` /
+   `npm run lint:rust` are clean.
+
+**Acceptance criteria**
+
+- [ ] An **unnamed** agent whose claude session has produced an `ai-title` shows that
+  title as its single-line label (per #95) in the sidebar, Overview, and Canvas — not the
+  bare branch.
+- [ ] A custom name (rename #57) always wins over the auto-name; **clearing** the custom
+  name reveals the current auto-name (or the branch if none).
+- [ ] The auto-name updates to reflect claude's latest `ai-title` as the session
+  progresses (keep-current), never overwriting a custom name.
+- [ ] An unnamed agent with **no** `ai-title` yet shows the trimmed first prompt, or the
+  branch if neither is available — never an error or empty label.
+- [ ] Works for interactive, worktree (#74), and fired scheduled (#93) sessions (reader
+  keys off the session's real cwd).
+- [ ] A missing / unreadable / format-changed claude log degrades gracefully to the
+  branch fallback, and the busy/idle indicator is unaffected (no hot-path I/O stalls).
+- [ ] `npm run build`, `npm run lint`, `npm test`, and the Rust checks pass.
+
+**Notes**
+
+- **Depends on #95 and #96** — both reshape the very surfaces this task edits. #95 makes
+  the agent label a single line rendering only `sessionLabel().primary` (no subtitle/dot);
+  #97 widens `primary` to include `auto_name`. #96 restructures the same Overview
+  `SessionCard` / Canvas agent header (parent-repo grouping + "worktree" badge) and
+  assumes an unnamed agent's label is its branch — **#97 supersedes that**: an unnamed
+  agent (worktree included) shows its `ai-title`, not the branch. Sequencing #97 after
+  both means it edits the settled header and there are no parallel edits to
+  `sessionLabel` / the agent surfaces.
+- **claude's log format is internal / undocumented** — same fragility class as the
+  `--session-id` / `--resume` flags noted in CLAUDE.md Conventions. Verified against the
+  logs under `~/.claude/projects/` (claude 2.1.x): `ai-title` / `last-prompt` entries
+  keyed by `sessionId`, file named `<session-id>.jsonl`. Treat as best-effort, degrade to
+  the branch fallback, and if a future claude version changes it, update the reader and
+  note it in CLAUDE.md.
+- The latest `ai-title` in the log is current (entries are appended as it updates) — scan
+  from EOF. Reading by UUID glob avoids replicating claude's cwd→dir encoding (it maps
+  `/` and `.` → `-`).
+- A later docs pass should record the new `auto_name` field + the auto-naming flow in
+  CLAUDE.md (architecture / data-flow + Conventions) and the README.
