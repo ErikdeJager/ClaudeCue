@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  accentCompanions,
   adjacentSessionId,
   dedupeBranchLabels,
   isCleanExit,
@@ -21,6 +22,33 @@ function session(id: string): SessionView {
     createdAt: 0,
   };
 }
+
+describe("accentCompanions (#107)", () => {
+  it("derives --accent-dim as the accent at 0.14 alpha", () => {
+    // Peach default = rgb(250, 179, 135).
+    expect(accentCompanions("#fab387").dim).toBe("rgba(250, 179, 135, 0.14)");
+  });
+
+  it("uses a dark fg + a valid lighter hover for every (light pastel) palette color", () => {
+    for (const hex of REPO_PALETTE) {
+      const c = accentCompanions(hex);
+      expect(c.fg).toBe("#11111b"); // all REPO_PALETTE swatches are light pastels
+      expect(c.hover).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
+  it("uses a light fg on a dark accent", () => {
+    expect(accentCompanions("#1e1e2e").fg).toBe("#ffffff");
+  });
+
+  it("falls back for an unparseable hex", () => {
+    expect(accentCompanions("nope")).toEqual({
+      hover: "nope",
+      dim: "nope",
+      fg: "#11111b",
+    });
+  });
+});
 
 beforeEach(() => {
   vi.useRealTimers();

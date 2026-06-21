@@ -244,8 +244,36 @@ export function mergeSettings(
   return { ...DEFAULT_SETTINGS, ...(raw ?? {}) };
 }
 
-/** Apply the imperative side-effects of settings (#100): the terminal options to
- * the live pool. (Appearance / Behavior effects are added by their follow-ups.) */
+/** Companion accent tokens derived from a chosen accent hex (#107): a lightened
+ * `--accent-hover`, a translucent `--accent-dim` (the accent at 0.14 alpha, like
+ * the default), and a contrast-safe on-accent `--accent-fg` (dark on a light
+ * accent, light on a dark one). Falls back gracefully for an unparseable hex. */
+export function accentCompanions(hex: string): {
+  hover: string;
+  dim: string;
+  fg: string;
+} {
+  const digits = /^#?([0-9a-f]{6})$/i.exec(hex.trim())?.[1];
+  if (!digits) return { hover: hex, dim: hex, fg: "#11111b" };
+  const n = parseInt(digits, 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const toHex = (c: number) => Math.round(c).toString(16).padStart(2, "0");
+  // Hover: lighten ~18% toward white (the feel of the default Peach hover).
+  const lighten = (c: number) => c + (255 - c) * 0.18;
+  const hover = `#${toHex(lighten(r))}${toHex(lighten(g))}${toHex(lighten(b))}`;
+  // Dim: the accent at 0.14 alpha (matches the default `--accent-dim`).
+  const dim = `rgba(${r}, ${g}, ${b}, 0.14)`;
+  // Foreground: dark text on a light accent, light on a dark one (relative
+  // luminance). Today's palette is all light pastels → dark fg, as before.
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const fg = lum > 0.6 ? "#11111b" : "#ffffff";
+  return { hover, dim, fg };
+}
+
+/** Apply the imperative side-effects of settings: the terminal options to the live
+ * pool (#100), the accent tokens (#102/#107), and the reduce-motion class (#102). */
 function applySettingsEffects(s: Settings): void {
   applyTerminalSettings({
     fontSize: s.terminalFontSize,
@@ -253,11 +281,23 @@ function applySettingsEffects(s: Settings): void {
     cursorBlink: s.terminalCursorBlink,
   });
   if (typeof document === "undefined") return; // non-DOM env (e.g. unit tests)
-  // Accent (#102): override --accent on :root, or clear it for the default ("")
-  // so the Catppuccin Peach token stands.
+  // Accent (#102/#107): override --accent AND its derived companion tokens
+  // (--accent-hover / -dim / -fg) on :root, so hover / dim / on-accent surfaces all
+  // track the chosen color; clear all four for the default ("") so the Catppuccin
+  // Peach tokens stand.
   const root = document.documentElement;
-  if (s.accentColor) root.style.setProperty("--accent", s.accentColor);
-  else root.style.removeProperty("--accent");
+  if (s.accentColor) {
+    const { hover, dim, fg } = accentCompanions(s.accentColor);
+    root.style.setProperty("--accent", s.accentColor);
+    root.style.setProperty("--accent-hover", hover);
+    root.style.setProperty("--accent-dim", dim);
+    root.style.setProperty("--accent-fg", fg);
+  } else {
+    root.style.removeProperty("--accent");
+    root.style.removeProperty("--accent-hover");
+    root.style.removeProperty("--accent-dim");
+    root.style.removeProperty("--accent-fg");
+  }
   // Reduce motion (#102): force-on beyond the OS setting via a body class that
   // global.css zeroes the motion for (mirrors the prefers-reduced-motion killswitch).
   document.body.classList.toggle("reduce-motion", s.reduceMotion);
