@@ -83,6 +83,7 @@ function toSessionView(record: SessionRecord): SessionView {
     createdAt: record.created_at,
     worktreeParent: record.worktree_parent ?? null,
     autoName: record.auto_name ?? null,
+    hasBeenActive: record.has_been_active ?? false,
     agent: record.agent ?? "claude",
   };
 }
@@ -400,6 +401,11 @@ export interface AppState {
   /** Sessions currently working, from the output-activity heuristic (#42); an
    * absent/false entry means idle. (The task's `sessionState`, as a boolean map.) */
   sessionBusy: Record<string, boolean>;
+  /** Sessions that have been active at least once (#112): set on the first busy
+   * transition (and seeded from each session's persisted `hasBeenActive` on load),
+   * never cleared until the session is removed. An idle session with this set shows
+   * the yellow "finished / needs input" indicator instead of never-active gray. */
+  sessionActive: Record<string, boolean>;
   /** Terminal items (#72) whose shell has exited → exit code (or null); drives the
    * Terminal exit overlay for non-agent PTYs (they aren't in `sessions`). */
   terminalExits: Record<string, number | null>;
@@ -601,6 +607,9 @@ async function killAgentsInRepo(repoPath: string): Promise<number> {
       sessionBusy: Object.fromEntries(
         Object.entries(s.sessionBusy).filter(([id]) => !idSet.has(id)),
       ),
+      sessionActive: Object.fromEntries(
+        Object.entries(s.sessionActive).filter(([id]) => !idSet.has(id)),
+      ),
     };
   });
   // Ref-counted worktree cleanup (#74): keep a dirty worktree rather than force it.
@@ -662,6 +671,7 @@ export const useStore = create<AppState>()((set, get) => ({
   detachedCanvasIds: [],
   activeLeafId: null,
   sessionBusy: {},
+  sessionActive: {},
   terminalExits: {},
   claudeMissing: false,
   toasts: [],
@@ -710,6 +720,7 @@ export const useStore = create<AppState>()((set, get) => ({
       selectedId: s.selectedId === id ? null : s.selectedId,
       view: s.selectedId === id ? "overview" : s.view,
       sessionBusy: omitKey(s.sessionBusy, id),
+      sessionActive: omitKey(s.sessionActive, id),
     })),
 
   markExited: (id, code) =>
@@ -724,10 +735,19 @@ export const useStore = create<AppState>()((set, get) => ({
   setBusy: (id, busy) =>
     set((s) => {
       if ((s.sessionBusy[id] ?? false) === busy) return {}; // no-op, skip re-render
+      // First activity marks the session "has been active" (#112): it stays set
+      // (idle returns to yellow; only going busy again leaves it), and is cleared
+      // with the other per-session state on removal. Only the false→true write
+      // changes the map ref; busy→idle keeps it (the session has still worked).
+      const sessionActive =
+        busy && !s.sessionActive[id]
+          ? { ...s.sessionActive, [id]: true }
+          : s.sessionActive;
       return {
         sessionBusy: busy
           ? { ...s.sessionBusy, [id]: true }
           : omitKey(s.sessionBusy, id),
+        sessionActive,
       };
     }),
 
@@ -920,12 +940,19 @@ export const useStore = create<AppState>()((set, get) => ({
       // "reconnecting" (neutral) until their first output / a real exit, never as
       // a wall of errors (#30). Branch labels refresh from the sidebar.
       booting = records.length > 0;
+      const views = records.map((r) => ({
+        ...toSessionView(r),
+        reconnecting: true,
+      }));
       set({
-        sessions: records.map((r) => ({
-          ...toSessionView(r),
-          reconnecting: true,
-        })),
+        sessions: views,
         recents,
+        // Seed the live "has been active" flag (#112) from the persisted records so
+        // a previously-active agent shows the yellow "finished / needs input" dot
+        // right after boot (reconnecting → idle), never reverting to gray.
+        sessionActive: Object.fromEntries(
+          views.filter((v) => v.hasBeenActive).map((v) => [v.id, true]),
+        ),
       });
       // End the boot window: stop suppressing exit toasts, and clear any flag
       // still set (e.g. a resumed session whose first output raced the listener —

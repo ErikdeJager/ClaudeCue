@@ -31,6 +31,17 @@
   box-shadow: 0 0 4px color-mix(in srgb, var(--status-running) 60%, transparent);
 }
 
+/* Settled (#112): the agent has been active and is now idle — a solid
+   --status-awaiting (yellow) dot with the same soft glow as busy but no sheen and
+   no animation, so it reads as "finished, needs your input" and is clearly distinct
+   from both the calm gray idle dot and the blue working dot. The base .ball::after
+   stays at opacity 0 (no .settled override), so there is no shimmer. */
+.settled::before {
+  background: var(--status-awaiting);
+  box-shadow: 0 0 4px
+    color-mix(in srgb, var(--status-awaiting) 60%, transparent);
+}
+
 /* The sheen overlay, clipped to the dot. Idle: invisible. */
 .ball::after {
   content: "";

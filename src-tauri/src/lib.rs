@@ -62,6 +62,14 @@ pub fn run() {
                             handle.emit("session://exited", commands::ExitPayload { id, code })
                         }
                         SessionEvent::State { id, busy } => {
+                            // Record the first activity (#112): on the first busy=true
+                            // we persist `has_been_active` so a previously-active agent
+                            // shows the "finished / needs input" (yellow) indicator
+                            // immediately on next boot. Persists only on the false→true
+                            // transition (a no-op afterward), off the emit hot path.
+                            if busy {
+                                let _ = handle.state::<Store>().mark_session_active(&id);
+                            }
                             handle.emit("session://state", commands::StatePayload { id, busy })
                         }
                         SessionEvent::Name { id, name } => {

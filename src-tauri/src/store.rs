@@ -46,6 +46,13 @@ pub struct PersistedSession {
     /// Defaulted so older records (without the field) still deserialize.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_name: Option<String>,
+    /// Whether this session has ever been active (#112): set true on its first
+    /// busy transition and persisted, so a previously-active agent shows the
+    /// "finished / needs input" (yellow) activity indicator immediately on the next
+    /// boot rather than the never-active gray. Defaulted false so older records
+    /// (without the field) still deserialize.
+    #[serde(default)]
+    pub has_been_active: bool,
     /// The coding agent this session runs (#101): `"claude"` (the default for older
     /// records), `"codex"`, …. Each session keeps its own agent so it always
     /// resumes / behaves with the CLI it was started with.
@@ -221,6 +228,29 @@ impl Store {
                 session.auto_name = auto_name;
             }
         })
+    }
+
+    /// Mark a session as having been active at least once (#112): flip
+    /// `has_been_active` false→true and persist. Persists **only** on that
+    /// transition (a no-op once set), so the busy→idle hot path doesn't rewrite the
+    /// file on every turn. A no-op for an unknown id.
+    pub fn mark_session_active(&self, id: &str) -> io::Result<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let changed = match guard.sessions.iter_mut().find(|s| s.id == id) {
+            Some(session) if !session.has_been_active => {
+                session.has_been_active = true;
+                true
+            }
+            _ => false,
+        };
+        if changed {
+            self.persist(&guard)
+        } else {
+            Ok(())
+        }
     }
 
     /// Record a working directory as most-recently-used (de-duplicated, capped)
@@ -449,6 +479,7 @@ mod tests {
             created_at: 0,
             worktree_parent: None,
             auto_name: None,
+            has_been_active: false,
             agent: default_agent(),
         }
     }
@@ -717,6 +748,27 @@ mod tests {
 
         store.remove_schedule("s2").unwrap();
         assert!(Store::load(&path).schedules().is_empty());
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn mark_session_active_sets_once_and_persists() {
+        let path = temp_path("active");
+        let store = Store::load(&path);
+        store.add_session(record("s1", "/repo/x")).unwrap();
+        // Defaults false.
+        assert!(!store.session("s1").unwrap().has_been_active);
+
+        // The first mark flips it true and persists (survives a reload).
+        store.mark_session_active("s1").unwrap();
+        assert!(Store::load(&path).session("s1").unwrap().has_been_active);
+
+        // Idempotent — a second call is a no-op (still true).
+        store.mark_session_active("s1").unwrap();
+        assert!(store.session("s1").unwrap().has_been_active);
+
+        // An unknown id is a no-op (no panic).
+        store.mark_session_active("missing").unwrap();
         let _ = fs::remove_file(&path);
     }
 

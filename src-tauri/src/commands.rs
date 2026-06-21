@@ -85,6 +85,7 @@ pub fn spawn_session(
         created_at: now_secs(),
         worktree_parent: None,
         auto_name: None,
+        has_been_active: false,
         agent,
     };
     store
@@ -140,6 +141,7 @@ pub fn spawn_worktree_agent(
         created_at: now_secs(),
         worktree_parent: Some(repo),
         auto_name: None,
+        has_been_active: false,
         agent,
     };
     store
@@ -569,6 +571,7 @@ pub fn fire_due_schedules(app: &AppHandle) {
                     created_at: now_secs(),
                     worktree_parent: None,
                     auto_name: None,
+                    has_been_active: false,
                     agent: sched.agent.clone(),
                 };
                 let _ = store.add_session(record.clone());

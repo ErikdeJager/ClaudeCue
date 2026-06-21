@@ -17,6 +17,9 @@ export interface SessionRecord {
   worktree_parent?: string | null;
   /** claude's auto-generated session title (#97); absent until captured. */
   auto_name?: string | null;
+  /** Whether this session has ever been active (#112): drives the third "finished /
+   * needs input" (yellow) activity state; absent/false for never-active records. */
+  has_been_active?: boolean;
   /** The coding agent this session runs (#101); `"claude"` for older records. */
   agent?: string;
 }
@@ -237,6 +240,10 @@ export interface SessionView {
   /** claude's auto-generated title (#97): the display label for an agent with no
    * custom `name`. Refreshed as the session progresses; `name` still wins. */
   autoName?: string | null;
+  /** Whether this session has ever been active (#112): seeds the live "has worked
+   * at least once" flag so a previously-active agent shows the yellow "finished /
+   * needs input" indicator right after boot. */
+  hasBeenActive?: boolean;
   /** The coding agent this session runs (#101); `"claude"` for older records. */
   agent?: string;
 }

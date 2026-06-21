@@ -122,6 +122,8 @@ interface SessionCardProps {
   groupStart: boolean;
   selected: boolean;
   busy: boolean;
+  /** The session has been active at least once (#112) → yellow when idle. */
+  hasBeenActive: boolean;
   /** True when this window renders the PTY; false when it's in a detached
    * canvas window (#84) and this card shows a "running in a window" note. */
   owned: boolean;
@@ -138,6 +140,7 @@ function SessionCard({
   groupStart,
   selected,
   busy,
+  hasBeenActive,
   owned,
   ownerLabel,
   onSelect,
@@ -198,7 +201,7 @@ function SessionCard({
       groupStart={groupStart}
       selected={selected}
       title={title}
-      leading={<BusyIndicator busy={busy} />}
+      leading={<BusyIndicator busy={busy} hasBeenActive={hasBeenActive} />}
       actions={actions}
       onClickBody={onSelect}
     >
@@ -395,6 +398,7 @@ function Overview() {
   const removeOverviewPanel = useStore((s) => s.removeOverviewPanel);
   const reorderOverview = useStore((s) => s.reorderOverview);
   const sessionBusy = useStore((s) => s.sessionBusy);
+  const sessionActive = useStore((s) => s.sessionActive);
   const schedules = useStore((s) => s.schedules);
   const cancelSchedule = useStore((s) => s.cancelSchedule);
   // PTY ownership across windows (#84): an agent shown in a detached canvas window
@@ -570,6 +574,7 @@ function Overview() {
                         groupStart={groupStart}
                         selected={session.id === selectedId}
                         busy={sessionBusy[session.id] ?? false}
+                        hasBeenActive={sessionActive[session.id] ?? false}
                         owned={ownedHere(owners, session.id)}
                         ownerLabel={owners[session.id]}
                         onSelect={() => select(session.id)}

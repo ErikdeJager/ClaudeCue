@@ -476,9 +476,9 @@ it — staying on-system (token-driven) rather than hardcoding 10px.
 
 ---
 
-### 112. [ ] Activity indicator — a third "finished / needs input" state (yellow), distinct from never-active gray
+### 112. [x] Activity indicator — a third "finished / needs input" state (yellow), distinct from never-active gray
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** none
 **Created:** 2026-06-21
 
@@ -530,52 +530,52 @@ rendered there today).
 
 **Subtasks**
 
-1. [ ] **Backend persisted flag.** Add `has_been_active: bool` (`#[serde(default)]`, default
+1. [x] **Backend persisted flag.** Add `has_been_active: bool` (`#[serde(default)]`, default
    false) to `PersistedSession` (`store.rs`); add a persist-once setter (e.g.
    `mark_session_active(id)` that flips false→true and saves, no-op if already true).
-2. [ ] **Set it on first busy.** In `lib.rs`'s `SessionEvent::State` handler, when
+2. [x] **Set it on first busy.** In `lib.rs`'s `SessionEvent::State` handler, when
    `busy == true`, call the setter so the flag is recorded the first time the session works.
    (Idempotent — only the false→true write persists.)
-3. [ ] **Thread to the frontend.** Add `has_been_active?: boolean` to TS `SessionRecord`,
+3. [x] **Thread to the frontend.** Add `has_been_active?: boolean` to TS `SessionRecord`,
    `hasBeenActive?: boolean` to `SessionView`, and map it in the record→view conversion
    (mirroring `auto_name` → `autoName`).
-4. [ ] **Live store tracking.** Track "active at least once this session" in the store so
+4. [x] **Live store tracking.** Track "active at least once this session" in the store so
    the dot turns yellow the instant a turn ends, without a reload: seed it from each
    session's persisted `hasBeenActive` on load (`refresh`), and set it true in
    `setBusy(id, true)`. Clear it with the other per-session state on session removal/forget
    (alongside `sessionBusy`).
-5. [ ] **Three-state component.** Give `BusyIndicator` a three-state input (e.g. a
+5. [x] **Three-state component.** Give `BusyIndicator` a three-state input (e.g. a
    `state: "fresh" | "busy" | "settled"` prop, or `busy` + `hasBeenActive` booleans it
    derives from): busy → blue shimmer (unchanged); else has-been-active → yellow solid +
    glow; else gray (unchanged). Update the `aria-label`/`title` per state ("Working…" /
    "Finished — needs input" / "Idle").
-6. [ ] **CSS.** Add a `.settled` (yellow) rule in `BusyIndicator.module.css`:
+6. [x] **CSS.** Add a `.settled` (yellow) rule in `BusyIndicator.module.css`:
    `--status-awaiting` fill + a soft `box-shadow` glow like `.busy::before`, **no `::after`
    shimmer / no animation**. Keep the fixed 14px slot / 10px dot (#95) so there's still zero
    layout shift between states.
-7. [ ] **Wire the call sites.** Pass the new state at both usages — `Sidebar.tsx:201` and
+7. [x] **Wire the call sites.** Pass the new state at both usages — `Sidebar.tsx:201` and
    `Overview.tsx:201` (SessionCard/SessionRow `busy={…}`) — from `sessionBusy` + the new
    live flag.
-8. [ ] Tests + checks: extend a store unit test for the gray→blue→yellow transition and that
+8. [x] Tests + checks: extend a store unit test for the gray→blue→yellow transition and that
    yellow persists/seed-from-record works; keep Rust store tests green (add one for
    `has_been_active` round-tripping). Run `npm run build`, `npm run lint`, `npm test`,
    `npm run format:check`, and the Rust build / `cargo test` / clippy.
 
 **Acceptance criteria**
 
-- [ ] A newly created agent shows **gray** until its first activity, then **blue** while
+- [x] A newly created agent shows **gray** until its first activity, then **blue** while
       working.
-- [ ] When an agent that has worked goes idle, its dot is **yellow** (`--status-awaiting`),
+- [x] When an agent that has worked goes idle, its dot is **yellow** (`--status-awaiting`),
       not gray — a solid dot with a soft glow, no shimmer/animation.
-- [ ] Sending a new message turns it **blue** again, and it returns to **yellow** when the
+- [x] Sending a new message turns it **blue** again, and it returns to **yellow** when the
       turn ends.
-- [ ] **Yellow survives an app restart:** a previously-active session shows yellow right
+- [x] **Yellow survives an app restart:** a previously-active session shows yellow right
       after boot (reconnecting → idle), never reverting to gray.
-- [ ] All three states appear consistently in both the **sidebar rows** and the **Overview
+- [x] All three states appear consistently in both the **sidebar rows** and the **Overview
       cards**; the dot's footprint (14px slot) never shifts between states.
-- [ ] Under `prefers-reduced-motion` / Settings reduce-motion: blue stays a solid glowing
+- [x] Under `prefers-reduced-motion` / Settings reduce-motion: blue stays a solid glowing
       dot (as today) and yellow is likewise solid — both clearly distinct from gray.
-- [ ] `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, and the Rust
+- [x] `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, and the Rust
       build / `cargo test` / clippy all pass.
 
 **Notes**

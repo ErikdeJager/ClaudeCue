@@ -104,3 +104,43 @@ describe("refresh() — legacy open_files no longer resurrects items (#110)", ()
     expect(ipc.setOpenFiles).not.toHaveBeenCalled();
   });
 });
+
+describe("refresh() — seeds the 'has been active' flag (#112)", () => {
+  it("seeds sessionActive from each persisted record's has_been_active", async () => {
+    m(ipc.listSessions).mockResolvedValue([
+      // Was active in a previous run → seeded so the dot is yellow right on boot.
+      {
+        id: "s1",
+        claude_session_id: "s1",
+        repo_path: "/repo/a",
+        name: null,
+        created_at: 0,
+        has_been_active: true,
+      },
+      // Explicitly never active → stays gray (no seed).
+      {
+        id: "s2",
+        claude_session_id: "s2",
+        repo_path: "/repo/b",
+        name: null,
+        created_at: 0,
+        has_been_active: false,
+      },
+      // Older record without the field → defaults to not-seeded.
+      {
+        id: "s3",
+        claude_session_id: "s3",
+        repo_path: "/repo/c",
+        name: null,
+        created_at: 0,
+      },
+    ]);
+
+    await useStore.getState().refresh();
+
+    const active = useStore.getState().sessionActive;
+    expect(active.s1).toBe(true);
+    expect(active.s2).toBeUndefined();
+    expect(active.s3).toBeUndefined();
+  });
+});

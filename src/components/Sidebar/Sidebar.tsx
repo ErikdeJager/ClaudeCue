@@ -106,6 +106,8 @@ interface SessionRowProps {
   selected: boolean;
   /** The session is currently working (#42). */
   busy: boolean;
+  /** The session has been active at least once (#112) → yellow when idle. */
+  hasBeenActive: boolean;
   onSelect: () => void;
   onRemove: () => void;
   /** Set (or clear, when blank) the session's custom name (#57). */
@@ -117,6 +119,7 @@ function SessionRow({
   label,
   selected,
   busy,
+  hasBeenActive,
   onSelect,
   onRemove,
   onRename,
@@ -198,7 +201,7 @@ function SessionRow({
       {/* Activity indicator (#71): far left of the row, before the label. Always
           shown — a calm dot when idle, a spinner when working. */}
       <span className={styles.rowBusy}>
-        <BusyIndicator busy={busy} />
+        <BusyIndicator busy={busy} hasBeenActive={hasBeenActive} />
       </span>
       {editing ? (
         <input
@@ -503,6 +506,7 @@ function Sidebar() {
   const addOverviewPanel = useStore((s) => s.addOverviewPanel);
   const removeOverviewPanel = useStore((s) => s.removeOverviewPanel);
   const sessionBusy = useStore((s) => s.sessionBusy);
+  const sessionActive = useStore((s) => s.sessionActive);
 
   // Right-click repo context menu (#31/#35), anchored at the cursor. `menuMode`
   // switches between the item list, the destructive Forget confirm, and the
@@ -780,6 +784,7 @@ function Sidebar() {
                   label={rowLabels[i] ?? baseLabel}
                   selected={session.id === selectedId}
                   busy={sessionBusy[session.id] ?? false}
+                  hasBeenActive={sessionActive[session.id] ?? false}
                   onSelect={() =>
                     selectItem({
                       kind: "agent",
@@ -892,6 +897,7 @@ function Sidebar() {
                         label={wtLabels[i] ?? wtBranch}
                         selected={session.id === selectedId}
                         busy={sessionBusy[session.id] ?? false}
+                        hasBeenActive={sessionActive[session.id] ?? false}
                         onSelect={() =>
                           selectItem({
                             kind: "agent",

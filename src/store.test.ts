@@ -65,6 +65,7 @@ beforeEach(() => {
     canvases: [{ id: "canvas-1", name: "Canvas 1", layout: null }],
     activeCanvasId: "canvas-1",
     sessionBusy: {},
+    sessionActive: {},
     claudeMissing: false,
     toasts: [],
     newSessionOpen: false,
@@ -110,6 +111,27 @@ describe("app store", () => {
     const ref = useStore.getState().sessionBusy;
     useStore.getState().setBusy("s2", true);
     expect(useStore.getState().sessionBusy).toBe(ref);
+  });
+
+  it("tracks 'has been active' for the third yellow/settled state (#112)", () => {
+    // Fresh: never active → gray (no flag).
+    expect(useStore.getState().sessionActive.s1).toBeUndefined();
+    // First activity (busy) sets the flag → blue while working.
+    useStore.getState().setBusy("s1", true);
+    expect(useStore.getState().sessionBusy.s1).toBe(true);
+    expect(useStore.getState().sessionActive.s1).toBe(true);
+    // Going idle clears busy but KEEPS the active flag → yellow "settled".
+    useStore.getState().setBusy("s1", false);
+    expect(useStore.getState().sessionBusy.s1).toBeUndefined();
+    expect(useStore.getState().sessionActive.s1).toBe(true);
+    // Going busy again leaves yellow (blue) and the flag stays set.
+    useStore.getState().setBusy("s1", true);
+    expect(useStore.getState().sessionActive.s1).toBe(true);
+    // Removing the session clears both per-session flags.
+    useStore.setState({ sessions: [session("s1")] });
+    useStore.getState().dropSession("s1");
+    expect(useStore.getState().sessionActive.s1).toBeUndefined();
+    expect(useStore.getState().sessionBusy.s1).toBeUndefined();
   });
 
   it("markExited clears a busy flag (an exited session isn't working) (#42)", () => {
