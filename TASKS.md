@@ -485,3 +485,112 @@ and the rest of the sidebar spacing stay as they are.
 - [ ] The vertical gap between the New session and Schedule session buttons is ~4px (down
   from 12px); their outer/side margins and the rest of the sidebar layout are unchanged.
 - [ ] `npm run build` and `npm run lint` pass.
+
+---
+
+### 100. [ ] Settings screen — sidebar footer gear + a robust application Settings modal
+
+**Status:** Not started
+**Depends on:** #97
+**Created:** 2026-06-21
+
+**Description**
+
+Add an application **Settings** screen, opened from a new **thin footer row at the bottom of
+the sidebar** holding a **⚙ gear** button (built deliberately roomy so more quick actions can
+join the row later). This **reverses the v1 "no settings screen" out-of-scope rule** (as #84
+reversed "no multi-window") — record it in CLAUDE.md / README at the next docs pass.
+
+**Entry point.** A new persistent thin bar pinned to the bottom of the `Sidebar` (below the
+scrolling repo list), separated by a hairline. For now it holds a single `Settings` (Lucide,
+16px) icon button → opens the Settings modal. Lay it out so more icon buttons can be added
+without a layout change.
+
+**Settings UI.** A **centered modal overlay** over a dimmed scrim, reusing the
+`NewSessionModal` scrim + focus-trap (#49) + Escape-to-close pattern (and the `Checkbox`
+#52 / `ViewSwitch` building blocks). A left-hand **section list** (Terminal / Appearance /
+Behavior / Sessions / Data & About) with the active section's controls on the right.
+**Explicit Save / Cancel:** edits are staged in modal-local **draft** state and applied +
+persisted only on **Save**; **Cancel** (and Escape / scrim click) discards the draft. (A
+"Reset to defaults" is a nice-to-have.)
+
+**Persistence.** A new `settings` blob persisted through the existing Rust store
+(`store.rs` `PersistedState` + a `set_settings` command + an `ipc.ts` wrapper), loaded on
+boot into the Zustand store with serde-/TS-side **defaults** so an older `sessions.json`
+upgrades cleanly. Mirrors the proven `setRepoColor` persist pattern (no localStorage).
+
+**Settings (this first robust set):**
+
+- **Terminal** — Font size (10–16px, default 12.5) · Line height (1.0–1.8, default 1.2) ·
+  Cursor blink (on/off, default on). Applied to **live** pooled terminals on Save
+  (`terminalPool` updates each xterm's `options.fontSize` / `lineHeight` / `cursorBlink`
+  and refits) and used for newly created ones.
+- **Appearance** — Accent color: pick from the 14-color Catppuccin palette (`REPO_PALETTE`),
+  default Peach, applied by overriding the `--accent` CSS var on `:root` · Reduce motion:
+  force-on beyond the OS `prefers-reduced-motion` (a `body.reduce-motion` class zeroing the
+  motion tokens, mirroring the global killswitch).
+- **Behavior** — Default view on launch (Overview / Canvas; read by the store at boot) ·
+  Confirm destructive actions (on/off, default on): when off, the Sidebar
+  Remove / Kill-all / Close-all (#91) skip their confirm step.
+- **Sessions** — Auto-name from claude's title (on/off, default on): gates the #97
+  auto-naming so `sessionLabel` falls back to the branch when off. **(This is why the task
+  `Depends on: #97`.)**
+- **Data & About** — Open data folder (reveal the app-data dir / `sessions.json` in Finder —
+  a small Tauri `opener`/shell command) · Clear recents (store action + persist) · App
+  version (from Tauri); `claude` version optional (a tiny `claude --version` command).
+
+**In scope:** the footer row + gear, the modal, the settings state + persistence, and wiring
+each setting above to its effect. **Out of scope (deferred):** advanced backend thresholds
+(scrollback size / busy-detection window / schedule poll — would need Rust changes in the
+`pty.rs` / `lib.rs` hot loops), light theme (full palette swap), custom `claude` binary
+path, sidebar-width drag, keyboard-shortcut rebinding.
+
+**Subtasks**
+
+1. [ ] **Settings state + persistence.** Define a `Settings` type (TS) with defaults; add a
+   `settings` field to `store.rs` `PersistedState` (serde default) + a `set_settings`
+   command + `ipc.ts` wrapper; load into the Zustand store on boot; add a `saveSettings`
+   action (optimistic update + persist, like `setRepoColor`).
+2. [ ] **Sidebar footer row + gear.** Add a thin bottom bar to `Sidebar` (hairline-topped,
+   pinned below `.repos`) with a `Settings` icon button that opens the modal; lay it out to
+   accept more buttons later.
+3. [ ] **Settings modal scaffold.** New `Settings/Settings.tsx` (+ CSS module) — centered
+   modal (reuse NewSessionModal scrim / focus-trap / Escape), section list + content pane,
+   draft state, Save / Cancel.
+4. [ ] **Terminal section** + apply font size / line height / cursor blink to live + new
+   pooled terminals (`terminalPool`).
+5. [ ] **Appearance section** — accent picker (→ `--accent` override) + reduce-motion toggle
+   (→ `body.reduce-motion`).
+6. [ ] **Behavior section** — default view (boot) + confirm-destructive toggle (Sidebar menu
+   handlers honor it).
+7. [ ] **Sessions section** — auto-name toggle gating #97's label fallback.
+8. [ ] **Data & About section** — open data folder, clear recents, app (+ optional claude)
+   version.
+9. [ ] **Verify** `npm run build`, `npm run lint`, `npm test`, and the Rust checks
+   (`cargo test` / `npm run lint:rust`) are clean.
+
+**Acceptance criteria**
+
+- [ ] A thin row sits at the bottom of the sidebar with a gear button that opens a centered
+  Settings modal; the row visibly has room for future actions.
+- [ ] The modal has Terminal / Appearance / Behavior / Sessions / Data & About sections;
+  changes apply only on **Save** and persist across an app restart; **Cancel** / Escape
+  discards.
+- [ ] Each setting takes effect: terminal font size / line height / cursor blink change live
+  terminals; accent color recolors accent UI; reduce-motion stops animations; default view
+  is honored on next launch; confirm-destructive off skips the Sidebar confirms; auto-name
+  off shows the branch.
+- [ ] Defaults apply cleanly to an existing `sessions.json` with no `settings` (no crash,
+  sane values).
+- [ ] `npm run build`, `npm run lint`, `npm test`, and the Rust checks pass.
+
+**Notes**
+
+- **Reverses the v1 "no settings screen" rule** — note it in CLAUDE.md / README at the next
+  docs pass (architecture + the out-of-scope list).
+- **Depends on #97** for the auto-name toggle (it gates #97's `ai-title` naming).
+- Grounded by a repo settings audit: most items are frontend-only; the only backend work is
+  the `settings` persistence command + the small Data & About helpers (open-folder,
+  versions). Advanced thresholds were explicitly deferred.
+- If too large for one pass, split per the backlog rule (e.g. infra + footer + modal shell
+  first, then the section wirings) — but ship the whole set.
