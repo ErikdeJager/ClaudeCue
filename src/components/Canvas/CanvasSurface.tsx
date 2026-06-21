@@ -178,6 +178,11 @@ function LeafPanel({
             <span className={styles.panelTitle}>{titleText}</span>
           )}
           {metaText && <span className={styles.panelMeta}>{metaText}</span>}
+          {/* Worktree agent (#74/#96): it inherits the parent repo's color, so a
+              text badge (mirroring the sidebar) is the sole worktree cue. */}
+          {content.kind === "agent" && session?.worktreeParent && (
+            <span className={styles.worktreeBadge}>worktree</span>
+          )}
         </span>
         <span className={styles.panelActions}>
           {/* Copy `claude --resume <id>` (#28) — agents only, re-homed here

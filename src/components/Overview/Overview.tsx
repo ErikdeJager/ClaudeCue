@@ -20,7 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { mergeRepoOrder, repoColor, useStore } from "../../store";
 import { useSessionOwners } from "../../ownership";
-import { repoName, sessionLabel } from "../../paths";
+import { effectiveRepo, repoName, sessionLabel } from "../../paths";
 import { formatFireTime } from "../../time";
 import type { OverviewPanel, ScheduledSession, SessionView } from "../../types";
 import { ownedHere } from "../../windowContext";
@@ -152,7 +152,16 @@ function SessionCard({
     session.name,
     branch || repoName(session.repoPath),
   );
-  const title = <span className={styles.name}>{primary}</span>;
+  // A worktree agent (#74/#96) inherits the parent repo's color, so a small text
+  // badge — mirroring the sidebar's (#74) — is the sole "this is a worktree" cue.
+  const title = (
+    <span className={styles.agentTitle}>
+      <span className={styles.name}>{primary}</span>
+      {session.worktreeParent && (
+        <span className={styles.worktreeBadge}>worktree</span>
+      )}
+    </span>
+  );
   const actions = (
     <>
       {/* Copy `claude --resume <id>` (#28) — re-homed here post-Focus (#86). */}
@@ -418,17 +427,21 @@ function Overview() {
 
   // The sidebar repo filter (#34) narrows the wall to one repo's agents.
   const shown = filter
-    ? sessions.filter((s) => s.repoPath === filter)
+    ? sessions.filter((s) => effectiveRepo(s) === filter)
     : sessions;
 
   // Always group by repo: sidebar's alphabetical order (#20), agents contiguous
   // within a repo (stable by createdAt) — the default order before any drag.
   const ordered = [...shown].sort((a, b) => {
-    const byName = repoName(a.repoPath)
+    // Group by the effective repo (#96) so a worktree agent sorts next to its
+    // parent's agents (and shares the parent's cluster), not in its own group.
+    const aRepo = effectiveRepo(a);
+    const bRepo = effectiveRepo(b);
+    const byName = repoName(aRepo)
       .toLowerCase()
-      .localeCompare(repoName(b.repoPath).toLowerCase());
+      .localeCompare(repoName(bRepo).toLowerCase());
     if (byName !== 0) return byName;
-    const byPath = a.repoPath.localeCompare(b.repoPath);
+    const byPath = aRepo.localeCompare(bRepo);
     if (byPath !== 0) return byPath;
     return a.createdAt - b.createdAt;
   });
@@ -436,7 +449,8 @@ function Overview() {
   // Repos to render: those with agents, plus those with extra panels (respecting
   // the filter) — so a diff/markdown panel shows even with no agent in the repo.
   const repoSet = new Set<string>();
-  for (const s of ordered) repoSet.add(s.repoPath);
+  // Worktree agents group under their parent repo (#96), not their own folder.
+  for (const s of ordered) repoSet.add(effectiveRepo(s));
   for (const repo of Object.keys(overviewPanels)) {
     if (
       (overviewPanels[repo]?.length ?? 0) > 0 &&
@@ -461,7 +475,7 @@ function Overview() {
   // exit drops out without scrambling the rest.
   const clusters = repoList
     .map((repo) => {
-      const agents = ordered.filter((s) => s.repoPath === repo);
+      const agents = ordered.filter((s) => effectiveRepo(s) === repo);
       const extras = overviewPanels[repo] ?? [];
       const repoSchedules = schedules.filter((sc) => sc.cwd === repo);
       const defaultKeys = [
@@ -547,7 +561,7 @@ function Overview() {
                       <SessionCard
                         key={session.id}
                         session={session}
-                        branch={branch}
+                        branch={branches[session.repoPath] ?? ""}
                         color={color}
                         groupStart={groupStart}
                         selected={session.id === selectedId}

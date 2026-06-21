@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> The backlog has fully shipped (#1–#95).
+> The backlog has fully shipped (#1–#96).
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -211,6 +211,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #95 Slimmed agent items to a single thin line and enlarged the activity dot. The shared `BusyIndicator` (#88) is now a ~10px dot in a ~14px slot (still a fixed slot — no idle↔busy layout shift) everywhere it appears: Overview agent cards + sidebar rows. Agent labels render **only the primary** — the custom name if set, else the branch, with no subtitle line — on all three surfaces (sidebar `SessionRow`, Overview `SessionCard`, Canvas agent panels). The colored repo dot was removed from **every** Overview card (the `.metaDot` on agent / diff / file / scheduled cards) and from Canvas **agent** panels; repo color still reads from each card's colored top band. Canvas non-agent panels keep their dot + meta. Purely visual.
 
+**Worktree agents grouped & badged in Overview/Canvas (#96).**
+
+- #96 A worktree agent (#74) now reads as part of its **parent repo** instead of a foreign-colored stray. A pure `effectiveRepo(session)` (`worktreeParent ?? repoPath`, in `src/paths.ts`) drives Overview grouping / sort / filter, so a worktree agent's card sits **inside the parent's cluster** sharing the parent's color (top band + selection frame) while still labelled with **its own branch** (#95). "This is a worktree" is now a small **"worktree" text badge** (mirroring the sidebar's #74 chip) on the Overview `SessionCard` and the Canvas agent-panel header — never a color difference. Sidebar + `repoColor` unchanged (the fix is *which* repo we color by). Purely visual.
+
 ---
 
 ## Design reference (dark theme only)
@@ -247,7 +251,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#95 are complete — see **Implemented (completed tasks)** above for the index,
+Tasks #1–#96 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. Open tasks are listed below. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
@@ -260,89 +264,6 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 96. [ ] Color worktree agents by their parent repo; mark worktrees with a badge, not a color
-
-**Status:** Not started
-**Depends on:** #95
-**Created:** 2026-06-21
-
-**Description**
-
-A worktree agent (#74) is an isolated `git worktree` of a parent repo, so it belongs to
-the **same folder** — but it currently reads as a *different repo* because of its color.
-`repoColor(path, …)` keys off the path, and a worktree agent's `repoPath` is the worktree
-folder (`<app-data>/worktrees/<repo-id>/<branch>`), which hashes to a different palette
-color than the parent. In the **Overview** this is doubly wrong: a worktree agent gets a
-foreign-colored top band **and** sits in its own separate column cluster (see image #3 —
-`fix/niralei-tools-improvements` shows a teal band beside the pink main-repo agent of the
-same repo).
-
-Make a worktree agent **inherit its parent repo's color**, and convey "this is a
-worktree" with a **non-color cue** — a small **"worktree" text badge** in the card/panel
-header, matching the chip the sidebar already shows (`worktreeBadge`, a `GitBranch`-marked
-sub-header). The sidebar is already correct (worktree agents nested under the parent +
-badge, no foreign color); this brings the **Overview** and **Canvas** in line.
-
-Concretely:
-
-1. **Overview — group worktree agents into the parent repo's cluster.** Build the wall's
-   clusters by each session's *effective repo* (`worktreeParent ?? repoPath`), so a
-   worktree agent's card sits **inside the parent repo's cluster**, sharing its color
-   (the cluster's `repoColor(parent)`) with no stray divider. Each worktree card still
-   shows **its own branch** as its label (`branches[session.repoPath]`, not the parent's)
-   — after #95 an unnamed agent shows just its branch, so the worktree's branch
-   (`fix/niralei-tools-improvements`) reads as the title. Also make the repo filter (#34)
-   and the contiguity sort treat the effective repo, so filtering to a repo still shows
-   its worktree agents and they sort next to the parent's.
-
-2. **Overview + Canvas — add the "worktree" badge.** On a `SessionCard` (Overview) and an
-   agent `PanelLeaf` header (Canvas) whose session has `worktreeParent` set, render a
-   small "worktree" chip (mirroring the sidebar's `worktreeBadge` styling). This is the
-   sole worktree indicator there — never a different color. (Canvas agent panels have no
-   color dot after #95, so no Canvas color change is needed — just the badge.)
-
-Out of scope: the sidebar (already correct); non-agent panels; any change to `repoColor`
-itself (the fix is *which* repo we color by, via grouping — not the hash). Purely visual.
-
-**Subtasks**
-
-1. [ ] Overview (`Overview.tsx`): group by the **effective repo** (`worktreeParent ??
-   repoPath`) — repoSet / clusters / `keyToRepo` / sort — so worktree agents fall into
-   the parent cluster and inherit `repoColor(parent)`.
-2. [ ] Overview: make `overviewRepoFilter` match `repoPath === filter || worktreeParent
-   === filter`, so filtering a repo keeps its worktree agents.
-3. [ ] Overview `SessionCard`: pass each worktree agent **its own** branch
-   (`branches[session.repoPath]`) for the label; add a "worktree" badge when
-   `session.worktreeParent` is set.
-4. [ ] Canvas (`CanvasSurface.tsx`): add a "worktree" badge to an agent panel's header
-   when its session has `worktreeParent`.
-5. [ ] Add a matching "worktree" chip style in the Overview / Canvas CSS modules (mirror
-   the sidebar's token-based `worktreeBadge`).
-6. [ ] `npm run build` + `npm run lint` + `npm test` clean.
-
-**Acceptance criteria**
-
-- [ ] A worktree agent's Overview card uses the **same color** as its parent repo's
-  agents (top band + selection frame), not a separate palette color.
-- [ ] In Overview, worktree agents appear **within the parent repo's cluster** (same
-  color, no extra divider); filtering the wall to that repo still shows them.
-- [ ] Each worktree card/panel is marked with a **"worktree" badge** (no color
-  difference) in Overview and Canvas; its label is still its own branch.
-- [ ] The sidebar is unchanged (already nests + badges worktree agents).
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
-
-**Notes**
-
-- Depends on **#95** (which reshapes the same `SessionCard` / Canvas agent header and
-  removes the metaDot / Canvas agent dot) — sequence after it to avoid conflicting edits
-  and to add the badge to the settled header.
-- The sidebar's existing pattern (`worktreeGroup` / `worktreeHeader` / `worktreeBadge`,
-  `GitBranch` icon) is the reference for the badge.
-- Optional: a tiny pure helper (e.g. `effectiveRepo(session)` = `worktreeParent ??
-  repoPath`) keeps the grouping / filter / color consistent and unit-testable.
 
 ---
 

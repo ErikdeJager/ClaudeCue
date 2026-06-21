@@ -162,13 +162,34 @@
   gap: var(--space-1);
 }
 
+/* Agent title row (#96): the name plus an optional inline "worktree" badge. */
+.agentTitle {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 .name {
   overflow: hidden;
+  min-width: 0;
   color: var(--text-primary);
   font-size: var(--fs-meta);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* "worktree" marker (#96) — mirrors the sidebar badge (#74). A worktree agent
+   inherits the parent repo's color, so this text chip is the sole worktree cue. */
+.worktreeBadge {
+  flex-shrink: 0;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-chip);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
 }
 
 /* Repo badge (#36): the repo name / agent subtitle text. The colored repo dot was
