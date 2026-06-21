@@ -42,7 +42,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> The backlog has fully shipped (#1–#101).
+> The backlog has fully shipped (#1–#102).
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -235,6 +235,10 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #101 Made the coding-agent CLI **pluggable** (part 1 of 2): a new `AgentSpec` abstraction (`src-tauri/src/agents.rs`) — a built-in catalog describing each agent's binary + how it spawns / resumes / seeds a session + capability flags (resume / auto-name / install-hint) — with the **`claude`** spec preserving today's exact flags (`--session-id <uuid>`, `--resume <uuid>`, positional prompt). Each session/schedule now **records its own `agent`** (`PersistedSession` / `ScheduledSession`, serde-default `"claude"`; TS `SessionRecord` / `SessionView` / `ScheduledSession` mirrors + record→view mapping). The spawn/resume **path is generalized off the `"claude"` literal**: `pty.rs` (`spawn_session` / `spawn_session_with_prompt` / `resume_session`) resolves the spec's `binary_name` + arg builders, and `commands.rs` (`spawn_session` / `spawn_worktree_agent` / `create_schedule` / `fire_due_schedules`) + the `lib.rs` boot-resume loop thread the agent (default Claude, stored on the record, resumed with the **stored** agent). **Claude is still the only agent and behaves identically** (verified). Codex spec + Settings "Agent" select + resume-capability gating + missing-binary / auto-name / UI-copy generalization → #104.
 
+**Settings — Appearance section (#102).**
+
+- #102 Wired the **Appearance** section of the Settings modal (#100): an **accent color** swatch picker over the Catppuccin palette (`REPO_PALETTE`) — the chosen hex overrides the `--accent` token on `:root` (Peach is the default, stored as `""` so the token stands) — and a **Reduce motion** toggle that forces the motion killswitch on via a `body.reduce-motion` class (mirroring the `prefers-reduced-motion` block in `global.css`). Both apply on Save + boot through the store's `applySettingsEffects` (DOM-guarded for the test env); the `accentColor` / `reduceMotion` fields + persistence already existed (#100). Behavior section → #103.
+
 ---
 
 ## Design reference (dark theme only)
@@ -271,7 +275,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#101 are complete — see **Implemented (completed tasks)** above for the index,
+Tasks #1–#102 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. Open tasks are listed below. New work goes
 here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
@@ -284,54 +288,6 @@ its `Depends on:` prerequisites.
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
-
----
-
-### 102. [ ] Settings — Appearance section (accent color + reduce motion)
-
-**Status:** Not started
-**Depends on:** #100
-**Created:** 2026-06-21
-
-**Description**
-
-Add the **Appearance** section to the Settings modal (#100) — one of the two section-wirings
-deferred when #100 shipped its infra + Terminal / Sessions / Data sections. The `accentColor`
-and `reduceMotion` fields already exist on the `Settings` type (`types/index.ts`) with
-defaults and persist through #100's `settings` blob; this wires their **UI + effects**. Both
-apply on **Save** and on boot (extend the store's `applySettingsEffects`, #100).
-
-- **Accent color** — a swatch picker over the 14-color Catppuccin palette (`REPO_PALETTE`,
-  `store.ts`), default Peach. Apply by overriding the `--accent` CSS variable on
-  `document.documentElement` (`:root`); `accentColor: ""` (the default) clears the override so
-  the token stands. Just `--accent` (not `--accent-hover`/`-fg`/`-dim`), per #100's note.
-- **Reduce motion** — a toggle forcing reduced motion beyond the OS setting, via a
-  `body.reduce-motion` class that zeroes the motion tokens, mirroring the existing
-  `prefers-reduced-motion` killswitch in `src/styles/global.css`.
-
-**Subtasks**
-
-1. [ ] Add an `Appearance` entry to `Settings.tsx`'s `SECTIONS` + content: a palette swatch
-   grid (reuse `REPO_PALETTE`) bound to `draft.accentColor` (with a "default" choice = ""),
-   and a reduce-motion `Checkbox` bound to `draft.reduceMotion`.
-2. [ ] Extend `applySettingsEffects` (`store.ts`): set/clear `--accent` on `:root`, and toggle
-   `body.reduce-motion`.
-3. [ ] Add a `body.reduce-motion { … }` block to `global.css` zeroing the motion tokens
-   (mirror the `@media (prefers-reduced-motion: reduce)` killswitch).
-4. [ ] `npm run build`, `npm run lint`, and `npm test` are clean.
-
-**Acceptance criteria**
-
-- [ ] Picking an accent color and Saving recolors accent UI (New session button, selected
-  sidebar row, …) immediately and after restart; the default / "Reset to defaults" restores
-  Peach.
-- [ ] Reduce-motion on stops app animations (as the OS killswitch does) and persists.
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
-
-**Notes**
-
-- Part of the #100 Settings split — purely the Appearance UI + effects; persistence already
-  exists.
 
 ---
 

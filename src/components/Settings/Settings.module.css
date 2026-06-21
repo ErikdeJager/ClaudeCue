@@ -123,6 +123,33 @@
   font-size: var(--fs-meta);
 }
 
+/* Accent swatch picker (#102). */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.swatch:hover {
+  border-color: var(--border-strong);
+}
+
+.swatchActive,
+.swatchActive:hover {
+  border-color: var(--text-primary);
+}
+
 /* Data & About. */
 .dataSection {
   display: flex;

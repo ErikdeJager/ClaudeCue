@@ -9,23 +9,33 @@ import {
   Bot,
   Database,
   FolderOpen,
+  Palette,
   SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 
 import * as ipc from "../../ipc";
-import { DEFAULT_SETTINGS, useStore } from "../../store";
+import { DEFAULT_SETTINGS, REPO_PALETTE, useStore } from "../../store";
 import type { Settings as SettingsType } from "../../types";
 import Checkbox from "../Checkbox/Checkbox";
 import styles from "./Settings.module.css";
 
-type Section = "terminal" | "sessions" | "data";
+type Section = "terminal" | "appearance" | "sessions" | "data";
+
+/** Peach — the default `--accent` token (#102). The Appearance picker maps this
+ * swatch to `accentColor: ""` (no override, so the token stands). */
+const DEFAULT_ACCENT = "#fab387";
 
 const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   {
     id: "terminal",
     label: "Terminal",
     icon: <SlidersHorizontal size={15} strokeWidth={1.5} />,
+  },
+  {
+    id: "appearance",
+    label: "Appearance",
+    icon: <Palette size={15} strokeWidth={1.5} />,
   },
   {
     id: "sessions",
@@ -201,6 +211,43 @@ function SettingsModal() {
                   checked={draft.terminalCursorBlink}
                   onChange={(v) => update("terminalCursorBlink", v)}
                   label="Cursor blink"
+                  className={styles.checkRow}
+                />
+              </>
+            )}
+
+            {section === "appearance" && (
+              <>
+                <div className={styles.field}>
+                  <span className={styles.fieldLabel}>Accent color</span>
+                  <div className={styles.swatches}>
+                    {REPO_PALETTE.map((color) => {
+                      // Peach is the default → store "" so the --accent token
+                      // stands; any other swatch overrides --accent with its hex.
+                      const isDefault = color === DEFAULT_ACCENT;
+                      const active =
+                        (draft.accentColor || DEFAULT_ACCENT) === color;
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`${styles.swatch} ${active ? styles.swatchActive : ""}`}
+                          style={{ background: color }}
+                          onClick={() =>
+                            update("accentColor", isDefault ? "" : color)
+                          }
+                          title={isDefault ? `${color} (default)` : color}
+                          aria-label={`Accent ${color}${isDefault ? " (default)" : ""}`}
+                          aria-pressed={active}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+                <Checkbox
+                  checked={draft.reduceMotion}
+                  onChange={(v) => update("reduceMotion", v)}
+                  label="Reduce motion"
                   className={styles.checkRow}
                 />
               </>

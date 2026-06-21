@@ -252,6 +252,15 @@ function applySettingsEffects(s: Settings): void {
     lineHeight: s.terminalLineHeight,
     cursorBlink: s.terminalCursorBlink,
   });
+  if (typeof document === "undefined") return; // non-DOM env (e.g. unit tests)
+  // Accent (#102): override --accent on :root, or clear it for the default ("")
+  // so the Catppuccin Peach token stands.
+  const root = document.documentElement;
+  if (s.accentColor) root.style.setProperty("--accent", s.accentColor);
+  else root.style.removeProperty("--accent");
+  // Reduce motion (#102): force-on beyond the OS setting via a body class that
+  // global.css zeroes the motion for (mirrors the prefers-reduced-motion killswitch).
+  document.body.classList.toggle("reduce-motion", s.reduceMotion);
 }
 
 /** A clicked sidebar item — an agent/terminal (by PTY id) or a file/diff panel
