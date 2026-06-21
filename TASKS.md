@@ -484,3 +484,71 @@ place — emptied — as a follow-up).
   (both registered).
 - Follow-up (not this task): fully retire the legacy `open_files` field +
   `list_open_files` / `set_open_files` commands once confirmed empty in the wild.
+
+---
+
+### 111. [ ] Compact sidebar — unify every tree-row label to 10px (font size only)
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-21
+
+**Description**
+
+The left sidebar's agent rows render **larger** than the rows beneath them, which looks
+bulky and inconsistent: the agent label `.rowPrimary` (`src/components/Sidebar/Sidebar.module.css`)
+is `--fs-meta` (12px), the repo header name `.repoName` is also `--fs-meta` (12px), while
+the file / diff / terminal / scheduled **item** rows are already `--fs-meta-sm` (11px).
+
+Make the whole sidebar tree **more compact and uniform** by dropping **every tree-row label
+to 10px** — agents included — so the left panel reads at one consistent, smaller size. This
+is a **font-size-only** change (per the user): row padding, heights, gaps, and the
+busy-indicator slot (#95) all stay exactly as they are, and **non-row chrome** (the New
+session / Schedule buttons, the footer gear row, context menus, section headers) is
+untouched.
+
+The smallest existing font token is `--fs-meta-sm` (11px), so add a new **`--fs-meta-xs:
+10px`** token (`src/styles/tokens.css`, font-size group) and point the sidebar row labels at
+it — staying on-system (token-driven) rather than hardcoding 10px.
+
+**Labels that move to 10px** (all classes in `Sidebar.module.css`):
+- Agent / session label `.rowPrimary`, plus the inline rename editor `.renameInput` (so the
+  text doesn't jump size when you start renaming).
+- The file / diff / terminal / scheduled **item** row label text (currently `--fs-meta-sm`).
+- The repo header name `.repoName` and the agent `.count` (so "all rows" are uniform).
+
+**Out of scope:** any padding / height / gap change; the Overview and Canvas agent labels
+(this is the **left panel only**); the busy indicator; and any non-row sidebar chrome.
+
+**Subtasks**
+
+1. [ ] Add `--fs-meta-xs: 10px` to the font-size group in `src/styles/tokens.css`.
+2. [ ] Point the agent label `.rowPrimary` (and `.renameInput`) at `--fs-meta-xs`.
+3. [ ] Point the file / diff / terminal / scheduled **item** row label text at `--fs-meta-xs`.
+4. [ ] Point the repo header `.repoName` + `.count` at `--fs-meta-xs`.
+5. [ ] Verify no padding / height / chrome changed; run build + lint + format.
+
+**Acceptance criteria**
+
+- [ ] Every sidebar tree-row label — repo header name, agent label, and file / diff /
+      terminal / scheduled item labels — renders at 10px.
+- [ ] Row padding, heights, gaps, and the busy-indicator slot are unchanged (font size only).
+- [ ] Non-row sidebar chrome (New session / Schedule buttons, footer, context menus, section
+      headers) is visually unchanged.
+- [ ] A `--fs-meta-xs: 10px` token exists and the sidebar rows reference it — no hardcoded 10px.
+- [ ] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass.
+
+**Notes**
+
+- From the user: "All sidebar rows should be roughly the same size … aim for 10px," font
+  size only. This broadened the original ask (just the agent custom title) to the whole tree.
+- **Targeted, not a global swap:** change only the named row-label classes — do **not**
+  blanket-replace `--fs-meta-sm`, which is also used by the footer / menus / section headers
+  that must stay their current size.
+- **Hierarchy note:** this flattens the repo header to the same 10px as its child rows. If
+  that reads too flat, the one-line fallback is to keep `.repoName` at `--fs-meta-sm` (11px)
+  and apply 10px to the leaf rows only — but the request was "all rows," so default to uniform.
+- 10px mono is intentionally small; `--fs-meta-sm` (11px) is the obvious fallback if 10px
+  reads too tight in practice.
+- Pure CSS / token change — no TS or Rust. **Depends on: none** (all touched code exists;
+  unrelated to #109 / #110).
