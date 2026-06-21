@@ -100,9 +100,16 @@ export const listOverviewOrder = () =>
 export const setOverviewOrder = (path: string, order: string[]) =>
   invoke<void>("set_overview_order", { path, order });
 
-/** Legacy per-repo opened files (#45); read once to migrate into overviewPanels (#59). */
+/** Legacy per-repo opened files (#45); read once on boot to clear the stale map
+ * (#110 — the #59 fold no longer runs). */
 export const listOpenFiles = () =>
   invoke<Record<string, string[]>>("list_open_files");
+
+/** Clear (or replace) a repo's legacy opened-file list (#110). Called once on boot
+ * with `[]` to permanently empty the stale `open_files` map so a closed file viewer
+ * can't be resurrected; the Rust setter drops a now-empty key. */
+export const setOpenFiles = (path: string, files: string[]) =>
+  invoke<void>("set_open_files", { path, files });
 
 /** The legacy single Canvas layout tree (#46); read once to migrate into #58. */
 export const getCanvasLayout = () =>

@@ -321,9 +321,9 @@ its `Depends on:` prerequisites.
 
 ---
 
-### 110. [ ] Fix: a closed/forgotten file viewer reopens on every launch (stale legacy `open_files` resurrected each boot)
+### 110. [x] Fix: a closed/forgotten file viewer reopens on every launch (stale legacy `open_files` resurrected each boot)
 
-**Status:** Not started
+**Status:** Complete
 **Depends on:** none
 **Created:** 2026-06-21
 
@@ -365,32 +365,32 @@ place — emptied — as a follow-up).
 
 **Subtasks**
 
-1. [ ] Add a typed `setOpenFiles(path, files)` wrapper in `src/ipc.ts` mapping to the
+1. [x] Add a typed `setOpenFiles(path, files)` wrapper in `src/ipc.ts` mapping to the
    existing `set_open_files` Rust command (already registered in `lib.rs`).
-2. [ ] In `store.ts` `refresh()`, remove the `open_files → overviewPanels` fold-in (the
+2. [x] In `store.ts` `refresh()`, remove the `open_files → overviewPanels` fold-in (the
    `mergedPanels` resurrection loop) so `overviewPanels` loads from persisted panels
    only — nothing is re-added from `open_files`.
-3. [ ] After loading, **main-window only** (mirroring the old migration's
+3. [x] After loading, **main-window only** (mirroring the old migration's
    `IS_MAIN_WINDOW` guard), clear every legacy entry: for each repo in `listOpenFiles()`,
    call `ipc.setOpenFiles(repo, [])` so `sessions.json`'s `open_files` empties once and
    stays empty (the Rust setter drops empty keys).
-4. [ ] Confirm no other path depends on the fold-in; verify closing a panel and
+4. [x] Confirm no other path depends on the fold-in; verify closing a panel and
    Forget-folder now leave nothing behind that can resurrect an item.
-5. [ ] Tests: keep the Rust `open_files_set_and_persist` test green; add/extend a Vitest
+5. [x] Tests: keep the Rust `open_files_set_and_persist` test green; add/extend a Vitest
    store test for "boot does not resurrect a closed file and empties `open_files`" if the
    harness can mock the IPC layer.
 
 **Acceptance criteria**
 
-- [ ] Launching the app no longer auto-opens `CLAUDE.md` (or any previously-closed/
+- [x] Launching the app no longer auto-opens `CLAUDE.md` (or any previously-closed/
       forgotten file viewer); it does not reappear across restarts.
-- [ ] Closing a file/markdown panel (×) and relaunching: it stays closed.
-- [ ] Forget-folder on a repo and relaunching: none of its file viewers reappear.
-- [ ] After one launch with the fix, `sessions.json`'s `open_files` is empty (the stuck
+- [x] Closing a file/markdown panel (×) and relaunching: it stays closed.
+- [x] Forget-folder on a repo and relaunching: none of its file viewers reappear.
+- [x] After one launch with the fix, `sessions.json`'s `open_files` is empty (the stuck
       `{ ClaudeCue: ["CLAUDE.md"] }` entry is gone).
-- [ ] No regression to `overview_panels` persistence: panels kept open still persist and
+- [x] No regression to `overview_panels` persistence: panels kept open still persist and
       restore.
-- [ ] `npm run build`, `npm run lint`, `npm test`, and the Rust build / `cargo test` /
+- [x] `npm run build`, `npm run lint`, `npm test`, and the Rust build / `cargo test` /
       clippy all pass.
 
 **Notes**

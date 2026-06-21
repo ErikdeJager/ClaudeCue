@@ -1005,34 +1005,23 @@ export const useStore = create<AppState>()((set, get) => ({
       if (!IS_MAIN_WINDOW && DETACHED_CANVAS_ID) {
         activeCanvasId = DETACHED_CANVAS_ID;
       }
-      // #59: fold the old per-repo `openFiles` (#45) into `overviewPanels` as
-      // markdown file items, so the sidebar and Overview share one source of
-      // truth. Any opened file not already a panel becomes one; persist once.
-      const mergedPanels: Record<string, OverviewPanel[]> = { ...panels };
-      for (const [repo, fileList] of Object.entries(files)) {
-        const existing = mergedPanels[repo] ?? [];
-        const have = new Set(
-          existing.filter((p) => p.kind === "markdown").map((p) => p.file),
-        );
-        const additions = fileList
-          .filter((f) => !have.has(f))
-          .map((f) => ({
-            id: crypto.randomUUID(),
-            kind: "markdown" as const,
-            file: f,
-          }));
-        if (additions.length > 0) {
-          const list = [...existing, ...additions];
-          mergedPanels[repo] = list;
-          // Persist the migration once, from the main window only (#84).
-          if (IS_MAIN_WINDOW) {
-            void ipc.setOverviewPanels(repo, list).catch(() => {});
-          }
+      // #110: the legacy per-repo `open_files` map (#45) is **no longer** folded
+      // into `overviewPanels`. The #59 fold ran on every boot, and because nothing
+      // ever cleared `open_files`, a closed/forgotten file viewer was **resurrected**
+      // each launch (the file lingered in `open_files`, was seen absent from the
+      // persisted panels, and was re-created as a fresh markdown panel). Every real
+      // install long since migrated and persisted its panels, so we drop the fold
+      // entirely — `overviewPanels` loads from the persisted layout only — and
+      // permanently **empty** the stale `open_files` map (main window only; the Rust
+      // setter drops each now-empty key) so it can never resurrect an item again.
+      if (IS_MAIN_WINDOW) {
+        for (const repo of Object.keys(files)) {
+          void ipc.setOpenFiles(repo, []).catch(() => {});
         }
       }
       set({
         repoColors: colors,
-        overviewPanels: mergedPanels,
+        overviewPanels: panels,
         overviewOrder: order,
         canvases,
         activeCanvasId,
@@ -1044,7 +1033,7 @@ export const useStore = create<AppState>()((set, get) => ({
       // restart (previous output/history is gone, by design). Main window only —
       // a detached window (#84) must not re-spawn shells the main window owns.
       if (IS_MAIN_WINDOW) {
-        for (const [repo, list] of Object.entries(mergedPanels)) {
+        for (const [repo, list] of Object.entries(panels)) {
           for (const p of list) {
             if (p.kind === "terminal") {
               void ipc.spawnTerminal(repo, p.id).catch(() => {});
