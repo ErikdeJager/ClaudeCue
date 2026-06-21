@@ -465,3 +465,72 @@ agent title). Purely additive to the single-line label model #95 leaves in place
   `/` and `.` → `-`).
 - A later docs pass should record the new `auto_name` field + the auto-naming flow in
   CLAUDE.md (architecture / data-flow + Conventions) and the README.
+
+---
+
+### 98. [ ] Fix: a detached canvas window shows an empty "open in its own window" placeholder instead of its panels
+
+**Status:** Not started
+**Depends on:** none
+**Created:** 2026-06-21
+
+**Description**
+
+Popping a canvas into its own window (#84) shows an **empty** window: the body renders the
+"This canvas is open in its own window. / Focus window" placeholder (`DetachedCanvasNote`)
+instead of the canvas's panels (image #2). A canvas that already has components should keep
+showing them in the detached window.
+
+**Root cause.** `CanvasSurface` is shared by the main window's Canvas view **and** the
+detached `CanvasWindow`. It picks the placeholder vs. the layout with:
+
+```
+const activeDetached = detachedCanvasIds.includes(activeCanvasId);
+… activeDetached ? <DetachedCanvasNote …/> : renderNode(layout)
+```
+
+That guard is meant only for the **main** window (so a detached canvas's PTYs aren't drawn
+in two windows). But the detached window forces `activeCanvasId = DETACHED_CANVAS_ID` on
+init (`store.ts` ~806–807), and that id **is** in `detachedCanvasIds`, so `activeDetached`
+is `true` there too — the detached window shows the placeholder instead of its own content.
+
+**Fix.** Gate the placeholder on window identity so only the main window shows it:
+
+```
+const activeDetached = IS_MAIN_WINDOW && detachedCanvasIds.includes(activeCanvasId);
+```
+
+(import `IS_MAIN_WINDOW` from `../../windowContext`). In the detached window
+(`IS_MAIN_WINDOW === false`) this is always `false`, so it renders `renderNode(layout)` for
+its canvas. The detached window already owns its canvas's sessions
+(`computeSessionOwners` → `reconcileTerminals`), so each agent panel's `ownedHere` is `true`
+and the pooled terminals render; file / diff / terminal panels render regardless. The main
+window still shows the note for a detached active tab (unchanged), so a PTY is never drawn
+in two windows.
+
+Scope: the single `activeDetached` guard in `CanvasSurface.tsx`. No backend, ownership, or
+cross-window-sync changes.
+
+**Subtasks**
+
+1. [ ] `CanvasSurface.tsx`: import `IS_MAIN_WINDOW` and gate `activeDetached` with it.
+2. [ ] Verify the detached window renders the canvas's panels with **live** content (agent
+   terminals included), and the main window still shows the "open in its own window" note
+   when its active tab is the detached canvas.
+3. [ ] `npm run build` + `npm run lint` clean.
+
+**Acceptance criteria**
+
+- [ ] Opening a non-empty canvas in its own window shows its **panels** (live terminals /
+  file / diff content), not the "open in its own window" placeholder.
+- [ ] The main window still shows the "This canvas is open in its own window / Focus window"
+  note when its active tab is a popped-out canvas (no PTY rendered in two windows).
+- [ ] `npm run build` and `npm run lint` pass.
+
+**Notes**
+
+- Regression from #84 (multi-window canvases), built but never runtime-verified for
+  interactive multi-monitor behavior.
+- Touches `CanvasSurface.tsx`, the same file as #95 / #96 / #97 (which edit the agent panel
+  *header* / label — a different region). No functional dependency; sequencing after them
+  just avoids edit churn.
