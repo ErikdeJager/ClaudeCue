@@ -676,9 +676,9 @@ would also read `forkSession` / `copyToClipboard` via `useStore`.
 
 ---
 
-### 132. [ ] Add simple right-click context menus to the non-agent left-panel rows (file / diff / terminal / schedule)
+### 132. [x] Add simple right-click context menus to the non-agent left-panel rows (file / diff / terminal / schedule)
 
-**Status:** Not started
+**Status:** Done
 **Owner:** _(unassigned)_
 **Depends on:** none · _(pure-frontend; builds on the shipped sidebar rows #45/#59/#72/#94 and mirrors the `SessionRow` menu pattern; the #120/#121 refining passes are complete, so nothing open gates it)_
 **Created:** 2026-06-22
@@ -721,29 +721,29 @@ menu items beyond Remove/Cancel, and any backend change.
 
 **Subtasks**
 
-1. [ ] Add the menu to each row by mirroring `SessionRow`'s local `menu` state +
+1. [x] Add the menu to each row by mirroring `SessionRow`'s local `menu` state +
    `onContextMenu` + `.menuOverlay`/`.menu` render. To avoid four near-identical copies,
    optionally factor a tiny shared `RowContextMenu` (single-item) component — but a direct
    mirror is acceptable for this minimal pass.
-2. [ ] `FileRow` / `DiffRow` / `TerminalRow`: single **Remove** item (`menuItemDanger`) →
+2. [x] `FileRow` / `DiffRow` / `TerminalRow`: single **Remove** item (`menuItemDanger`) →
    calls the existing `onClose`; close the menu after.
-3. [ ] `ScheduleRow`: single **Cancel** item (`menuItemDanger`) → calls the existing
+3. [x] `ScheduleRow`: single **Cancel** item (`menuItemDanger`) → calls the existing
    `onCancel`; close the menu after.
-4. [ ] Verify `npm run build`, `npm run lint`, `npm test`, `npm run format:check` (no Rust
+4. [x] Verify `npm run build`, `npm run lint`, `npm test`, `npm run format:check` (no Rust
    changes expected).
 
 **Acceptance criteria**
 
-- [ ] Right-clicking a **file**, **diff**, or **terminal** row opens a menu with a single
+- [x] Right-clicking a **file**, **diff**, or **terminal** row opens a menu with a single
   **Remove** item that removes the row (and, for a terminal, kills its shell) — identical
   to the × button.
-- [ ] Right-clicking a **scheduled-session** row opens a menu with a single **Cancel**
+- [x] Right-clicking a **scheduled-session** row opens a menu with a single **Cancel**
   item that cancels the schedule — identical to the × button.
-- [ ] The menu mirrors the `SessionRow` menu (cursor-positioned/clamped, overlay-click
+- [x] The menu mirrors the `SessionRow` menu (cursor-positioned/clamped, overlay-click
   closes, red danger styling) with **no** confirm prompt.
-- [ ] Existing click-to-open, ×, and drag-into-Canvas behaviors are unchanged on all four
+- [x] Existing click-to-open, ×, and drag-into-Canvas behaviors are unchanged on all four
   rows.
-- [ ] All build/lint/test/format checks pass.
+- [x] All build/lint/test/format checks pass.
 
 **Notes**
 

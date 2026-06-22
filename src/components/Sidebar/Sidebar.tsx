@@ -1,4 +1,5 @@
 import {
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useRef,
@@ -35,9 +36,82 @@ import FilePicker from "../FilePicker/FilePicker";
 import ViewSwitch from "../ViewSwitch/ViewSwitch";
 import styles from "./Sidebar.module.css";
 
+/** Shared right-click menu state for the non-agent sidebar rows (#132). Mirrors
+ * `SessionRow`'s pattern — a cursor-positioned, viewport-clamped `{x,y}` that
+ * Escape / overlay-click dismisses. Returns the open handler for the row's
+ * `onContextMenu` and a `closeMenu` for the menu/overlay. */
+function useRowMenu() {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menu]);
+  const openMenu = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenu({
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 160)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 96)),
+    });
+  };
+  return { menu, openMenu, closeMenu: () => setMenu(null) };
+}
+
+/** A deliberately minimal single-item context menu for the non-agent rows (#132):
+ * file / diff / terminal show **Remove**, schedule shows **Cancel** — both the red
+ * `menuItemDanger` style, calling the row's existing `onClose`/`onCancel` handler
+ * (no confirm, no new backend). Reuses the `.menuOverlay` / `.menu` classes. */
+function RowContextMenu({
+  menu,
+  label,
+  onClose,
+  onActivate,
+}: {
+  menu: { x: number; y: number } | null;
+  label: string;
+  onClose: () => void;
+  onActivate: () => void;
+}) {
+  if (!menu) return null;
+  return (
+    <>
+      <div
+        className={styles.menuOverlay}
+        onClick={onClose}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onClose();
+        }}
+      />
+      <div
+        className={styles.menu}
+        style={{ left: menu.x, top: menu.y }}
+        role="menu"
+      >
+        <button
+          type="button"
+          role="menuitem"
+          className={styles.menuItemDanger}
+          onClick={() => {
+            onClose();
+            onActivate();
+          }}
+        >
+          {label}
+        </button>
+      </div>
+    </>
+  );
+}
+
 /** A pending scheduled-session row (#93/#94): a dnd-kit draggable item (drops into
  * Canvas as a scheduled panel), click selects/jumps to it (#79), × cancels. The
- * whole label is the drag handle; a small activation distance keeps clicks working. */
+ * whole label is the drag handle; a small activation distance keeps clicks working.
+ * Right-click opens a single-item **Cancel** menu (#132). */
 function ScheduleRow({
   schedule,
   selected,
@@ -60,6 +134,7 @@ function ScheduleRow({
     });
   const label =
     schedule.name?.trim() || schedule.branch || repoName(schedule.cwd);
+  const { menu, openMenu, closeMenu } = useRowMenu();
   const style = transform
     ? { transform: CSS.Translate.toString(transform) }
     : undefined;
@@ -69,6 +144,7 @@ function ScheduleRow({
       className={`${styles.scheduleRow} ${selected ? styles.scheduleRowSelected : ""} ${isDragging ? styles.scheduleRowDragging : ""}`}
       style={style}
       title={`Scheduled for ${new Date(schedule.fire_at * 1000).toLocaleString()}`}
+      onContextMenu={openMenu}
     >
       <button
         type="button"
@@ -97,6 +173,12 @@ function ScheduleRow({
       >
         <X size={13} strokeWidth={1.5} />
       </button>
+      <RowContextMenu
+        menu={menu}
+        label="Cancel"
+        onClose={closeMenu}
+        onActivate={onCancel}
+      />
     </div>
   );
 }
@@ -351,6 +433,7 @@ function FileRow({ repoPath, file, selected, onOpen, onClose }: FileRowProps) {
       data: { kind: "file", repoPath, file },
     });
   const name = file.split("/").pop() || file;
+  const { menu, openMenu, closeMenu } = useRowMenu();
   const style = transform
     ? { transform: CSS.Translate.toString(transform) }
     : undefined;
@@ -359,6 +442,7 @@ function FileRow({ repoPath, file, selected, onOpen, onClose }: FileRowProps) {
       ref={setNodeRef}
       className={`${styles.fileRow} ${selected ? styles.fileRowSelected : ""} ${isDragging ? styles.fileRowDragging : ""}`}
       style={style}
+      onContextMenu={openMenu}
     >
       <button
         type="button"
@@ -385,6 +469,12 @@ function FileRow({ repoPath, file, selected, onOpen, onClose }: FileRowProps) {
       >
         <X size={13} strokeWidth={1.5} />
       </button>
+      <RowContextMenu
+        menu={menu}
+        label="Remove"
+        onClose={closeMenu}
+        onActivate={onClose}
+      />
     </div>
   );
 }
@@ -414,6 +504,7 @@ function DiffRow({
       id: `diff:${repoPath}:${panelId}`,
       data: { kind: "diff", repoPath },
     });
+  const { menu, openMenu, closeMenu } = useRowMenu();
   const style = transform
     ? { transform: CSS.Translate.toString(transform) }
     : undefined;
@@ -422,6 +513,7 @@ function DiffRow({
       ref={setNodeRef}
       className={`${styles.fileRow} ${selected ? styles.fileRowSelected : ""} ${isDragging ? styles.fileRowDragging : ""}`}
       style={style}
+      onContextMenu={openMenu}
     >
       <button
         type="button"
@@ -448,6 +540,12 @@ function DiffRow({
       >
         <X size={13} strokeWidth={1.5} />
       </button>
+      <RowContextMenu
+        menu={menu}
+        label="Remove"
+        onClose={closeMenu}
+        onActivate={onClose}
+      />
     </div>
   );
 }
@@ -475,6 +573,7 @@ function TerminalRow({
       id: `terminal:${repoPath}:${panelId}`,
       data: { kind: "terminal", repoPath, sessionId: panelId },
     });
+  const { menu, openMenu, closeMenu } = useRowMenu();
   const style = transform
     ? { transform: CSS.Translate.toString(transform) }
     : undefined;
@@ -483,6 +582,7 @@ function TerminalRow({
       ref={setNodeRef}
       className={`${styles.fileRow} ${selected ? styles.fileRowSelected : ""} ${isDragging ? styles.fileRowDragging : ""}`}
       style={style}
+      onContextMenu={openMenu}
     >
       <button
         type="button"
@@ -509,6 +609,12 @@ function TerminalRow({
       >
         <X size={13} strokeWidth={1.5} />
       </button>
+      <RowContextMenu
+        menu={menu}
+        label="Remove"
+        onClose={closeMenu}
+        onActivate={onClose}
+      />
     </div>
   );
 }
