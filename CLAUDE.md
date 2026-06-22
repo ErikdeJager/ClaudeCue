@@ -221,8 +221,10 @@ even though it works in `tauri dev`.
   Best-effort: a missing / unreadable / format-changed log degrades to the branch,
   and the busy indicator is never stalled. The Settings auto-name toggle (#100) gates
   it.
-- **Settings (#100/#102/#103/#107):** a sidebar **footer gear** opens a centered,
-  focus-trapped **Settings modal** (`components/Settings`) with five sections —
+- **Settings (#100/#102/#103/#107/#119):** a sidebar **footer gear** opens a centered,
+  focus-trapped **Settings modal** (`components/Settings`) — a **fixed 720×600** size
+  (clamped to 90vh, #119) so every section renders identically and a tall section
+  scrolls inside the content pane (the nav + action row stay put) — with five sections —
   **Terminal** (font size / line height / cursor blink → the live pooled xterms via
   `terminalPool.applyTerminalSettings`), **Sessions** (the #97 auto-name toggle),
   **Appearance** (an accent swatch over the Catppuccin palette + a reduce-motion

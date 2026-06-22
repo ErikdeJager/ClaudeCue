@@ -321,8 +321,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#118 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. **Open tasks: #119–#125.** New work
+Tasks #1–#119 are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. **Open tasks: #120–#125.** New work
 goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -947,9 +947,9 @@ and any spawn-count guard.
 
 ---
 
-### 119. [ ] Settings modal: consistent, larger fixed size with vertical scroll on overflow
+### 119. [x] Settings modal: consistent, larger fixed size with vertical scroll on overflow
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** _(unassigned)_
 **Depends on:** none · _(self-contained CSS change to the #100 Settings modal)_
 **Created:** 2026-06-22
@@ -986,14 +986,14 @@ user-confirmed **720 × 600** (height clamped to 90vh).
 
 **Acceptance criteria**
 
-- [ ] The Settings modal is the **same size for every section** — switching Terminal
+- [x] The Settings modal is the **same size for every section** — switching Terminal
   / Sessions / Appearance / Behavior / Data & About never changes its width or
   height.
-- [ ] The modal is **larger** than today (≈720 × 600), and its height is clamped to
+- [x] The modal is **larger** than today (≈720 × 600), and its height is clamped to
   the viewport (≤ ~90vh) so it never exceeds a short screen.
-- [ ] A section taller than the modal **scrolls vertically inside the content area**;
+- [x] A section taller than the modal **scrolls vertically inside the content area**;
   the section nav and the Cancel/Save action row remain visible (don't scroll away).
-- [ ] `npm run build`, `npm run lint`, and `npm run format:check` pass.
+- [x] `npm run build`, `npm run lint`, and `npm run format:check` pass.
 
 **Notes**
 

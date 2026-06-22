@@ -13,8 +13,12 @@
 
 .dialog {
   display: flex;
-  width: min(640px, 100%);
-  max-height: min(520px, 90vh);
+  width: min(720px, 100%);
+  /* A fixed (viewport-clamped) height (#119) so the modal is the same size for
+     every section — short sections no longer shrink it, tall ones scroll inside
+     `.content` instead of growing the dialog. The `.sections` nav + `.actions` row
+     are flex-shrink:0, so only the content pane scrolls. */
+  height: min(600px, 90vh);
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-window);
