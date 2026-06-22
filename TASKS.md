@@ -360,10 +360,12 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#132 are complete** — see **Implemented (completed tasks)** above for the
-index and git history for per-task detail. The **open** tasks (#133–#134) follow below.
-New work goes here as a fresh `### N.` entry in
-[TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:` prerequisites.
+Tasks **#1–#134 are complete** — see **Implemented (completed tasks)** above for the
+index and git history for per-task detail. There are **no open tasks** right now (the
+full entries for the most recently completed #133–#134 remain below until the next
+`/update-docs` condenses them into the summary). New work goes here as a fresh `### N.`
+entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:`
+prerequisites.
 
 > **Implementing tasks — never skip one.** The agent implementing this backlog
 > (`/develop-tasks`, `/isolate-agent`, `/handoff`) MUST implement **every** open task
@@ -448,9 +450,9 @@ held to the worktree header; agent rows (#131) untouched. No backend change.
 
 ---
 
-### 134. [ ] Guard Fork against an empty / un-materialized conversation
+### 134. [x] Guard Fork against an empty / un-materialized conversation
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none · _(builds on #126 fork + #97 `title.rs` log-globbing — both shipped)_
 **Created:** 2026-06-22
 
@@ -492,26 +494,28 @@ Out of scope: changing fork's flags or behavior for sessions that **do** have hi
 
 **Subtasks**
 
-1. [ ] Factor a small read-only helper that locates a session's claude JSONL log (reuse
+1. [x] Factor a small read-only helper that locates a session's claude JSONL log (reuse
    `title.rs`'s `~/.claude/projects/*/<uuid>.jsonl` glob) and reports whether it exists
    with ≥1 conversation entry.
-2. [ ] In `fork_session` (commands.rs / `pty.rs`), call it for the source before
+2. [x] In `fork_session` (commands.rs / `pty.rs`), call it for the source before
    spawning; on "no history" return a typed `SessionError` with a clear message instead
    of spawning a doomed PTY.
-3. [ ] Confirm the frontend `forkSession` surfaces that message as an error toast and
+3. [x] Confirm the frontend `forkSession` surfaces that message as an error toast and
    creates no session/panel on this path (it already toasts `err.message`).
-4. [ ] _(Optional)_ Also disable/hide the Fork buttons + the #131 menu item when the
-   source has no history, if a reliable signal is cheaply available.
+4. [ ] _(Optional, skipped)_ Disable/hide the Fork buttons + the #131 menu item when the
+   source has no history — no *reliable* signal is cheaply available client-side (the
+   on-disk log is the only trustworthy one, and per-render IPC log reads aren't "cheap");
+   the backend guard + error toast is the robust fix.
 
 **Acceptance criteria**
 
-- [ ] Forking a brand-new session the user never prompted does **not** create a dead
+- [x] Forking a brand-new session the user never prompted does **not** create a dead
   "Process exited" panel; the user is told to send a message first.
-- [ ] "Type a prompt → fork → fork the fork" no longer crashes the second fork — an
+- [x] "Type a prompt → fork → fork the fork" no longer crashes the second fork — an
   un-materialized fork is handled gracefully (no dead panel).
-- [ ] Forking a session that **does** have conversation history is unchanged (works as
+- [x] Forking a session that **does** have conversation history is unchanged (works as
   in #126).
-- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+- [x] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
 
 **Notes**
 
@@ -519,4 +523,28 @@ Out of scope: changing fork's flags or behavior for sessions that **do** have hi
   #63 exit overlay on the new fork; the fix prevents creating that session at all.
 - Detection is against the on-disk log, not `hasBeenActive` / busy (a fork inherits
   history yet starts gray #116).
+
+**Implementation report**
+
+Backend guard at the root, as recommended. Factored `title.rs`'s log glob into a
+3-state `locate_log` → `Found` / `Absent` (projects dir readable, no `<id>.jsonl`) /
+`Unknown` (no `HOME` / unreadable dir); `find_log` (used by `read_session_title`) now
+wraps it, behavior unchanged. Added `pub fn has_conversation(claude_session_id)` +
+`log_has_turn(path)`: a session is forkable iff its log holds ≥1 line with
+`type":"user"`/`"assistant"` (a real turn, vs. the startup-only `mode` /
+`permission-mode` / `file-history-snapshot` / `last-prompt` metadata; format verified
+against `~/.claude/projects/*.jsonl`, claude 2.1.x). **Fail-open:** only a *positive*
+"no conversation" (Absent, or a file with zero turns) returns `false`; any uncertainty
+(Unknown, unreadable file) returns `true` so a working fork is never wrongly blocked —
+worst case the pre-#134 behavior remains for that unreachable path. Added a typed
+`SessionError::NothingToFork` (`#[error("Nothing to fork yet — send the agent a message
+first.")]`, `kind()` → `"NothingToFork"`, mirrored in the TS `SessionError` union) and
+`commands.rs::fork_session` returns it before `manager.fork_session` when
+`has_conversation` is false — so no PTY/record is created. The frontend `forkSession`
+(store.ts) already toasts `err.message` and, throwing before `upsertSession`, creates no
+session/panel — confirmed, no change needed (subtask 3). Subtask 4 skipped (optional; no
+cheap reliable client signal). Unit test `log_has_turn_detects_conversation` covers
+metadata-only / real-turn / empty-file / missing-file (fail-open). All gates pass:
+`cargo test` (68), `cargo clippy -D warnings`, `npm run build`, `npm run lint`,
+`npm test` (140).
 

@@ -245,7 +245,8 @@ pub fn resume_session(
 /// new `PersistedSession` carrying an app-owned id + `forked_from = <source>`. The
 /// source session is left untouched (the fork has its own id). The fork inherits the
 /// source's `repo_path` + `worktree_parent` (same cwd / worktree). A source with no
-/// conversation yet makes the fork exit non-zero (the standard Restart overlay, #63).
+/// materialized conversation is refused up front (#134, see below) rather than spawned
+/// into a `claude` that would exit 1 and leave a dead "Process exited" panel (#63).
 #[tauri::command]
 pub fn fork_session(
     manager: State<'_, SessionManager>,
@@ -255,6 +256,14 @@ pub fn fork_session(
     let source = store
         .session(&source_id)
         .ok_or_else(|| SessionError::SessionNotFound(source_id.clone()))?;
+    // Guard (#134): forking needs the source's on-disk conversation log to exist with
+    // ≥1 real turn. A brand-new / never-interacted source — including a just-created
+    // fork whose log isn't materialized yet (#116 keeps it gray) — would otherwise
+    // spawn a `claude` that exits 1 ("No conversation found"), surfacing as a crashed
+    // panel. Check the log (not busy / `has_been_active`) and refuse before spawning.
+    if !crate::title::has_conversation(&source.claude_session_id) {
+        return Err(SessionError::NothingToFork);
+    }
     let info = manager.fork_session(
         &source.claude_session_id,
         &source.repo_path,

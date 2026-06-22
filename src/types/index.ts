@@ -38,7 +38,13 @@ export interface SkillInfo {
 
 /** Typed command error (mirrors `pty::SessionError`, serialized `{ kind, message }`). */
 export interface SessionError {
-  kind: "BinaryNotFound" | "SessionNotFound" | "Spawn" | "Io" | "Git";
+  kind:
+    | "BinaryNotFound"
+    | "SessionNotFound"
+    | "Spawn"
+    | "Io"
+    | "Git"
+    | "NothingToFork";
   message: string;
 }
 

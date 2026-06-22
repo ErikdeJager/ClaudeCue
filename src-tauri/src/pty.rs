@@ -52,6 +52,10 @@ pub enum SessionError {
     Io(String),
     #[error("{0}")]
     Git(String),
+    /// The fork source has no materialized conversation to fork (#134) — refused
+    /// before spawning a `claude` that would exit 1 ("No conversation found").
+    #[error("Nothing to fork yet — send the agent a message first.")]
+    NothingToFork,
 }
 
 impl SessionError {
@@ -62,6 +66,7 @@ impl SessionError {
             Self::Spawn(_) => "Spawn",
             Self::Io(_) => "Io",
             Self::Git(_) => "Git",
+            Self::NothingToFork => "NothingToFork",
         }
     }
 }
