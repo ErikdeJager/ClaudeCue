@@ -548,3 +548,191 @@ metadata-only / real-turn / empty-file / missing-file (fail-open). All gates pas
 `cargo test` (68), `cargo clippy -D warnings`, `npm run build`, `npm run lint`,
 `npm test` (140).
 
+---
+
+### 135. [ ] Drag to reorder / reposition existing Canvas panels
+
+**Status:** Not started
+**Depends on:** none · _(builds on the #46/#47/#58 Canvas BSP + edge-drop machinery, the #18 terminal pool, and #84 detached canvas windows — all shipped)_
+**Created:** 2026-06-22
+
+**Description**
+
+In a Canvas tab, panels can be **added** by dragging items in from the sidebar (#47), but
+an existing panel **can't be moved**: there is no drag source on a panel, and the drop
+path (`canvasDrop.ts applyCanvasDrop` → `canvasTree.ts splitLeaf`) only ever mints a
+**new** leaf + content. Let the user **drag an existing panel to reorder or reposition it**
+within the active tab's BSP layout, reusing the per-panel edge drop-zones that drag-in
+already renders (`panel:<leafId>:<edge>`, shown while `dragActive`).
+
+**Behavior — atomic "move leaf" computed on drop (decided):** the layout stays exactly
+as-is during the drag (panels don't move, no terminal churn); the existing edge zones
+light up; and on a successful drop the whole reposition is applied as **one atomic tree
+update**. Conceptually this is "remove the dragged panel, its sibling reflows to fill the
+gap, then re-split the drop target with it" — but it happens **once, on drop**, not on
+drag-start, so:
+
+- A **canvas-only shell terminal** (#72/#118, tracked only by its leaf) is **never
+  disposed mid-drag** — `reconcileTerminals` only ever sees the final tree, which still
+  contains the moved panel. The moved panel keeps its identity, so the #18 pool just
+  **reparents** its xterm (agent or shell) rather than recreating it.
+- There is **no double reflow / flicker** (the panel-absent intermediate tree never
+  reaches the store), and a **cancelled / Escape drag is a no-op for free** (nothing
+  changed). _(This was chosen over the alternative "remove on drag-start, re-insert on
+  drop", which would dispose canvas-only terminals the instant you grab them and require
+  restoring the tree on cancel.)_
+
+One mechanism covers **both reorder and reposition**: dropping panel A on B's left edge
+moves A to B's left; dropping A on a sibling's far edge swaps their order. No separate
+"swap" operation is needed.
+
+This must work in **both** the main Canvas view **and** a detached canvas window (#84) —
+reordering is the only drag interaction a detached window has (it has no sidebar).
+
+**Recommended approach**
+
+1. **Pure op** `moveLeaf(tree, sourceId, targetId, edge, newSplitId)` in `canvasTree.ts`:
+   no-op if `sourceId === targetId` or the source isn't found; capture the source leaf
+   node (its **id + content**), `removeLeaf(tree, sourceId)`, then `splitLeaf(removed,
+   targetId, edge, sourceContent, sourceId, newSplitId)` — **reusing the source leaf's
+   original id + content** (not minting new ones) so identity is preserved and the pooled
+   terminal reparents. If `removeLeaf` returns `null` (the source was the whole canvas)
+   or the target no longer exists, return the tree unchanged. Add unit tests in
+   `canvasTree.test.ts` (reorder siblings, reposition across branches, self-drop no-op,
+   single-leaf no-op, identity/content preserved).
+2. **Drag source:** a small **grip handle** in `LeafPanel`'s header (`CanvasSurface.tsx`)
+   via `useDraggable({ id: "move:" + leaf.id, data: { kind: "move-leaf", leafId } })`.
+   Attach the drag listeners to the **grip only** — not the whole header — so the filename
+   `FileSwitcher` (#90) and the fork / copy / close buttons keep working. The PointerSensor's
+   existing 4px `activationConstraint` already keeps a click (select/focus) from starting a
+   drag.
+3. **Drop handling:** in the app-level `DndContext.onDragEnd` (`App.tsx`), branch on
+   `active.data.current?.kind === "move-leaf"`: parse `over.id` as `panel:<target>:<edge>`
+   (ignore `canvas-center`), and when `target !== source` call a new store action
+   `moveCanvasLeaf(sourceLeafId, targetId, edge)` that applies `moveLeaf` to the active
+   tab's layout via the existing `setActiveCanvasLayout` (which already persists + syncs).
+   The existing `payloadToContent` / `applyCanvasDrop` add-content path is unchanged.
+4. **Detached window:** wire the same drag-active state + `onDragStart`/`onDragEnd` (the
+   `move-leaf` branch only) into `CanvasWindow`'s `DndContext`, and pass real `dragActive`
+   to its `CanvasSurface` so the edge zones appear. `moveCanvasLeaf` already targets the
+   active canvas, which a detached window forces to its own id (#84/#98), and a detached
+   window's `set_canvases` write merges only the `canvases` array — so the reorder persists
+   + broadcasts correctly.
+5. _(Optional, nice-to-have)_ a lightweight `DragOverlay` ghost showing the panel **title**
+   following the cursor. **Do not** clone the live terminal into the overlay.
+
+Out of scope: cross-**tab** moves (dragging a panel onto another Canvas tab), and a
+per-panel center "swap" zone (edge-drop reorder already covers swapping).
+
+**Subtasks**
+
+1. [ ] Add the pure `moveLeaf` op + unit tests in `canvasTree.ts` / `canvasTree.test.ts`.
+2. [ ] Add a grip-handle drag source to `LeafPanel`'s header (listeners on the grip only).
+3. [ ] Add the `moveCanvasLeaf` store action (applies `moveLeaf` to the active tab via
+   `setActiveCanvasLayout`).
+4. [ ] Branch the main `onDragEnd` (`App.tsx`) on `move-leaf` → `moveCanvasLeaf`, ignoring
+   self-target and `canvas-center`; leave the add-content path intact.
+5. [ ] Wire `dragActive` + the `move-leaf` `onDragStart`/`onDragEnd` into `CanvasWindow` so
+   reordering works in a detached window too.
+6. [ ] _(Optional)_ a title-only `DragOverlay` ghost.
+
+**Acceptance criteria**
+
+- [ ] An existing panel can be dragged by a header grip and dropped on another panel's edge
+  to reorder / reposition it within the active Canvas tab.
+- [ ] Moving an **agent or shell-terminal** panel never disposes its xterm — the terminal
+  keeps its scrollback and just reparents (the #18 pool invariant holds).
+- [ ] During the drag the layout doesn't move; the relayout happens once on drop; a
+  cancelled / Escape drag leaves the layout unchanged; dropping a panel on its **own** edge
+  is a no-op.
+- [ ] Reordering works in both the main Canvas view and a **detached** canvas window (#84),
+  and the change persists + syncs across windows.
+- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+
+**Notes**
+
+- The visual "snap back" the feature evokes is just `removeLeaf` collapsing the source's
+  parent into its sibling — applied atomically with the re-split on drop, never on
+  drag-start.
+- Reusing the source leaf's **id + content** in the re-split (vs. `splitLeaf`'s usual fresh
+  ids) is what keeps the moved panel's React key + pool mapping stable.
+
+---
+
+### 136. [ ] Optional custom agent name on Canvas-template `new-agent` blocks
+
+**Status:** Not started
+**Depends on:** none · _(builds on the #117 template block registry + #118 instantiation, the #93/#101 prompt-seeded spawn, and #97 auto-naming — all shipped)_
+**Created:** 2026-06-22
+
+**Description**
+
+A Canvas-template `new-agent` block (#117) can carry an optional **initial prompt** but
+**not a name** — when a template is instantiated (#118), each agent spawns nameless
+(`resolveTemplateBlock` calls `ipc.spawnSession(cwd, undefined, block.prompt)`), so it
+always shows Claude's auto-title (#97) or the branch. Let the template author optionally
+set a **custom agent name** on a `new-agent` block — i.e. **name an agent before it
+exists** — and have that name applied to the spawned session. Leaving the field **empty
+preserves today's behavior**: the agent is auto-named from Claude's `ai-title` (#97),
+falling back to the branch.
+
+This is almost entirely a **frontend / template-data** change: `spawnSession(cwd, name?,
+prompt?)` and Rust `spawn_session(name: Option<String>)` already support a custom name
+end-to-end (#93/#101), `sessionLabel` already resolves **custom || auto || branch** (#97),
+and the `canvas_templates` store is an **opaque `serde_json::Value`** (the frontend owns
+the shape) — so a new block field round-trips with **no Rust change**.
+
+**Scope:** `new-agent` blocks only. Terminal / file / diff blocks keep their derived
+titles (filename / "Diff" / "Terminal") — a generic per-panel title override for those is
+**out of scope** for this task.
+
+**Recommended approach**
+
+1. Store the desired name on the block's content. Add an optional `name?: string` to
+   `CanvasContent` (in `src/types`) — used only on `new-agent` template blocks. Prefer a
+   dedicated `name` field over the existing generic `label` (which is a panel-title
+   fallback) for clarity. No Rust/struct change (opaque blob).
+2. **TemplateEditor:** for the `new-agent` block, render an optional **"Agent name
+   (optional)"** text input (alongside the existing prompt textarea) with helper text like
+   _"Leave empty to use Claude's auto-generated title."_, wired through the same
+   `onConfig` patch path the prompt uses. (The block now has two config inputs — render the
+   name input whenever the block's `liveKind === "agent"`, independent of the single-value
+   `BlockConfig`.)
+3. **`blockPlaceholderLabel`** (`templateBlocks.ts`): when a name is set, reflect it in the
+   editor block placeholder (e.g. prefer the name, or `Start session: <name>`), so the
+   editor surface shows the chosen name. Keep the prompt-snippet fallback when no name.
+4. **`resolveTemplateBlock`** (store): pass `block.name?.trim() || undefined` as the spawn
+   name → `ipc.spawnSession(cwd, block.name?.trim() || undefined, block.prompt)`. An
+   empty/whitespace name → `undefined` → auto-name path preserved. The live resolved
+   content (`resolvedContent`) is **unchanged** — the name is consumed at spawn (it becomes
+   the session record's `name`), not stored on live agent content.
+5. Tests: extend `templateBlocks.test.ts` (placeholder label reflects a set name) and, if
+   useful, `templateInstantiate.test.ts` (the block's `name` survives instantiation onto the
+   pending leaf so Retry re-spawns with it).
+
+**Subtasks**
+
+1. [ ] Add `name?: string` to `CanvasContent` (types) — used on `new-agent` blocks only.
+2. [ ] Add the optional "Agent name" input to the `new-agent` block in `TemplateEditor`,
+   wired via `onConfig`.
+3. [ ] Surface a set name in `blockPlaceholderLabel`.
+4. [ ] In `resolveTemplateBlock`, pass `block.name?.trim() || undefined` as the spawn name.
+5. [ ] Extend the template unit tests for the name field.
+
+**Acceptance criteria**
+
+- [ ] A `new-agent` block in the template editor has an optional name field whose value
+  **persists** in the saved template.
+- [ ] Instantiating a template whose `new-agent` block has a name spawns the agent **with
+  that custom name**, shown as the panel title and the sidebar label.
+- [ ] Leaving the name **empty** preserves current behavior (Claude's auto-title, else the
+  branch).
+- [ ] Terminal / file / diff blocks are unchanged (no name field).
+- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+
+**Notes**
+
+- No backend change: `spawn_session` already takes `name: Option<String>` (#93/#101);
+  `canvas_templates` persists as an opaque JSON blob; `sessionLabel` resolves
+  custom || auto || branch (#97). A user rename after spawn (#57) still wins, as always.
+
