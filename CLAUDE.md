@@ -23,7 +23,8 @@ even though it works in `tauri dev`.
 
 - **Tauri 2** desktop shell (macOS only)
 - **Frontend:** React + TypeScript + Vite, **Zustand** for state, plain CSS with
-  CSS-variable design tokens (CSS Modules), **xterm.js** terminals, **Lucide**
+  CSS-variable design tokens (CSS Modules), **xterm.js** terminals (⌘-clickable
+  `http`/`https` links via `@xterm/addon-web-links`, #109), **Lucide**
   icons, **JetBrains Mono** (bundled, offline), **react-markdown + remark-gfm**
   (GFM markdown, no raw HTML) + **Prism.js** (curated-language read-only code
   highlighting) — both in the universal **`FileViewer`** (#40/#44), **dnd-kit**
@@ -45,19 +46,25 @@ even though it works in `tauri dev`.
   subscription routes output **bytes** to `outputBus.ts` (a pub/sub the xterm
   `Terminal` consumes — deliberately *not* React state) and lifecycle +
   busy/idle to the Zustand `store.ts`.
-- **Busy indicator (#42/#55/#71/#88/#95):** a backend monitor thread (`pty.rs`) derives each
+- **Busy indicator (#42/#55/#71/#88/#95/#112):** a backend monitor thread (`pty.rs`) derives each
   session's **busy/idle** from output activity (within a ~700ms window) and emits
   `session://state { id, busy }` on transitions only. So **keystroke echo doesn't
   read as busy** (#55), `write_stdin` stamps a per-session `last_input` time and the
   monitor marks busy only when output arrived ≥300ms *after* the last keystroke. The
-  store keeps `sessionBusy`; the `BusyIndicator` is a **Claude-style shimmer** (#88,
-  supersedes #71's spinner arc) — a calm `--status-idle` dot that, while busy, turns
-  `--status-running` (Blue) with a soft sheen **sweeping across it** (animated
-  `background-position` on a `::after` sheen, the dot via `::before` — no extra DOM),
-  **always rendered** (idle dot visible) as a ~10px dot in a fixed ~14px slot (#95)
+  store keeps `sessionBusy` plus a per-session **has-been-active** flag; the
+  `BusyIndicator` (#88, supersedes #71's spinner arc) has **three states** (#112): a
+  calm `--status-idle` (gray) dot when **fresh** (never active); while busy, a
+  `--status-running` (Blue) **Claude-style shimmer** — a soft sheen **sweeping across
+  it** (animated `background-position` on a `::after` sheen, the dot via `::before` —
+  no extra DOM); and once it has worked and gone idle again, a **settled**
+  `--status-awaiting` (yellow) dot with a soft glow and no animation ("finished —
+  needs input"). It is **always rendered** as a ~10px dot in a fixed ~14px slot (#95)
   so the footprint never shifts, and placed **before the agent's name** — in the
-  sidebar rows and Overview card headers. Under reduced-motion the sweep is dropped,
-  leaving a solid glowing blue dot distinct from idle.
+  sidebar rows and Overview card headers. "Has been active" is **persisted**
+  (`has_been_active` on the record, set once on the first busy edge in `lib.rs`,
+  seeded into the store on load) so a previously-active agent shows yellow immediately
+  on boot. Under reduced-motion the sweep is dropped, leaving a solid glowing blue dot
+  (and a solid yellow settled dot) distinct from idle.
 - **Input / resize:** the `Terminal` sends keystrokes to `write_stdin` and a
   `ResizeObserver` drives `resize_pty`.
 - **Persistence / resume:** records + recents survive restarts; on boot the
@@ -67,14 +74,17 @@ even though it works in `tauri dev`.
   sidebar render the structured result.
 - **Views:** the store holds `sessions / selectedId / view / recents / branches /
   canvases / activeCanvasId / claudeMissing / toasts / schedules / settings /
-  sidebarWidth`; the app mounts one of
+  sidebarWidth / collapsedRepos`; the app mounts one of
   **Overview or Canvas** (#46/#75 — Focus was removed). Each session's xterm is owned
   by a **persistent terminal
   pool** (`Terminal/terminalPool.ts`), created once and **reparented** into the
   active view's slot (parked off-screen otherwise) — so a view switch never
   disposes/recreates the terminal or replays scrollback (which would garble
   `claude`'s width-specific TUI redraw). Scrollback replays once at creation;
-  resizes are debounced + applied only while visible.
+  resizes are debounced + applied only while visible. The pool's `createHost`
+  **linkifies `http`/`https` URLs** (a `WebLinksAddon`) so a **⌘-click** opens the
+  default browser via the dependency-free Rust `open_url` (http/https only, shells out
+  to macOS `open` without a shell) — for both agent and shell terminals (#109).
 - **Overview customization:** columns are grouped by repo (#36) — by a session's
   pure **`effectiveRepo`** (`paths.ts`), so a worktree agent (#74) sits in its
   **parent repo's** cluster sharing its color, text-badged "worktree" rather than
@@ -89,7 +99,9 @@ even though it works in `tauri dev`.
   items — the **same `overview_panels` Overview shows, 1:1**: file viewers, diff
   viewers, shell terminals (#72), and scheduled sessions (#94). #59 folded the old per-repo `open_files` into
   `overview_panels`, so an item opened anywhere (the searchable file picker #56, or the
-  repo menu's **Views** section #82) appears in both places. A tree row click
+  repo menu's **Views** section #82) appears in both places (that legacy fold-in is now
+  **one-shot** — boot clears `open_files` instead of re-folding it, so a closed viewer
+  never resurrects, #110). A tree row click
   **selects/jumps to the item in the current view** (#79 — never auto-switching
   Overview↔Canvas); the hover × removes the item (and its Overview column); every row
   (session / file / diff / terminal) is a dnd-kit **draggable source** that drops into
@@ -100,7 +112,14 @@ even though it works in `tauri dev`.
   **Kill all agents** / **Close all items** (#91) and **Forget folder** (#31), the
   latter two also tearing down the folder's non-agent items (killing their PTYs) and
   pending schedules (#106); each destructive step is confirm-gated unless turned off
-  in Settings (#103).
+  in Settings (#103). Each **repo header is collapsible** (#113): a repo-colored
+  **disclosure triangle** (▶ collapsed / ▼ expanded, a `clip-path` shape sized to the
+  activity-dot slot, replacing the old color dot) toggles hiding **all** the folder's
+  child rows (sessions, worktree agents, file/diff/terminal/scheduled items) while the
+  name still filters Overview (#34) — two independent controls; the collapsed set
+  persists via a dedicated Rust `collapsed_repos` value (separate from Settings,
+  mirroring #108). Every tree-row label renders at a uniform compact 10px
+  (`--fs-meta-xs`, #111).
 - **Canvas (#46/#47/#58):** a third view — **multiple named tabs** (#58), each its
   own recursive **BSP split-panel** layout (a binary tree `split{dir,a,b,sizes}` /
   `leaf{id,content}`; pure ops in `Canvas/canvasTree.ts`). The tabs (`canvases` =
@@ -228,9 +247,10 @@ even though it works in `tauri dev`.
 │   ├── src/path_env.rs     # Restore login-shell PATH at startup (Finder-launch fix)
 │   ├── src/title.rs        # Best-effort reader for claude's own ai-title (#97)
 │   ├── src/commands.rs     # Tauri command surface + event payloads
-│   ├── src/store.rs        # JSON persistence (sessions, recents, canvases, schedules, settings, sidebar width)
+│   ├── src/store.rs        # JSON persistence (sessions, recents, canvases, schedules, settings, sidebar width, collapsed repos)
 │   ├── src/git.rs          # Git: branch + diff + compare (#81) + list + checkout + worktree (#74)
 │   ├── src/files.rs        # Read-only file access (list text files/read, path-validated)
+│   ├── Info.plist          # Partial plist (mic + speech-recognition usage strings), merged into the bundle
 │   ├── tauri.conf.json     # Window, bundle, build config
 │   ├── capabilities/       # Tauri permission capabilities
 │   └── Cargo.toml          # Crate `claudecue` / lib `claudecue_lib`
@@ -270,9 +290,9 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   only when its last agent goes, and a dirty worktree is kept rather than
   force-deleted. No branch creation, commits, or other writes.
 - No app-rendered approval UI — users answer prompts directly in the terminal.
-  (The v1 "no status system" rule was deliberately narrowed by **#42**: a single
-  **busy/idle** indicator now exists. Still no approval pills/awaiting-glow/
-  floating.)
+  (The v1 "no status system" rule was deliberately narrowed by **#42** — a single
+  **busy/idle** indicator — and by **#112**, which adds a third "finished / needs
+  input" yellow state to that same dot. Still no approval pills or floating status.)
 - No Archive (single **Remove = kill + forget**), no Skills manager, no Fork, no
   light mode, no auth.
 - **Settings** now exists (#100/#102/#103 — reverses the v1 "no settings screen"
@@ -345,7 +365,11 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   macOS `.app`/`.dmg` (Gatekeeper warns on first open — no code signing /
   notarization). There is **no in-app auto-update and no release pipeline**: the
   repo is private and the #15 updater (Tauri updater/process plugins, the baked-in
-  minisign pubkey, and the release workflow) was removed in **#62**.
+  minisign pubkey, and the release workflow) was removed in **#62**. The bundle ships
+  a partial `src-tauri/Info.plist` (auto-merged by the Tauri CLI in both `dev` and
+  `build`) declaring `NSMicrophoneUsageDescription` / `NSSpeechRecognitionUsageDescription`
+  so voice dictation works inside a session's PTY (macOS attributes a child process's
+  mic request to the responsible app — ClaudeCue).
 - **Styling:** CSS Modules (`*.module.css` next to each component) that consume
   the design tokens in `src/styles/tokens.css`. The reset, base styles,
   scrollbars, keyframes, and the `prefers-reduced-motion` killswitch live in
@@ -362,7 +386,7 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
 
 ## Tasks
 
-Work is tracked in `TASKS.md`. **#1–#108 have shipped — the backlog is fully
+Work is tracked in `TASKS.md`. **#1–#113 have shipped — the backlog is fully
 implemented, with no open tasks.** Completed tasks are condensed into an **Implemented
 (completed tasks)** summary at the top (one line each, grouped by theme), with full
 per-task detail in git history; the `## Tasks` body holds any open tasks (currently

@@ -20,7 +20,8 @@ chrome, navigation, persistence, and read-only git reading; the terminals come f
 - **Sidebar** — sessions and their file / diff / terminal viewers grouped by repository
   (labelled by your custom name, else `claude`'s own session title, else the branch),
   from persisted recents so repos stay listed with no active session; isolated
-  **worktree agents** nest under their parent repo. Right-click a repo (new session, a
+  **worktree agents** nest under their parent repo, and a repo's **disclosure
+  triangle** collapses it to hide its rows. Right-click a repo (new session, a
   **Views** section to add viewers, change color, **kill all agents** / **close all
   items**, forget) or an agent (**rename**, remove). Drag the sidebar's right edge to
   resize it.
@@ -35,8 +36,10 @@ chrome, navigation, persistence, and read-only git reading; the terminals come f
   → branch pick; **Enter** to start, **⌘⏎** for an isolated worktree agent), **⌘⇧N**
   schedules one for later. In the app, Shift+arrows move between agents (Overview) or
   panels (Canvas), ⌘1–9 jump between canvases, and ⌘\\ toggles Overview ↔ Canvas.
-- **Busy indicator** — a per-session **shimmer** marks when `claude` is genuinely
-  working, settling into a calm dot when idle (typing alone doesn't read as busy).
+- **Busy indicator** — a per-session dot marks when `claude` is genuinely working (a
+  **shimmer**), turns **yellow** when a turn finishes and it's waiting on you, and
+  stays a calm gray when fresh (typing alone doesn't read as busy). **⌘-click** any
+  `http`/`https` link printed in a terminal to open it in your browser.
 - **Persistence + resume** — sessions, layouts, settings, and recent folders survive
   restarts; sessions resume their `claude` conversation by id on launch. An agent you
   end cleanly just disappears; one that crashes keeps a **Restart** button.
