@@ -699,3 +699,247 @@ despite the resume repaint.
 - Files in play: `src-tauri/src/pty.rs` (busy monitor + `Activity`/`last_input`,
   `spawn_session_with_prompt`), `src-tauri/src/lib.rs` (`mark_session_active`),
   `src/store.ts` (`setBusy` → `sessionActive`), `src/components/BusyIndicator`.
+
+---
+
+### 117. [ ] Canvas Templates (part 1 of 2): data model, persistence, block registry, editor & CRUD
+
+**Status:** Not started
+**Owner:** _(unassigned)_
+**Depends on:** none · _(builds on the shipped Canvas subsystem #46/#47/#58/#94)_
+**Created:** 2026-06-22
+
+**Description**
+
+Add **Canvas Templates** — reusable, saved Canvas layouts whose panels hold
+**action "blocks"** (e.g. "Start session", "Open terminal", "Open file", "Open
+diff") instead of live content. A user can author a template in a dedicated editor,
+save it, and later **instantiate** it to spin up a whole workspace at once (part 2,
+#118). This **part 1** delivers everything *except* the runtime instantiation: the
+template **data model**, **persistence**, a **block-type registry**, the
+**editor** (reusing the Canvas split UI), and template **CRUD** + the tab-strip
+entry point. After #117, a user can create/edit/name/duplicate/delete templates
+(the blocks render as inert, labelled placeholders in the editor); **#118** makes
+"use template" actually execute the blocks.
+
+**Why split:** the full feature (model + persistence + editor + a block registry +
+an async instantiation engine + per-panel error/retry fallbacks + folder-pick-on-use)
+is too large for one pass, so per this repo's split rule it is two dependent
+tasks (mirroring #93 → #93/#94). Part 2 is **#118** and depends on this.
+
+**Background (grounded in the code).** A Canvas tab is `CanvasTab { id, name,
+layout }` where `layout` is a BSP tree (`CanvasNode` = `CanvasSplit` | `CanvasLeaf`,
+pure ops in `src/components/Canvas/canvasTree.ts`); each `CanvasLeaf` holds a
+`CanvasContent { kind, label?, repoPath?, file?, sessionId?, scheduleId? }` resolved
+at render in `CanvasSurface.tsx` (`renderContent`). Content kinds today: `agent`,
+`terminal`, `file`, `diff`, `scheduled`. Canvas tabs persist as the opaque
+`canvases` blob (`get_canvases`/`set_canvases`, store `setCanvases`). Templates
+should reuse this tree machinery wholesale — a template is essentially a `CanvasTab`
+whose leaves carry **block** descriptors.
+
+**Data model.** A new `CanvasTemplate { id, name, layout }` where `layout` is a
+`CanvasNode` tree whose leaves hold a **block** descriptor. Define block kinds
+distinct from live content kinds, e.g. `new-agent` (optional `prompt`),
+`new-terminal`, `open-file` (a **relative** `file` path), `open-diff`. Persist as a
+**new, separate** Rust store value `canvas_templates` (a JSON blob, mirroring
+`canvases`/`settings`/`collapsed_repos`): `get_canvas_templates` /
+`set_canvas_templates` commands (`commands.rs`) + `lib.rs` registration +
+`store.rs` field/accessors + typed `ipc.ts` wrappers + store state/actions
+(`canvasTemplates`, create/update/rename/duplicate/delete). Kept separate from the
+`canvases` blob so a Settings/draft write can't clobber it.
+
+**Block-type registry (the user's "future blocks auto-included" requirement).**
+The set of placeable block kinds must be driven by a **single registry**, mirroring
+#82's "one registry drives every addable view type", so that when a **new Canvas
+content kind** is added later it becomes available as a template block **without
+editing the template code in N places**. Centralize a content-kind ⇄ block-kind
+registry (label, icon, how the block is configured in the editor, and — in #118 —
+how it instantiates). v1 block kinds: `new-agent`, `new-terminal`, `open-file`,
+`open-diff`.
+
+**Editor ("separate screen", reusing the Canvas split UI).** A dedicated
+**edit-template surface** that reuses the Canvas BSP surface/`canvasTree` so
+building a template feels exactly like building a canvas: a **block palette** to
+drag blocks from (there are no live sidebar items to drag in template mode), drop
+into the center or onto panel edges to split, resize borders, and close panels.
+Each block is **configurable** inline:
+- `new-agent`: an optional **initial prompt** (textarea; pre-sent on launch in #118,
+  like scheduled sessions #93).
+- `open-file`: a **relative file path** chosen via a picker (reuse `FilePicker`
+  #56 against a folder the user browses *only for reference*) **or typed
+  free-text**, storing just the relative path. Show **helper text** making the
+  resolution explicit, e.g. *"Resolved inside the folder you pick when you use this
+  template — e.g. type `README.md` to open that folder's README."*
+- `new-terminal`, `open-diff`: no config (act on the chosen folder in #118).
+In the editor each block renders as an inert, labelled placeholder (icon + "Start
+session" / "Open file: README.md" etc.) — no live PTY/file in edit mode.
+
+**Entry point + CRUD.** Add a **Templates menu to the Canvas tab strip**
+(`CanvasTabs.tsx`) — a ▾ control near the **+**: "New template…" (opens the editor
+empty) and "Manage templates…". A **Manage** view lists saved templates with
+**Edit** (reopen in editor), **Rename**, **Duplicate**, and **Delete**. ("New tab
+from template…" — the *use* action — is added in **#118**.)
+
+**Out of scope for this part:** the instantiation engine, block execution, folder-
+pick-on-use, and the error/retry fallbacks (all **#118**). Also out of scope for
+v1 entirely: **"Save current canvas as a template"** (the user chose build-from-
+scratch only — note as a follow-up), per-block branch/worktree, absolute file
+paths, and detached-window (#84) interaction.
+
+**Subtasks**
+
+1. [ ] **Types + registry** — `CanvasTemplate` + block-kind descriptors in
+   `src/types`; a centralized content-kind/block-kind **registry** (extensible so a
+   future content kind auto-yields a block).
+2. [ ] **Persistence** — Rust `canvas_templates` store value + `get`/`set`
+   commands + `lib.rs` registration + `store.rs` field/accessors/tests; typed
+   `ipc.ts` wrappers; store state + `create/update/rename/duplicate/delete`
+   actions (persisting the blob).
+3. [ ] **Editor surface** — reuse the Canvas BSP surface/`canvasTree` in an
+   edit-template mode: block **palette** (drag source), drop/split/resize/close,
+   per-block config (agent prompt; file relative-path picker + helper text),
+   name + save.
+4. [ ] **Tab-strip Templates menu** — ▾ near **+** in `CanvasTabs.tsx`: "New
+   template…", "Manage templates…".
+5. [ ] **Manage view** — list templates with Edit / Rename / Duplicate / Delete
+   (confirm-gated per #103 for Delete).
+6. [ ] **Tests** — Vitest over the template store actions + any pure tree/block
+   helpers; Rust tests over `canvas_templates` persistence.
+
+**Acceptance criteria**
+
+- [ ] A user can open a template editor (from the Canvas tab-strip ▾), drag the
+  v1 blocks (start session / terminal / file / diff) into a split layout, configure
+  them (agent prompt; file relative path with clear helper text), name and **save**
+  the template.
+- [ ] Saved templates **persist** across restarts (separate `canvas_templates`
+  blob) and can be **edited, renamed, duplicated, and deleted**.
+- [ ] The placeable block set is driven by a **registry** such that adding a new
+  Canvas content kind later surfaces a new block with minimal, localized changes.
+- [ ] No live PTY/file is created in the editor (blocks are inert placeholders);
+  the `canvases` blob and existing Canvas behavior are untouched.
+- [ ] `npm run build`, `npm run lint`, `npm test`, `cargo test`, and
+  `npm run lint:rust` all pass.
+
+**Notes**
+
+- Decisions captured from the user (interactive refinement): editor **reuses the
+  Canvas split UI**; templates are authored **from scratch** (save-current-as-
+  template deferred); access via the **Canvas tab-strip menu**; management =
+  edit/rename/duplicate/delete; the block set must be **registry-driven so future
+  block types are auto-included**.
+- This is **part 1 of 2**; **#118** (instantiation + block actions + fallbacks)
+  depends on it. Keep the block descriptors rich enough that #118 can execute them
+  (e.g. the agent block's `prompt`, the file block's relative `path`).
+
+---
+
+### 118. [ ] Canvas Templates (part 2 of 2): instantiation engine, block actions & per-panel fallbacks
+
+**Status:** Not started
+**Owner:** _(unassigned)_
+**Depends on:** #117 · _(uses the template model, persistence, blocks & editor from part 1)_
+**Created:** 2026-06-22
+
+**Description**
+
+Make Canvas Templates (#117) **actually usable**: a "**New tab from template**"
+flow that, on use, **picks one folder**, opens a **new Canvas tab**, and
+**executes every block** to set up the workspace — starting agent sessions, opening
+terminals, opening files, and opening diffs — with robust **per-panel fallbacks**
+when a block can't be fulfilled. This is the payoff: "pick up a template seamlessly
+in the Canvas UI to set up your workspace every time."
+
+**Use flow ("pick folder on use" → new tab → execute blocks).**
+
+1. From the Canvas tab-strip ▾ (#117), **"New tab from template…"** → choose a
+   saved template.
+2. **Pick the target folder once** (reuse the new-session folder step UX / recents
+   + folder picker, #66) — **all** blocks in the template apply to this one folder;
+   `open-file` paths resolve **relative** to it.
+3. Create a **new `CanvasTab`** named after the template (its `layout` is the
+   template's tree) and open it as the active canvas.
+4. **Execute each block** (leaf) into live `CanvasContent`, **best-effort and
+   independent** — the tab opens immediately and each panel resolves on its own:
+   - `new-agent` → spawn a **new** `claude` session in the chosen folder (current
+     branch, no checkout) **pre-seeded with the block's optional prompt** (reuse the
+     prompt-seeded spawn path used by schedules, `spawn_session_with_prompt` /
+     #93/#101) → panel becomes `{kind:"agent", sessionId, repoPath}`.
+   - `new-terminal` → spawn a shell terminal (#72) in the chosen folder → `{kind:
+     "terminal", sessionId, repoPath}`.
+   - `open-file` → resolve the relative path under the chosen folder; if it exists →
+     `{kind:"file", repoPath, file}`.
+   - `open-diff` → `{kind:"diff", repoPath}` for the chosen folder.
+5. **"Just do it"** — no spawn-count confirmation even when many agents start at
+   once (the user's explicit choice).
+
+**Fallbacks (the user emphasized — "think carefully").** The tab **always opens**;
+each panel that fails shows an **inline error with a Retry button** (not a toast,
+not a silent skip). Specifically:
+- `open-file` **file not found** (relative path doesn't exist in the chosen folder)
+  → panel shows "File not found: `<relative path>`" + **Pick file** (open
+  `FilePicker` #56 scoped to the chosen folder to choose a replacement) + **Retry**.
+- `new-agent` / `new-terminal` **spawn failure** (e.g. `claude` missing — reuse the
+  existing `claudeMissing` signal — or PTY error) → "Couldn't start…" + **Retry**.
+- `open-diff` when the **chosen folder isn't a git repo** → "Not a git repository"
+  + **Retry**.
+- A failed panel **retains its source block** so **Retry** re-runs that block in
+  place; on success the panel becomes normal live content. Successful sibling panels
+  are unaffected.
+
+**Implementation notes.** Instantiation is **async** (spawns return ids over IPC);
+a panel should show a brief loading state, then live content or the error state.
+Each instantiated leaf must keep a reference to its originating block (a `pending` /
+`block` field on the leaf's content, cleared once resolved) so the panel can render
+loading/error/Retry and re-execute. Reuse the existing missing-reference rendering
+pattern in `CanvasSurface.tsx` (e.g. the "Session closed." placeholder) for the
+error states. The new tab persists into the `canvases` blob like any other (a
+panel left in an error state persists as its pending block so Retry survives a
+restart — or document if an unresolved panel is dropped on reload).
+
+**Out of scope.** Per-block branch/worktree, absolute paths, save-current-as-
+template, detached-window (#84) instantiation (templates open in the main window),
+and any spawn-count guard.
+
+**Subtasks**
+
+1. [ ] **"New tab from template" entry** in the tab-strip ▾ (#117) → template
+   chooser.
+2. [ ] **Folder-pick-on-use** step (reuse #66 folder UX); carry the chosen folder
+   to all blocks.
+3. [ ] **Instantiation engine** — pure mapping of a template tree → a new
+   `CanvasTab`, with each block flagged pending; async executor that resolves each
+   block to live content (agent via prompt-seeded spawn, terminal, file, diff).
+4. [ ] **Per-panel loading / error / Retry** rendering in `CanvasSurface.tsx`,
+   including `open-file`'s **Pick file** affordance and the retain-source-block
+   logic.
+5. [ ] **Fallback coverage** — file-not-found, spawn failure (claude missing),
+   non-git diff; verify partial success (some panels live, some error).
+6. [ ] **Tests** — Vitest over the pure template→tab instantiation mapping and the
+   block→content resolution (incl. error states); cover the retry path.
+
+**Acceptance criteria**
+
+- [ ] "New tab from template" → pick a folder → a **new Canvas tab** opens with the
+  template's layout, and each block executes against the chosen folder.
+- [ ] `new-agent` blocks start real sessions (with their optional prompt pre-sent);
+  `new-terminal`, `open-file` (relative to the folder), and `open-diff` blocks open
+  their content.
+- [ ] A missing file shows an **inline error + Pick file + Retry** in that panel;
+  the rest of the tab still loads. Spawn failures and non-git diffs likewise show
+  **error + Retry**. Nothing is silently skipped.
+- [ ] **Retry** re-runs the failed block in place and, on success, replaces the
+  error with live content.
+- [ ] Many `new-agent` blocks instantiate without any confirmation ("just do it").
+- [ ] `npm run build`, `npm run lint`, `npm test`, `cargo test`, and
+  `npm run lint:rust` all pass.
+
+**Notes**
+
+- Decisions captured from the user (interactive refinement): **pick one folder on
+  use**; **open a new tab**; **error + Retry** per failed panel (file → Pick file);
+  agent blocks carry an **optional prompt**; **no spawn guard** ("just do it");
+  `open-file` accepts a plain relative name like `README.md` resolved in the chosen
+  folder.
+- Depends on **#117** for the template model, persisted store, block registry, and
+  editor. Together #117 + #118 are the complete Canvas Templates feature.
