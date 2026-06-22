@@ -196,13 +196,13 @@
   color: var(--accent);
 }
 
-/* Per-repo color identity (#35/#115): a static, non-interactive repo-colored cube
-   marker (Lucide Box) before the repo name — replaces the #113 disclosure triangle
-   (the collapse feature was reverted). A 14px slot matching the activity-indicator
+/* Per-repo color identity (#35/#128): a static, non-interactive repo-colored folder
+   marker (Lucide Folder) before the repo name — replaces the #115 cube (itself the
+   #113 disclosure triangle, since reverted). A 14px slot matching the activity-indicator
    footprint (#95), inset (margin-left 16px) so it lines up with the agent rows'
-   activity dots (row margin 8px + rowBusy padding 8px). The cube is tinted to the
+   activity dots (row margin 8px + rowBusy padding 8px). The folder is tinted to the
    repo color via the inline `color` (the icon strokes use currentColor). */
-.repoCube {
+.repoFolder {
   display: flex;
   width: 14px;
   height: 14px;

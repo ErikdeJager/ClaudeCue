@@ -368,9 +368,9 @@ per-task detail. New work goes here as a fresh `### N.` entry in
 
 ---
 
-### 128. [ ] Replace the sidebar repo folder cube icon with a folder icon
+### 128. [x] Replace the sidebar repo folder cube icon with a folder icon
 
-**Status:** Not started
+**Status:** Done
 **Owner:** _(unassigned)_
 **Depends on:** none · _(a cosmetic swap on the already-shipped #115 cube marker; #120/#121 — the refining passes it builds on — are complete, so nothing open gates it)_
 **Created:** 2026-06-22
@@ -415,26 +415,26 @@ backend, IPC, store, or persistence changes.
 
 **Subtasks**
 
-1. [ ] In `Sidebar.tsx`, import `Folder` from `lucide-react` (replace the `Box`
+1. [x] In `Sidebar.tsx`, import `Folder` from `lucide-react` (replace the `Box`
    import) and render `<Folder size={12} strokeWidth={2} />` in place of `<Box .../>`,
    keeping the `style={{ color: repoColor(repo, repoColors) }}` tint and `aria-hidden`.
-2. [ ] Rename the `repoCube` class (TS + `Sidebar.module.css`) to a folder-appropriate
+2. [x] Rename the `repoCube` class (TS + `Sidebar.module.css`) to a folder-appropriate
    name (e.g. `repoFolder`) and update the explanatory comment (it references the #115
    cube); the slot dimensions/alignment stay identical.
-3. [ ] Verify alignment with the agent activity dots and that the repo name still filters
+3. [x] Verify alignment with the agent activity dots and that the repo name still filters
    Overview / right-click still opens the menu (no behavior change).
 
 **Acceptance criteria**
 
-- [ ] Every sidebar repo header shows a **closed folder (Lucide `Folder`)** instead of
+- [x] Every sidebar repo header shows a **closed folder (Lucide `Folder`)** instead of
   the cube, **tinted to the repo's color** (outline, not filled, not neutral).
-- [ ] The marker stays **static / non-interactive** (`aria-hidden`), in the **same slot**
+- [x] The marker stays **static / non-interactive** (`aria-hidden`), in the **same slot**
   with **no layout shift** or alignment change versus the cube; no off-system colors;
   reduced-motion unaffected (no animation involved).
-- [ ] Clicking the repo name still filters Overview; right-click still opens the repo
+- [x] Clicking the repo name still filters Overview; right-click still opens the repo
   context menu — both unchanged.
-- [ ] No `Box`/cube reference remains for this marker (import, JSX, class name, comment).
-- [ ] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass (no
+- [x] No `Box`/cube reference remains for this marker (import, JSX, class name, comment).
+- [x] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass (no
   Rust changes expected).
 
 **Notes**

@@ -7,10 +7,10 @@ import {
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Box,
   Clock,
   FileDiff,
   FileText,
+  Folder,
   GitBranch,
   Plus,
   Settings as SettingsIcon,
@@ -745,15 +745,15 @@ function Sidebar() {
                   setMenuMode("menu");
                 }}
               >
-                {/* Static repo-colored cube marker (#115, replaces the #113
-                    disclosure triangle): a non-interactive identity marker. The
-                    name still filters Overview on click (#34). */}
+                {/* Static repo-colored folder marker (#128, replaces the #115
+                    cube): a non-interactive identity marker. The name still
+                    filters Overview on click (#34). */}
                 <span
-                  className={styles.repoCube}
+                  className={styles.repoFolder}
                   style={{ color: repoColor(repo, repoColors) }}
                   aria-hidden
                 >
-                  <Box size={12} strokeWidth={2} />
+                  <Folder size={12} strokeWidth={2} />
                 </span>
                 {/* Left-click a repo title filters Overview to it (toggle);
                     right-click opens the #31 context menu. */}
