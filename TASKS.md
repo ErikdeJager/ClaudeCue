@@ -1006,7 +1006,7 @@ user-confirmed **720 × 600** (height clamped to 90vh).
 
 **Status:** Not started
 **Owner:** _(unassigned)_
-**Depends on:** #116, #117, #118, #119 · _(all tasks open at authoring time — this runs LAST, only once everything else is Done)_
+**Depends on:** #116, #117, #118, #119, #122 · _(#116–#119 plus the custom-slider #122, added afterward so the slider lands before the UI/UX pass #121; #120 runs after all of them and before #121)_
 **Created:** 2026-06-22
 
 **Description**
@@ -1243,3 +1243,89 @@ and new heavy UI dependencies.
   traffic); **visual/interaction changes ARE in scope** (unlike #120) while feature
   behavior is preserved; the pass relies on a run-the-app **visual feedback loop** +
   independent review. Adjust if you want it limited to specific surfaces.
+
+---
+
+### 122. [ ] Custom slider component (refined) — replace the native Settings range inputs
+
+**Status:** Not started
+**Owner:** _(unassigned)_
+**Depends on:** none · _(builds on shipped Settings #100 + the Checkbox custom-control precedent #52)_
+**Created:** 2026-06-22
+
+**Description**
+
+The two Settings sliders (**Settings → Terminal: Font size, Line height**) are
+native `<input type="range">` elements (`Settings.tsx` ~185 & ~204, styled by
+`.range` in `Settings.module.css` ~line 116). The user **dislikes the native
+slider look** and wants a **custom slider element**. Build a **reusable,
+on-design-system `Slider` component** with a **refined** appearance and replace
+both. Any future slider uses it. This must be done **before the UI/UX improvement
+pass (#121)** so that pass polishes the *custom* slider, not the native one.
+
+**Chosen direction — "Refined custom slider"** (the user's pick): same slider
+interaction, bespoke on-token look — a **thicker rounded track**, a clear **accent
+fill** from the minimum up to the thumb, and a **larger, prominent circular thumb**
+with **hover / active / focus-visible** states. **No** numeric-input field and **no**
+tick marks (out of scope here; possible #121 follow-ups).
+
+**Approach — follow the Checkbox (#52) precedent.** Keep a **real
+`<input type="range">`** so keyboard (←/→, Home/End, PageUp/Down), `:focus-visible`,
+the correct ARIA value/min/max, label association, and the existing draft `onChange`
+all work for free — then style it custom: `appearance: none` to drop the native
+track/thumb and render the refined visual via the cross-browser pseudo-elements
+(`::-webkit-slider-runnable-track` / `::-webkit-slider-thumb` / `::-moz-range-track`
+/ `::-moz-range-thumb`). The **fill up to the thumb** is value-driven — e.g. an
+inline CSS variable (`style={{ ["--fill"]: pct + "%" }}`) recomputed from
+`(value-min)/(max-min)` on change, used in the track background. All colors from
+`tokens.css` (Peach `--accent` fill — **no off-system colors**); transitions via the
+motion tokens and **reduced-motion safe**.
+
+**Component API** (mirrors the current usage + the Checkbox shape): `value`, `min`,
+`max`, `step`, `onChange(value: number)`, optional `label`, `valueLabel` (formatted
+display, e.g. `12.5px` / `1.0`), `ariaLabel`, `disabled`, `className`.
+
+**Scope — in:** the new `Slider` component (`src/components/Slider/Slider.tsx` +
+`.module.css`); replacing the two Settings sliders with it; removing the old
+`.range` styles. **Out:** numeric-input field, tick marks, and any new slider
+instances elsewhere.
+
+**Subtasks**
+
+1. [ ] Build `src/components/Slider/Slider.tsx` + `Slider.module.css` — a real range
+   input with a custom rounded track, accent fill, and larger thumb; hover / active
+   / focus-visible states; tokens only; reduced-motion safe; cross-browser
+   pseudo-elements; value-driven fill.
+2. [ ] Accessibility — keyboard parity (arrows / Home / End), visible focus,
+   label / `ariaLabel` association, disabled state.
+3. [ ] Replace both Settings sliders (Font size, Line height) with `<Slider>`,
+   keeping the value display + draft `update(...)` wiring; remove the `.range` CSS.
+4. [ ] Tests — a small render/interaction test (value / min / max / step / onChange)
+   following the project's testing patterns.
+
+**Acceptance criteria**
+
+- [ ] Both Settings sliders render the custom `Slider`; **no native range visual
+  remains** anywhere.
+- [ ] Refined look: rounded track, accent fill up to a **larger thumb** with
+  hover / active / focus states; **tokens only (no off-system colors)**;
+  reduced-motion respected.
+- [ ] **Full keyboard + ARIA parity** — arrows / Home / End change the value, focus
+  is visible, the accessible value is correct.
+- [ ] **Reusable** — a single `Slider` component is used for both (and future)
+  sliders.
+- [ ] Settings draft/Save still applies font size + line height to the live pooled
+  terminals (behavior unchanged).
+- [ ] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass.
+
+**Notes**
+
+- **User-chosen direction:** "Refined custom slider" — no numeric field / tick
+  marks (those are deferred, possible #121 follow-ups).
+- Follows the **Checkbox (#52)** custom-control precedent (a real input + a custom
+  Catppuccin visual driven by its state).
+- **Ordering:** must land **before #121** (the UI/UX pass). Wired by adding **#122
+  to #120's `Depends on`** (so #122 → #120 → #121) — this also means the code
+  iteration pass reviews the new component.
+- Files in play: `src/components/Settings/Settings.tsx` (~178–215),
+  `src/components/Settings/Settings.module.css` (`.range`, ~116).
