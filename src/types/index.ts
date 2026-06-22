@@ -207,6 +207,11 @@ export interface CanvasContent {
    * agent when the template is instantiated (#118), like a scheduled session (#93).
    * Only set on template-block leaves, never on live content. */
   prompt?: string;
+  /** Optional custom agent name for a `new-agent` **template block** (#136) — applied
+   * as the spawned session's name on instantiation (#118), so an agent can be named
+   * before it exists. Empty/unset → the agent auto-names from claude's `ai-title`
+   * (#97), else the branch. Only set on `new-agent` template-block leaves. */
+  name?: string;
   /** A `kind: "pending"` panel from instantiating a template (#118): the originating
    * template block, re-run on Retry. Cleared once the panel resolves to live content. */
   block?: CanvasContent;

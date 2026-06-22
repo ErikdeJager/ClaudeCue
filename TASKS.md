@@ -360,9 +360,9 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#135 are complete** — see **Implemented (completed tasks)** above for the
-index and git history for per-task detail. The **open** tasks are **#136–#137** (both
-`Depends on: none`). The full entries for the recently completed #133–#135 remain below
+Tasks **#1–#136 are complete** — see **Implemented (completed tasks)** above for the
+index and git history for per-task detail. The only **open** task is **#137**
+(`Depends on: none`). The full entries for the recently completed #133–#136 remain below
 until the next `/update-docs` condenses them into the summary. New work goes here as a
 fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its
 `Depends on:` prerequisites.
@@ -695,9 +695,9 @@ gates pass: `npm run build`, `npm run lint`, `npm test` (143), `cargo test` (68)
 
 ---
 
-### 136. [ ] Optional custom agent name on Canvas-template `new-agent` blocks
+### 136. [x] Optional custom agent name on Canvas-template `new-agent` blocks
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none · _(builds on the #117 template block registry + #118 instantiation, the #93/#101 prompt-seeded spawn, and #97 auto-naming — all shipped)_
 **Created:** 2026-06-22
 
@@ -748,23 +748,46 @@ titles (filename / "Diff" / "Terminal") — a generic per-panel title override f
 
 **Subtasks**
 
-1. [ ] Add `name?: string` to `CanvasContent` (types) — used on `new-agent` blocks only.
-2. [ ] Add the optional "Agent name" input to the `new-agent` block in `TemplateEditor`,
+1. [x] Add `name?: string` to `CanvasContent` (types) — used on `new-agent` blocks only.
+2. [x] Add the optional "Agent name" input to the `new-agent` block in `TemplateEditor`,
    wired via `onConfig`.
-3. [ ] Surface a set name in `blockPlaceholderLabel`.
-4. [ ] In `resolveTemplateBlock`, pass `block.name?.trim() || undefined` as the spawn name.
-5. [ ] Extend the template unit tests for the name field.
+3. [x] Surface a set name in `blockPlaceholderLabel`.
+4. [x] In `resolveTemplateBlock`, pass `block.name?.trim() || undefined` as the spawn name.
+5. [x] Extend the template unit tests for the name field.
 
 **Acceptance criteria**
 
-- [ ] A `new-agent` block in the template editor has an optional name field whose value
-  **persists** in the saved template.
-- [ ] Instantiating a template whose `new-agent` block has a name spawns the agent **with
-  that custom name**, shown as the panel title and the sidebar label.
-- [ ] Leaving the name **empty** preserves current behavior (Claude's auto-title, else the
-  branch).
-- [ ] Terminal / file / diff blocks are unchanged (no name field).
-- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+- [x] A `new-agent` block in the template editor has an optional name field whose value
+  **persists** in the saved template. _(Stored as `content.name` via the existing
+  `onConfig` patch path → the opaque `canvas_templates` blob, no Rust change.)_
+- [x] Instantiating a template whose `new-agent` block has a name spawns the agent **with
+  that custom name**, shown as the panel title and the sidebar label. _(`resolveTemplateBlock`
+  passes it to `spawnSession`; `sessionLabel` resolves custom || auto || branch, #97.)_
+- [x] Leaving the name **empty** preserves current behavior (Claude's auto-title, else the
+  branch). _(`block.name?.trim() || undefined` → the #97 auto-name path.)_
+- [x] Terminal / file / diff blocks are unchanged (no name field). _(The input is gated on
+  `desc?.liveKind === "agent"`.)_
+- [x] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+
+**Implementation report**
+
+Frontend/template-data only, exactly as recommended — no Rust change (`spawn_session`
+already takes `name: Option<String>`; `canvas_templates` is an opaque JSON blob). Added
+`name?: string` to `CanvasContent` (types). `TemplateEditor`'s `BlockPanel` renders an
+optional **"Agent name (optional)"** text input gated on `desc?.liveKind === "agent"`
+(independent of the single-value `BlockConfig`, so it sits alongside the prompt textarea),
+helper text _"Leave empty to use Claude's auto-generated title."_, wired through the same
+`onConfig` patch path as the prompt — reusing the existing `configField`/`configLabel`/
+`configLine`/`helper` styles (no new CSS). `blockPlaceholderLabel` now prefers a set name
+(`Start session: <name>`) over the prompt snippet, falling back to the prompt when the
+name is blank. `resolveTemplateBlock` passes `block.name?.trim() || undefined` to
+`ipc.spawnSession` so an empty name keeps the #97 auto-name path; `resolvedContent` is
+unchanged (the name is consumed at spawn, becoming the session record's `name`). The
+block's `name` survives instantiation onto the pending leaf (deep-copied by
+`pendingContent`), so Retry re-spawns with it. Tests: `templateBlocks.test.ts` (name wins
+over prompt; blank name falls back) + `templateInstantiate.test.ts` (name preserved on the
+pending block). All gates pass: `npm run build`, `npm run lint`, `npm test` (145),
+`cargo test` (68), `prettier --check`.
 
 **Notes**
 

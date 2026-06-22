@@ -128,6 +128,27 @@ function BlockPanel({
         </span>
       </header>
       <div className={styles.blockBody}>
+        {/* Optional custom agent name (#136), gated on liveKind so it's specific to
+            new-agent blocks (independent of the single-value BlockConfig). Empty →
+            the agent auto-names from claude's ai-title (#97). */}
+        {desc?.liveKind === "agent" && (
+          <label className={styles.configField}>
+            <span className={styles.configLabel}>Agent name (optional)</span>
+            <input
+              className={styles.configLine}
+              type="text"
+              value={content.name ?? ""}
+              placeholder="e.g. Backend"
+              onChange={(event) =>
+                onConfig({ name: event.currentTarget.value })
+              }
+              aria-label="Agent name"
+            />
+            <span className={styles.helper}>
+              Leave empty to use Claude&apos;s auto-generated title.
+            </span>
+          </label>
+        )}
         {desc?.config === "prompt" && (
           <label className={styles.configField}>
             <span className={styles.configLabel}>

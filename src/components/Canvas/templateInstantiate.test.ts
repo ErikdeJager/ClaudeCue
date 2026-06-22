@@ -63,6 +63,27 @@ describe("instantiateTemplate (#118)", () => {
     });
   });
 
+  it("preserves a new-agent block's custom name onto the pending leaf (#136)", () => {
+    const named: CanvasTemplate = {
+      id: "t2",
+      name: "Named",
+      layout: {
+        type: "leaf",
+        id: "l1",
+        content: { kind: "new-agent", name: "Backend", prompt: "go" },
+      },
+    };
+    const tab = instantiateTemplate(named, "/repo/x", counter());
+    const leaf = tab.layout;
+    if (!leaf || leaf.type !== "leaf") throw new Error("expected a leaf");
+    // The name (and prompt) survive on the pending block so Retry re-spawns with it.
+    expect(leaf.content.block).toEqual({
+      kind: "new-agent",
+      name: "Backend",
+      prompt: "go",
+    });
+  });
+
   it("handles an empty template (null layout)", () => {
     const tab = instantiateTemplate(
       { id: "t", name: "Empty", layout: null },

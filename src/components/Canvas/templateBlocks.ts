@@ -104,6 +104,10 @@ export function blockPlaceholderLabel(content: CanvasContent): string {
     return f ? `${desc.label}: ${f}` : desc.label;
   }
   if (desc.config === "prompt") {
+    // A custom agent name (#136) takes precedence in the placeholder, so the editor
+    // surface shows the chosen name; otherwise fall back to the prompt snippet.
+    const name = content.name?.trim();
+    if (name) return `${desc.label}: ${name}`;
     const p = content.prompt?.trim();
     if (!p) return desc.label;
     const short = p.length > 40 ? `${p.slice(0, 40)}…` : p;

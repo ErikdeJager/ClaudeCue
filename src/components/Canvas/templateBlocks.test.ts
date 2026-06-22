@@ -66,6 +66,20 @@ describe("blockPlaceholderLabel (#117)", () => {
     );
   });
 
+  it("prefers a set agent name over the prompt for a new-agent block (#136)", () => {
+    expect(label({ kind: "new-agent", name: "Backend" })).toBe(
+      "Start session: Backend",
+    );
+    // Name wins even when a prompt is also set.
+    expect(
+      label({ kind: "new-agent", name: "Backend", prompt: "fix the bug" }),
+    ).toBe("Start session: Backend");
+    // A blank/whitespace name falls back to the prompt snippet.
+    expect(label({ kind: "new-agent", name: "  ", prompt: "fix it" })).toBe(
+      "Start session: fix it",
+    );
+  });
+
   it("falls back to the raw kind for an unknown block", () => {
     expect(label({ kind: "mystery" })).toBe("mystery");
   });

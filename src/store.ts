@@ -1570,7 +1570,13 @@ export const useStore = create<AppState>()((set, get) => ({
       const liveKind = blockDescriptor(block.kind)?.liveKind;
       let live;
       if (liveKind === "agent") {
-        const record = await ipc.spawnSession(cwd, undefined, block.prompt);
+        // Apply the block's optional custom name (#136); empty/whitespace → undefined
+        // so the agent auto-names from claude's ai-title (#97), as before.
+        const record = await ipc.spawnSession(
+          cwd,
+          block.name?.trim() || undefined,
+          block.prompt,
+        );
         get().upsertSession(toSessionView(record));
         live = resolvedContent(block, cwd, { sessionId: record.id });
       } else if (liveKind === "terminal") {
