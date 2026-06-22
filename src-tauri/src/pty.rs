@@ -10,7 +10,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -120,6 +120,11 @@ pub enum SessionEvent {
 struct ActivityState {
     last_output: AtomicU64,
     last_input: AtomicU64,
+    /// Whether the session booted with an initial prompt (#93/#116) — a scheduled /
+    /// prompt-seeded agent works immediately with **no** `write_stdin`, so it has
+    /// "work to do" from spawn even though `last_input` stays 0. An interactive
+    /// session starts `false`, so its pre-input startup paint never reads as busy.
+    seeded: AtomicBool,
 }
 
 /// Per-session activity map shared between the reader threads, `write_stdin`, and
@@ -239,7 +244,18 @@ impl SessionManager {
         let spec = crate::agents::agent_spec(agent);
         let args = spec.spawn_args(&id, prompt);
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        self.spawn_with_id(id.clone(), spec.binary_name, &arg_refs, cwd.as_ref(), name)
+        // A non-blank initial prompt means the agent starts working immediately with
+        // no keystrokes (#93), so it counts as "has work" for the busy heuristic
+        // (#116) — otherwise it would be stuck gray (never blue/yellow).
+        let seeded = prompt.map(|p| !p.trim().is_empty()).unwrap_or(false);
+        self.spawn_with_id(
+            id.clone(),
+            spec.binary_name,
+            &arg_refs,
+            cwd.as_ref(),
+            name,
+            seeded,
+        )
     }
 
     /// Resume a previously-persisted session by id (used on boot / Restart) using
@@ -258,12 +274,16 @@ impl SessionManager {
         let spec = crate::agents::agent_spec(agent);
         let args = spec.resume_args(claude_session_id);
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        // A resume just reopens the conversation; it doesn't re-run a prompt, so it
+        // has no autonomous work to do (#116) — `seeded` is false. A previously-active
+        // session still shows yellow on boot via its persisted `has_been_active`.
         self.spawn_with_id(
             claude_session_id.to_string(),
             spec.binary_name,
             &arg_refs,
             cwd.as_ref(),
             name,
+            false,
         )
     }
 
@@ -280,7 +300,7 @@ impl SessionManager {
         cwd: impl AsRef<Path>,
     ) -> Result<SessionInfo, SessionError> {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        self.spawn_with_id(id, shell.as_str(), &[], cwd.as_ref(), None)
+        self.spawn_with_id(id, shell.as_str(), &[], cwd.as_ref(), None, false)
     }
 
     /// Send keystrokes / paste to a session's stdin.
@@ -380,7 +400,8 @@ impl SessionManager {
         self.lock_sessions().map(|s| s.len()).unwrap_or(0)
     }
 
-    /// Spawn an arbitrary program in a PTY with a generated id (test helper).
+    /// Spawn an arbitrary program in a PTY with a generated id (test helper). Not
+    /// prompt-seeded — mirrors a fresh interactive session (#116).
     #[cfg(test)]
     fn spawn_program(
         &self,
@@ -389,7 +410,19 @@ impl SessionManager {
         cwd: &Path,
         name: Option<String>,
     ) -> Result<SessionInfo, SessionError> {
-        self.spawn_with_id(Uuid::new_v4().to_string(), program, args, cwd, name)
+        self.spawn_with_id(Uuid::new_v4().to_string(), program, args, cwd, name, false)
+    }
+
+    /// Like `spawn_program` but marks the session prompt-seeded (#116): its output
+    /// reads as work with no `write_stdin`, mirroring a scheduled agent (#93).
+    #[cfg(test)]
+    fn spawn_program_seeded(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: &Path,
+    ) -> Result<SessionInfo, SessionError> {
+        self.spawn_with_id(Uuid::new_v4().to_string(), program, args, cwd, None, true)
     }
 
     /// Spawn `program` in a PTY under a caller-chosen session id. Backs
@@ -401,6 +434,7 @@ impl SessionManager {
         args: &[&str],
         cwd: &Path,
         name: Option<String>,
+        seeded: bool,
     ) -> Result<SessionInfo, SessionError> {
         if !cwd.is_dir() {
             return Err(SessionError::Spawn(format!(
@@ -458,6 +492,7 @@ impl SessionManager {
         let activity_state = Arc::new(ActivityState {
             last_output: AtomicU64::new(0),
             last_input: AtomicU64::new(0),
+            seeded: AtomicBool::new(seeded),
         });
         if let Ok(mut map) = self.activity.lock() {
             map.insert(id.clone(), Arc::clone(&activity_state));
@@ -597,11 +632,19 @@ fn monitor_loop(
                 .map(|(id, state)| {
                     let out = state.last_output.load(Ordering::Relaxed);
                     let inp = state.last_input.load(Ordering::Relaxed);
-                    // Busy = recent output that arrived meaningfully *after* the
-                    // last keystroke, so the terminal's echo of typing doesn't
-                    // read as Claude working (#55). No keystrokes yet (inp == 0)
-                    // → any recent output counts.
-                    let busy = out != 0
+                    let seeded = state.seeded.load(Ordering::Relaxed);
+                    // Busy requires the session to actually *have work to do* (#116):
+                    // either the user has submitted input (`inp != 0`) or it booted
+                    // prompt-seeded (#93). So claude's pre-input startup paint on a
+                    // fresh interactive session no longer reads as busy (which used
+                    // to latch the #112 "needs input" yellow before any prompt).
+                    let has_work = inp != 0 || seeded;
+                    // Among that, busy = recent output that arrived meaningfully
+                    // *after* the last keystroke, so the terminal's echo of typing
+                    // doesn't read as Claude working (#55). With no keystrokes yet
+                    // (inp == 0, a seeded session) any recent output counts.
+                    let busy = has_work
+                        && out != 0
                         && now.saturating_sub(out) < BUSY_WINDOW_MS
                         && (inp == 0 || out.saturating_sub(inp) >= INPUT_ECHO_MS);
                     (id.clone(), busy)
@@ -787,9 +830,10 @@ mod tests {
     #[test]
     fn busy_state_tracks_output_then_goes_idle() {
         let (mgr, rx) = manager();
-        // Emit once, then stay alive but quiet well past BUSY_WINDOW_MS, so the
-        // monitor must report busy → idle while the session is still running.
-        mgr.spawn_program("sh", &["-c", "printf 'tick'; sleep 1.2"], &tmp(), None)
+        // A seeded session (#93/#116) has work from spawn, so its output reads as
+        // busy with no keystrokes. Emit once, then stay alive but quiet well past
+        // BUSY_WINDOW_MS, so the monitor must report busy → idle while still running.
+        mgr.spawn_program_seeded("sh", &["-c", "printf 'tick'; sleep 1.2"], &tmp())
             .expect("spawn sh");
 
         let mut saw_busy = false;
@@ -808,6 +852,65 @@ mod tests {
         assert!(
             saw_idle_after_busy,
             "expected an idle state once output went quiet"
+        );
+    }
+
+    #[test]
+    fn startup_output_without_input_is_not_busy() {
+        // A fresh interactive session's startup paint — output with no keystrokes
+        // and no seeded prompt — must NOT read as busy (#116), or it would latch the
+        // #112 "needs input" yellow before the user has typed anything.
+        let (mgr, rx) = manager();
+        let info = mgr
+            .spawn_program("sh", &["-c", "printf 'welcome'; sleep 1"], &tmp(), None)
+            .expect("spawn sh");
+
+        let mut saw_busy = false;
+        let deadline = Instant::now() + Duration::from_millis(1200);
+        while Instant::now() < deadline {
+            if let Ok(SessionEvent::State { busy: true, .. }) =
+                rx.recv_timeout(Duration::from_millis(100))
+            {
+                saw_busy = true;
+                break;
+            }
+        }
+        let _ = mgr.kill_session(&info.id);
+        assert!(
+            !saw_busy,
+            "startup output with no input or seed must not read as busy (#116)"
+        );
+    }
+
+    #[test]
+    fn output_after_input_reads_as_busy() {
+        // Once the user has submitted input (#55/#116), autonomous output arriving
+        // well after the keystroke counts as the agent working. The shell reads a
+        // line, waits ~400ms (past INPUT_ECHO_MS), then emits output.
+        let (mgr, rx) = manager();
+        let info = mgr
+            .spawn_program(
+                "sh",
+                &["-c", "read x; sleep 0.4; printf done; sleep 1"],
+                &tmp(),
+                None,
+            )
+            .expect("spawn sh");
+        mgr.write_stdin(&info.id, "go\n").expect("write");
+
+        let mut saw_busy = false;
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline && !saw_busy {
+            if let Ok(SessionEvent::State { busy: true, .. }) =
+                rx.recv_timeout(Duration::from_millis(150))
+            {
+                saw_busy = true;
+            }
+        }
+        let _ = mgr.kill_session(&info.id);
+        assert!(
+            saw_busy,
+            "output ~400ms after input must read as busy (#55/#116)"
         );
     }
 

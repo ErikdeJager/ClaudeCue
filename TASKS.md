@@ -321,8 +321,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#115 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. **Open tasks: #116–#119.** New work
+Tasks #1–#116 are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. **Open tasks: #117–#119.** New work
 goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 

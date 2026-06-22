@@ -46,11 +46,17 @@ even though it works in `tauri dev`.
   subscription routes output **bytes** to `outputBus.ts` (a pub/sub the xterm
   `Terminal` consumes — deliberately *not* React state) and lifecycle +
   busy/idle to the Zustand `store.ts`.
-- **Busy indicator (#42/#55/#71/#88/#95/#112):** a backend monitor thread (`pty.rs`) derives each
+- **Busy indicator (#42/#55/#71/#88/#95/#112/#116):** a backend monitor thread (`pty.rs`) derives each
   session's **busy/idle** from output activity (within a ~700ms window) and emits
   `session://state { id, busy }` on transitions only. So **keystroke echo doesn't
   read as busy** (#55), `write_stdin` stamps a per-session `last_input` time and the
-  monitor marks busy only when output arrived ≥300ms *after* the last keystroke. The
+  monitor marks busy only when output arrived ≥300ms *after* the last keystroke.
+  Busy also requires the session to have **work to do** (#116) — either the user has
+  submitted input, or it booted **prompt-seeded** (#93, an `ActivityState.seeded`
+  flag set by `spawn_session_with_prompt`) — so `claude`'s pre-input **startup paint
+  never reads as busy** (it used to, latching the yellow "needs input" state before
+  any prompt); a fresh interactive session stays gray until its first real turn,
+  while a seeded/scheduled agent still goes blue→yellow. The
   store keeps `sessionBusy` plus a per-session **has-been-active** flag; the
   `BusyIndicator` (#88, supersedes #71's spinner arc) has **three states** (#112): a
   calm `--status-idle` (gray) dot when **fresh** (never active); while busy, a
