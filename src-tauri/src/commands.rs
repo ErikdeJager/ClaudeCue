@@ -938,6 +938,20 @@ pub fn open_url(url: String) -> Result<(), SessionError> {
     Ok(())
 }
 
+/// Reveal a folder in Finder (#129 repo context menu → "Reveal in Finder"). Opens
+/// the folder itself (`open <path>`, per the user's decision — not `open -R`).
+/// Mirrors the `open_data_folder` / `open_url` precedent: macOS `open` runs
+/// **without a shell** (`Command::new("open").arg(path)`), so there is no
+/// shell-injection vector; the path is a tracked repo dir.
+#[tauri::command]
+pub fn reveal_path(path: String) -> Result<(), SessionError> {
+    std::process::Command::new("open")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| SessionError::Io(e.to_string()))?;
+    Ok(())
+}
+
 /// The ClaudeCue app version (#100 Settings → About), from the crate version.
 #[tauri::command]
 pub fn app_version() -> String {

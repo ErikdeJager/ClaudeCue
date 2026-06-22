@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 
-import { listFiles } from "../../ipc";
+import { listFiles, revealPath } from "../../ipc";
 import { repoName, sessionLabel } from "../../paths";
 import { formatFireTime } from "../../time";
 import {
@@ -488,6 +488,7 @@ function Sidebar() {
   const renameSession = useStore((s) => s.renameSession);
   const openNewSession = useStore((s) => s.openNewSession);
   const startRepoSession = useStore((s) => s.startRepoSession);
+  const copyToClipboard = useStore((s) => s.copyToClipboard);
   const openSchedule = useStore((s) => s.openSchedule);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const confirmDestructive = useStore((s) => s.settings.confirmDestructive);
@@ -1089,6 +1090,32 @@ function Sidebar() {
                     </button>
                   );
                 })}
+                {/* Non-destructive folder utilities (#129): reveal in Finder /
+                    copy the absolute path. Reuses the `open`-shell-out backend
+                    (#100/#109) and the store clipboard helper. */}
+                <div className={styles.menuSeparator} role="separator" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    void revealPath(menu.repo);
+                    closeMenu();
+                  }}
+                >
+                  Reveal in Finder
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    void copyToClipboard(menu.repo, "path");
+                    closeMenu();
+                  }}
+                >
+                  Copy path
+                </button>
                 <div className={styles.menuSeparator} role="separator" />
                 <button
                   type="button"

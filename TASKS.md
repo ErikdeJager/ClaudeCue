@@ -549,9 +549,9 @@ menu doesn't exist there).
 
 ---
 
-### 129. [ ] Add "Reveal in Finder" and "Copy path" to the repo (folder) context menu
+### 129. [x] Add "Reveal in Finder" and "Copy path" to the repo (folder) context menu
 
-**Status:** Not started
+**Status:** Done
 **Owner:** _(unassigned)_
 **Depends on:** none · _(builds on the shipped #54 repo context menu and the `open`-shell-out precedent #100/#109; the #120/#121 refining passes are complete, so nothing open gates it)_
 **Created:** 2026-06-22
@@ -585,25 +585,25 @@ to the existing menu items.
 
 **Subtasks**
 
-1. [ ] Backend: add `reveal_path(path: String)` to `commands.rs` (macOS `open <path>`, no
+1. [x] Backend: add `reveal_path(path: String)` to `commands.rs` (macOS `open <path>`, no
    shell; mirror `open_data_folder`), and register it in `lib.rs`'s `invoke_handler`.
-2. [ ] IPC: wrap it as `revealPath(path)` in `ipc.ts`.
-3. [ ] Sidebar repo menu: in the default-mode branch, add **Reveal in Finder** (→
+2. [x] IPC: wrap it as `revealPath(path)` in `ipc.ts`.
+3. [x] Sidebar repo menu: in the default-mode branch, add **Reveal in Finder** (→
    `revealPath(menu.repo)`) and **Copy path** (→ `copyToClipboard(menu.repo, "path")`),
    grouped in their own separator section (e.g. between the Views section and Change
    color…); `closeMenu()` after each.
-4. [ ] Verify `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, `cargo
+4. [x] Verify `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, `cargo
    clippy`, `cargo fmt`.
 
 **Acceptance criteria**
 
-- [ ] Right-clicking a repo header shows **Reveal in Finder** and **Copy path** alongside
+- [x] Right-clicking a repo header shows **Reveal in Finder** and **Copy path** alongside
   the existing items.
-- [ ] **Reveal in Finder** opens the repo's folder in a Finder window (`open <path>`).
-- [ ] **Copy path** copies the folder's absolute path and shows a "Copied path" toast.
-- [ ] The new Rust command runs `open` **without a shell**; the menu closes after either
+- [x] **Reveal in Finder** opens the repo's folder in a Finder window (`open <path>`).
+- [x] **Copy path** copies the folder's absolute path and shows a "Copied path" toast.
+- [x] The new Rust command runs `open` **without a shell**; the menu closes after either
   action; existing items are unchanged.
-- [ ] All build/lint/test/format + clippy/fmt checks pass.
+- [x] All build/lint/test/format + clippy/fmt checks pass.
 
 **Notes**
 

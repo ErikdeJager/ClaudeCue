@@ -173,6 +173,7 @@ pub fn run() {
             commands::clear_recents,
             commands::open_data_folder,
             commands::open_url,
+            commands::reveal_path,
             commands::app_version,
             commands::claude_version,
         ])

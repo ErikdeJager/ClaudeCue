@@ -284,6 +284,9 @@ export const openDataFolder = () => invoke<void>("open_data_folder");
 /** Open an http/https URL in the default browser (#109) — ⌘-click on a linkified
  * terminal URL. The backend rejects any non-http(s) scheme. */
 export const openUrl = (url: string) => invoke<void>("open_url", { url });
+/** Reveal a folder in Finder (#129 repo menu → "Reveal in Finder") — `open <path>`. */
+export const revealPath = (path: string) =>
+  invoke<void>("reveal_path", { path });
 /** ClaudeCue version, and claude's version (best-effort) (#100 Settings → About). */
 export const appVersion = () => invoke<string>("app_version");
 export const claudeVersion = () => invoke<string | null>("claude_version");
