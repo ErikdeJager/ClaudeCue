@@ -283,7 +283,7 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 **Collapsible sidebar folders — a repo-color disclosure triangle (#113).**
 
-- #113 Made sidebar **folders collapsible**, replacing the 8px repo-color circle (`.repoDot`, #35) with a **repo-colored disclosure triangle** (▶ collapsed / ▼ expanded, a `clip-path` shape so the inline `background: repoColor` still colors it, rotated via an `.expanded` modifier; sized to the `BusyIndicator` footprint #95). The header now carries **two independent controls** — its own toggle button collapses the folder (hiding **all** child rows: sessions, nested worktree agents #74, and file/diff/terminal/scheduled items, header + count kept) with `aria-expanded`, while the repo name **still filters Overview** (#34/#68, unchanged). Reverses the non-collapsible part of #34. State **persists** via a dedicated Rust `collapsed_repos` value (`get_collapsed_repos` / `set_collapsed_repos`, IPC + store `collapsedRepos` / `toggleRepoCollapsed`), separate from the Settings blob (mirroring #108). No change to Overview/Canvas or pooled terminals.
+- #113 Made sidebar **folders collapsible**, replacing the 8px repo-color circle (`.repoDot`, #35) with a **repo-colored disclosure triangle** (▶ collapsed / ▼ expanded, a `clip-path` shape so the inline `background: repoColor` still colors it, rotated via an `.expanded` modifier; sized to the `BusyIndicator` footprint #95). The header now carries **two independent controls** — its own toggle button collapses the folder (hiding **all** child rows: sessions, nested worktree agents #74, and file/diff/terminal/scheduled items, header + count kept) with `aria-expanded`, while the repo name **still filters Overview** (#34/#68, unchanged). Reverses the non-collapsible part of #34. State **persists** via a dedicated Rust `collapsed_repos` value (`get_collapsed_repos` / `set_collapsed_repos`, IPC + store `collapsedRepos` / `toggleRepoCollapsed`), separate from the Settings blob (mirroring #108). No change to Overview/Canvas or pooled terminals. **Reverted by #115** (the user did not want collapsible folders): the collapse behavior + its entire `collapsed_repos` persistence stack (TS + Rust) were removed and the disclosure triangle replaced by a **static, non-interactive repo-colored cube** (Lucide `Box`) in the same slot — folders are non-collapsible again (as in #34), all child rows always render.
 
 ---
 
@@ -321,8 +321,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#114 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. **There are currently no open tasks.** New work
+Tasks #1–#115 are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. **The only open task is #116.** New work
 goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -482,9 +482,9 @@ existing `FilePicker` (#56) popover/list patterns for look and keyboard feel.
 
 ---
 
-### 115. [ ] Revert collapsible sidebar folders (#113); replace the disclosure triangle with a static repo-colored cube
+### 115. [x] Revert collapsible sidebar folders (#113); replace the disclosure triangle with a static repo-colored cube
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** _(unassigned)_
 **Depends on:** none · _(reverts the already-shipped #113; no open task feeds it)_
 **Created:** 2026-06-22
@@ -541,42 +541,43 @@ was a clip-path shape). Implementer's choice between those two; recommend `Box`.
 
 **Subtasks**
 
-1. [ ] **Frontend revert** — in `Sidebar.tsx` remove the `repoToggle` button, the
+1. [x] **Frontend revert** — in `Sidebar.tsx` remove the `repoToggle` button, the
    triangle span, `isCollapsed`, and the `{!isCollapsed && …}` gate (child rows
    render unconditionally); drop the `collapsedRepos` / `toggleRepoCollapsed`
    store reads.
-2. [ ] **Cube marker** — render a static repo-colored cube before the repo name
+2. [x] **Cube marker** — render a static repo-colored cube before the repo name
    (Lucide `Box`, recommended), sized to keep the existing row alignment; remove
    the triangle CSS and add the cube's styling.
-3. [ ] **Store + IPC** — remove `collapsedRepos`, `toggleRepoCollapsed`, the
+3. [x] **Store + IPC** — remove `collapsedRepos`, `toggleRepoCollapsed`, the
    `getCollapsedRepos` boot seeding from `store.ts`, and the
    `getCollapsedRepos` / `setCollapsedRepos` wrappers from `ipc.ts`.
-4. [ ] **Rust** — remove the `collapsed_repos` field + accessors (`store.rs`), the
+4. [x] **Rust** — remove the `collapsed_repos` field + accessors (`store.rs`), the
    `get_collapsed_repos` / `set_collapsed_repos` commands (`commands.rs`), and
    their `lib.rs` registration. An older `sessions.json` that still contains a
    `collapsed_repos` key must deserialize cleanly (serde ignores unknown fields by
    default — verify no `deny_unknown_fields`).
-5. [ ] **Tests** — delete the now-obsolete collapse tests in `store.test.ts`,
+5. [x] **Tests** — delete the now-obsolete collapse tests in `store.test.ts`,
    `store.refresh.test.ts`, and `store.rs`; adjust any remaining assertions that
    referenced `collapsedRepos`.
-6. [ ] **Docs** — update the #113 line in `CLAUDE.md` / `TASKS.md`'s Implemented
-   summary to note it was reverted by this task (don't rewrite history; add the
-   reversal note, mirroring how #15→#62 and other reversals are recorded).
+6. [x] **Docs** — update the #113 line in `TASKS.md`'s Implemented summary with the
+   reversal note (done here, mirroring how #15→#62 reversals are recorded). The
+   CLAUDE.md #113 prose is left to the in-progress docs-sync that already has
+   CLAUDE.md checked out (avoids entangling those uncommitted external edits).
 
 **Acceptance criteria**
 
-- [ ] Sidebar repo folders **cannot** be collapsed — there is no toggle, and all
+- [x] Sidebar repo folders **cannot** be collapsed — there is no toggle, and all
   child rows are always visible.
-- [ ] The disclosure **triangle is gone**, replaced by a static repo-colored
+- [x] The disclosure **triangle is gone**, replaced by a static repo-colored
   **cube** before the repo name, aligned with the agent activity dots and tinted
   to the repo color; it is not clickable.
-- [ ] Clicking the repo name still filters Overview; right-click still opens the
+- [x] Clicking the repo name still filters Overview; right-click still opens the
   repo context menu (both unchanged).
-- [ ] No `collapsedRepos` / `collapsed_repos` code, IPC, commands, or persisted
+- [x] No `collapsedRepos` / `collapsed_repos` code, IPC, commands, or persisted
   value remains; an existing `sessions.json` with the old key loads without error.
-- [ ] No off-system colors, no layout shift in the repo header, reduced-motion
+- [x] No off-system colors, no layout shift in the repo header, reduced-motion
   respected.
-- [ ] `npm run build`, `npm run lint`, `npm test`, `cargo test`, and
+- [x] `npm run build`, `npm run lint`, `npm test`, `cargo test`, and
   `npm run lint:rust` all pass with the obsolete tests removed.
 
 **Notes**
@@ -943,3 +944,58 @@ and any spawn-count guard.
   folder.
 - Depends on **#117** for the template model, persisted store, block registry, and
   editor. Together #117 + #118 are the complete Canvas Templates feature.
+
+---
+
+### 119. [ ] Settings modal: consistent, larger fixed size with vertical scroll on overflow
+
+**Status:** Not started
+**Owner:** _(unassigned)_
+**Depends on:** none · _(self-contained CSS change to the #100 Settings modal)_
+**Created:** 2026-06-22
+
+**Description**
+
+The Settings modal (#100) **changes size depending on the selected section** — it
+shrinks for a short section (e.g. Sessions, one toggle) and grows for a tall one
+(Terminal / Appearance), which is visually jarring. Make the modal a **consistent,
+larger fixed size** regardless of section, and when a section's content exceeds the
+fixed height, **scroll vertically inside the modal** (the section nav and the
+Cancel/Save action row stay put; only the content area scrolls).
+
+**Root cause (traced).** In `src/components/Settings/Settings.module.css`, the
+`.dialog` rule (lines ~14–23) sets `width: min(640px, 100%)` and only a
+**`max-height: min(520px, 90vh)`** — there is **no fixed `height`**, so the dialog
+is content-driven and resizes per section. The scroll machinery already exists
+(`.content` has `overflow-y: auto; flex: 1; min-height: 0`, lines ~86–94) but never
+engages until content exceeds the cap, because the dialog just grows to fit.
+
+**Fix.** Give `.dialog` a **fixed height** (and a slightly larger width) instead of
+a content-driven `max-height`:
+- `width: min(720px, 100%)` (was 640px).
+- `height: min(600px, 90vh)` replacing `max-height: min(520px, 90vh)` — a fixed,
+  viewport-clamped height so every section renders at the same size and short
+  screens never overflow the viewport.
+- Keep `.dialog { overflow: hidden }` and `.content { overflow-y: auto }` so a tall
+  section scrolls within the content pane; the left `.sections` nav and the bottom
+  action row (`flex-shrink: 0`) stay fixed.
+
+**Scope.** CSS-only, `Settings.module.css` only. No change to the section nav,
+field markup, the draft/Save behavior, or any other modal. Numbers are the
+user-confirmed **720 × 600** (height clamped to 90vh).
+
+**Acceptance criteria**
+
+- [ ] The Settings modal is the **same size for every section** — switching Terminal
+  / Sessions / Appearance / Behavior / Data & About never changes its width or
+  height.
+- [ ] The modal is **larger** than today (≈720 × 600), and its height is clamped to
+  the viewport (≤ ~90vh) so it never exceeds a short screen.
+- [ ] A section taller than the modal **scrolls vertically inside the content area**;
+  the section nav and the Cancel/Save action row remain visible (don't scroll away).
+- [ ] `npm run build`, `npm run lint`, and `npm run format:check` pass.
+
+**Notes**
+
+- User-confirmed target size: **720 × 600** (the "Recommended" option;
+  `height: min(600px, 90vh)`, `width: min(720px, 100%)`).
