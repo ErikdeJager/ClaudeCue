@@ -15,6 +15,7 @@ import { useStore } from "../../store";
 import { toLocalInput } from "../../time";
 import type { BranchList, SkillInfo } from "../../types";
 import SkillAutocomplete from "../SkillAutocomplete/SkillAutocomplete";
+import { moveFolderHighlight } from "./folderNav";
 import styles from "./NewSessionModal.module.css";
 
 // Well-known branches pinned to the top of the branch list, in this order (#66).
@@ -79,6 +80,9 @@ function NewSessionModal() {
   // Slash-command skills for the chosen folder (#114) — feeds the prompt
   // autocomplete; best-effort, so it degrades to an empty list (no dropdown).
   const [skills, setSkills] = useState<SkillInfo[]>([]);
+  // The "Choose folder" picker is keyboard-highlighted (#123) — a virtual option
+  // after the recents (ArrowDown past the last recent; Enter opens it).
+  const [pickerActive, setPickerActive] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const fireAtRef = useRef<HTMLInputElement>(null);
@@ -105,6 +109,7 @@ function NewSessionModal() {
     setFireAt(toLocalInput(new Date(Date.now() + DEFAULT_LEAD_MS)));
     setPrompt("");
     setSchedName("");
+    setPickerActive(false);
   }, [open, prefillRepo]);
 
   // Focus the recents search whenever the folder step is shown (open or Back) —
@@ -216,14 +221,19 @@ function NewSessionModal() {
     }
   }, [open]);
 
-  // Keep the highlighted recent scrolled into view as ↑/↓ / ⌘1–9 move it.
+  // Keep the highlighted recent — or the folder picker (#123) — scrolled into view
+  // as ↑/↓ / ⌘1–9 move the highlight.
   useEffect(() => {
     if (step !== "folder") return;
+    if (pickerActive) {
+      chooseRef.current?.scrollIntoView({ block: "nearest" });
+      return;
+    }
     const el = recentsRef.current?.querySelector(
       '[aria-selected="true"]',
     ) as HTMLElement | null;
     el?.scrollIntoView({ block: "nearest" });
-  }, [cwd, step]);
+  }, [cwd, step, pickerActive]);
 
   // Keep the selected branch scrolled into view as ↑/↓ move it — important when
   // the filter input holds focus and the buttons don't.
@@ -267,6 +277,7 @@ function NewSessionModal() {
   const canCreate = !!cwd && !busy;
 
   const pick = async () => {
+    setPickerActive(false);
     const dir = await pickDirectory().catch(() => null);
     if (dir) {
       setQuery("");
@@ -353,6 +364,8 @@ function NewSessionModal() {
   // always advances something.
   const onQueryChange = (value: string) => {
     setQuery(value);
+    // Typing re-filters the recents → return the highlight to a recent (#123).
+    setPickerActive(false);
     const qq = value.trim().toLowerCase();
     const nl = qq
       ? recents.filter(
@@ -370,24 +383,36 @@ function NewSessionModal() {
   // unhinted); ↑/↓ move the highlight (= target folder). Enter falls through to
   // the form submit, which advances the step.
   const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    // Enter while the folder picker is highlighted opens it (#123) — handled here
+    // (not just the form submit) so it works even if the submit button is disabled.
+    if (event.key === "Enter" && pickerActive) {
+      event.preventDefault();
+      void pick();
+      return;
+    }
     if ((event.metaKey || event.ctrlKey) && /^[1-9]$/.test(event.key)) {
       event.preventDefault();
       const r = list[Number(event.key) - 1];
-      if (r) setCwd(r);
+      if (r) {
+        setCwd(r);
+        setPickerActive(false);
+      }
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      if (list.length === 0) return;
-      const next =
-        activeIndex < 0
-          ? 0
-          : Math.min(
-              Math.max(activeIndex + (event.key === "ArrowDown" ? 1 : -1), 0),
-              list.length - 1,
-            );
-      const r = list[next];
-      if (r) setCwd(r);
+      // The picker is a virtual option after the recents (#123): ArrowDown past the
+      // last recent (or from a filtered-empty list) highlights it; ArrowUp returns.
+      const next = moveFolderHighlight(
+        { index: activeIndex, picker: pickerActive },
+        list.length,
+        event.key === "ArrowDown" ? "down" : "up",
+      );
+      setPickerActive(next.picker);
+      if (!next.picker) {
+        const r = list[next.index];
+        if (r) setCwd(r);
+      }
     }
   };
 
@@ -486,7 +511,10 @@ function NewSessionModal() {
         onSubmit={(event) => {
           event.preventDefault();
           if (step === "folder") {
-            void advanceFromFolder();
+            // Enter on the highlighted folder picker opens it (#123); otherwise
+            // advance with the highlighted recent.
+            if (pickerActive) void pick();
+            else void advanceFromFolder();
           } else if (step === "branch") {
             if (scheduleMode) goToSchedule();
             else void create();
@@ -535,9 +563,12 @@ function NewSessionModal() {
                         key={recent}
                         type="button"
                         role="option"
-                        aria-selected={recent === cwd}
-                        className={`${styles.recent} ${recent === cwd ? styles.recentActive : ""}`}
-                        onClick={() => setCwd(recent)}
+                        aria-selected={recent === cwd && !pickerActive}
+                        className={`${styles.recent} ${recent === cwd && !pickerActive ? styles.recentActive : ""}`}
+                        onClick={() => {
+                          setCwd(recent);
+                          setPickerActive(false);
+                        }}
                         title={recent}
                       >
                         <span className={styles.recentName}>
@@ -554,7 +585,10 @@ function NewSessionModal() {
               <button
                 ref={chooseRef}
                 type="button"
-                className={styles.pickButton}
+                // Keyboard-highlightable as a virtual option after the recents
+                // (#123): ArrowDown past the last recent selects it, Enter opens it.
+                aria-selected={pickerActive}
+                className={`${styles.pickButton} ${pickerActive ? styles.pickButtonActive : ""}`}
                 onClick={() => void pick()}
               >
                 <FolderOpen size={15} strokeWidth={1.5} />

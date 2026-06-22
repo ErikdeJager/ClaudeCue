@@ -321,8 +321,8 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#119 + #122 are complete — see **Implemented (completed tasks)** above for the
-index, and git history for full per-task detail. **Open tasks: #120, #121, #123, #124,
+Tasks #1–#119 + #122 + #123 are complete — see **Implemented (completed tasks)** above
+for the index, and git history for full per-task detail. **Open tasks: #120, #121, #124,
 #125.** New work
 goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
@@ -1333,9 +1333,9 @@ instances elsewhere.
 
 ---
 
-### 123. [ ] New-session / schedule folder step — make the "Choose folder" picker reachable by arrow keys
+### 123. [x] New-session / schedule folder step — make the "Choose folder" picker reachable by arrow keys
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** _(unassigned)_
 **Depends on:** none · _(self-contained keyboard-UX fix in the #66 new-session flow)_
 **Created:** 2026-06-22
@@ -1382,30 +1382,30 @@ modals, and mouse behavior.
 
 **Subtasks**
 
-1. [ ] Add a "picker is the active option" notion (e.g. a `pickerActive` flag, or
+1. [x] Add a "picker is the active option" notion (e.g. a `pickerActive` flag, or
    extend `activeIndex` to range `[0, list.length]` where `list.length` = the
    picker) and update `onSearchKeyDown` so ArrowDown past the last recent selects the
    picker and ArrowUp returns to the recents (handling the filtered-to-empty case).
-2. [ ] Render the picker button with the active/selected style + accessible selected
+2. [x] Render the picker button with the active/selected style + accessible selected
    state when highlighted; keep search-input focus; scroll it into view.
-3. [ ] Make **Enter** (and the existing click) activate the highlighted picker →
+3. [x] Make **Enter** (and the existing click) activate the highlighted picker →
    `pick()`; reset the picker-active state on query change / step change.
-4. [ ] Verify both new-session and schedule modes; confirm ⌘1–9 and recents nav are
+4. [x] Verify both new-session and schedule modes; confirm ⌘1–9 and recents nav are
    unchanged.
-5. [ ] Add a test for the nav logic (pure helper if extracted) following the
+5. [x] Add a test for the nav logic (pure helper if extracted) following the
    project's testing patterns, if feasible.
 
 **Acceptance criteria**
 
-- [ ] In **both** modes, with recents present, ArrowDown on the last recent
+- [x] In **both** modes, with recents present, ArrowDown on the last recent
   highlights the "Choose folder" picker; ArrowUp returns to the last recent.
-- [ ] The highlighted picker shows the same active style + accessible selected state
+- [x] The highlighted picker shows the same active style + accessible selected state
   as a highlighted recent.
-- [ ] **Enter** while the picker is highlighted opens the native folder picker;
+- [x] **Enter** while the picker is highlighted opens the native folder picker;
   Enter on a recent still advances as before.
-- [ ] The picker is reachable even when the recents filter matches nothing; ⌘1–9 and
+- [x] The picker is reachable even when the recents filter matches nothing; ⌘1–9 and
   existing recents navigation are unchanged.
-- [ ] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass.
+- [x] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass.
 
 **Notes**
 

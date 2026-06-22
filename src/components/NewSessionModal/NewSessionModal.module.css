@@ -82,6 +82,15 @@
   background: var(--bg-hover);
 }
 
+/* Keyboard-highlighted picker (#123): the same accent treatment a highlighted
+   recent gets, so arrow-key focus reads consistently (the search input keeps DOM
+   focus, like the recents). */
+.pickButtonActive,
+.pickButtonActive:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
 .path {
   overflow: hidden;
   color: var(--text-secondary);
