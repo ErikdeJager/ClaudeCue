@@ -323,11 +323,9 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#127 status: **#1–#125 complete**; **#126 and #127 now unblocked** (both
-depended on the #120/#121 refining passes, which are done). See **Implemented
-(completed tasks)** above for the index and git history for per-task detail.
-**Open tasks: #126 (fork-conversation button), #127 (right-click new-session
-shortcut).** New work
+Tasks **#1–#126 are complete** — see **Implemented (completed tasks)** above for the
+index and git history for per-task detail. **The only open task is #127**
+(right-click new-session skips the folder step). New work
 goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -1622,9 +1620,9 @@ the `ScheduledPanel` (#94) editor (branch isn't editable there today — note).
 
 ---
 
-### 126. [ ] Fork an agent's conversation into a new parallel session ("Fork" button on the agent header)
+### 126. [x] Fork an agent's conversation into a new parallel session ("Fork" button on the agent header)
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** _(unassigned)_
 **Depends on:** #120, #121 · _(per the user: built on top of the refined codebase — runs after both iteration/refining passes; otherwise independent, building on shipped #86 agent header, #101 agent spec, #93 spawn machinery, #97 auto-name, #63 exit handling)_
 **Created:** 2026-06-22
@@ -1734,42 +1732,43 @@ any conversation-merge.
 
 **Subtasks**
 
-1. [ ] **Backend args + spawn** — `AgentSpec::fork_args` (claude → `--session-id <new>
+1. [x] **Backend args + spawn** — `AgentSpec::fork_args` (claude → `--session-id <new>
    --resume <src> --fork-session`) and `SessionManager::fork_session` (new UUID,
    non-seeded); Rust unit test for the args.
-2. [ ] **`fork_session` command + persistence** — look up the source record, spawn the
-   fork, persist a new `PersistedSession` with `forked_from = Some(source_id)`; add the
-   serde-default `forked_from` field to `PersistedSession` + `SessionView`; register in
-   `lib.rs`.
-3. [ ] **IPC + TS types** — `forkSession(sourceId)` in `ipc.ts`; `forkedFrom?` on
-   `SessionRecord` / `SessionView`.
-4. [ ] **Store action** — `forkSession`: call IPC, add + **select** the session,
-   **surface** it (append a Canvas panel when in Canvas), toast, error handling.
-5. [ ] **Header button** — fork button (Lucide `GitFork`) next to Copy-resume + Close
-   on `SessionCard` (Overview) and the Canvas agent-panel header.
-6. [ ] **Fork badge** — small "fork" badge (reuse `worktreeBadge`) on both surfaces
+2. [x] **`fork_session` command + persistence** — looks up the source record, spawns
+   the fork, persists a new `PersistedSession` with `forked_from = Some(source_id)`
+   (+ copied `repo_path`/`worktree_parent`/`agent`); added the serde-default
+   `forked_from` field to `PersistedSession` + `SessionView`; registered in `lib.rs`.
+3. [x] **IPC + TS types** — `forkSession(sourceId)` in `ipc.ts`; `forkedFrom?` on
+   `SessionRecord` / `SessionView` (+ the `toSessionView` mapping).
+4. [x] **Store action** — `forkSession`: calls IPC, adds + **selects** the session,
+   **surfaces** it (appends a Canvas panel via `appendLeaf` when in Canvas), toasts,
+   error handling (claude-missing → banner).
+5. [x] **Header button** — `GitFork` button next to Copy-resume + Close on
+   `SessionCard` (Overview) and the Canvas agent-panel header.
+6. [x] **Fork badge** — small "fork" badge (reuses `worktreeBadge`) on both surfaces
    when `forkedFrom` is set.
-7. [ ] **Docs** — record the fork spawn path + verified flag combo in CLAUDE.md
+7. [x] **Docs** — fork spawn path + verified flag combo recorded in CLAUDE.md
    (Conventions "Sessions & resume" + the Spawn note).
-8. [ ] **Tests** — Vitest for the store action (adds + selects the fork) and any pure
-   helpers; Rust fork-args test; all gates green.
+8. [x] **Tests** — Vitest for the store action (adds + selects the fork, + the error
+   path); Rust fork-args test; all gates green.
 
 **Acceptance criteria**
 
-- [ ] Every agent header (Overview cards **and** Canvas agent panels) shows a **Fork**
+- [x] Every agent header (Overview cards **and** Canvas agent panels) shows a **Fork**
   button next to the Copy-resume and Close buttons.
-- [ ] Clicking it starts a **new parallel `claude` session** forked from the source's
+- [x] Clicking it starts a **new parallel `claude` session** forked from the source's
   current conversation (via `--session-id <new> --resume <src> --fork-session`),
   **selected and surfaced** where the user is (Overview card selected / new Canvas
-  panel), ready to type — while the **source keeps running untouched**.
-- [ ] The forked agent carries an **app-owned UUID** (resumes on boot, auto-names,
+  panel), ready to type — while the **source keeps running untouched** (its own id).
+- [x] The forked agent carries an **app-owned UUID** (resumes on boot, auto-names,
   persists like any session) and shows a small **"fork" badge** distinguishing it from
   the identically-titled source.
-- [ ] The fork button is **enabled anytime** (including while the source is busy); the
+- [x] The fork button is **enabled anytime** (including while the source is busy); the
   fork reflects the conversation persisted at click time.
-- [ ] The forked session starts **gray** (per #116) and goes blue→yellow only after
-  the user submits a prompt in it.
-- [ ] `npm run build`, `npm run lint`, `npm test`, `cargo test`, and
+- [x] The forked session starts **gray** (per #116) and goes blue→yellow only after
+  the user submits a prompt in it (spawned non-seeded, like a resume).
+- [x] `npm run build`, `npm run lint`, `npm test`, `cargo test`, and
   `npm run lint:rust` all pass.
 
 **Notes**

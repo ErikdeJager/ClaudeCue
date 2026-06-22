@@ -22,6 +22,9 @@ export interface SessionRecord {
   has_been_active?: boolean;
   /** The coding agent this session runs (#101); `"claude"` for older records. */
   agent?: string;
+  /** The source session this was forked from (#126); absent for non-fork sessions.
+   * Drives the "fork" badge + records provenance. */
+  forked_from?: string | null;
 }
 
 /** A slash-invokable skill/command (#114, mirrors `skills::SkillInfo`). Powers
@@ -284,4 +287,7 @@ export interface SessionView {
   hasBeenActive?: boolean;
   /** The coding agent this session runs (#101); `"claude"` for older records. */
   agent?: string;
+  /** The source session this was forked from (#126); absent for non-fork sessions.
+   * Drives the "fork" badge distinguishing it from the identically-titled source. */
+  forkedFrom?: string | null;
 }

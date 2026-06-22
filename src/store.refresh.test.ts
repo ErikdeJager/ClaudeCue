@@ -22,11 +22,12 @@ vi.mock("./ipc", () => ({
   setCanvasTemplates: vi.fn(),
   spawnTerminal: vi.fn(),
   listSchedules: vi.fn(),
+  forkSession: vi.fn(),
 }));
 
 import * as ipc from "./ipc";
 import { useStore } from "./store";
-import type { OverviewPanel } from "./types";
+import type { OverviewPanel, SessionRecord } from "./types";
 
 const m = vi.mocked;
 
@@ -146,5 +147,39 @@ describe("refresh() — seeds the 'has been active' flag (#112)", () => {
     expect(active.s1).toBe(true);
     expect(active.s2).toBeUndefined();
     expect(active.s3).toBeUndefined();
+  });
+});
+
+describe("forkSession (#126)", () => {
+  it("adds and selects the forked session (carrying forkedFrom)", async () => {
+    useStore.setState({ sessions: [], selectedId: null, view: "overview" });
+    const forked: SessionRecord = {
+      id: "fork-1",
+      claude_session_id: "fork-1",
+      repo_path: "/repo/x",
+      name: null,
+      created_at: 0,
+      forked_from: "src-1",
+    };
+    m(ipc.forkSession).mockResolvedValue(forked);
+
+    const ok = await useStore.getState().forkSession("src-1");
+
+    expect(ok).toBe(true);
+    expect(m(ipc.forkSession)).toHaveBeenCalledWith("src-1");
+    const s = useStore.getState();
+    expect(s.sessions.map((x) => x.id)).toContain("fork-1");
+    expect(s.selectedId).toBe("fork-1");
+    expect(s.sessions.find((x) => x.id === "fork-1")?.forkedFrom).toBe("src-1");
+  });
+
+  it("returns false and adds nothing when the fork spawn fails", async () => {
+    useStore.setState({ sessions: [], selectedId: null, view: "overview" });
+    m(ipc.forkSession).mockRejectedValue(new Error("boom"));
+
+    const ok = await useStore.getState().forkSession("src-1");
+
+    expect(ok).toBe(false);
+    expect(useStore.getState().sessions).toHaveLength(0);
   });
 });

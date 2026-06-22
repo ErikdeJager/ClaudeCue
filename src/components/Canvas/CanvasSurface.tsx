@@ -1,6 +1,6 @@
 import { type ReactElement, useEffect } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import { Copy, ExternalLink, X } from "lucide-react";
+import { Copy, ExternalLink, GitFork, X } from "lucide-react";
 import { Group, type Layout, Panel, Separator } from "react-resizable-panels";
 
 import { useSessionOwners } from "../../ownership";
@@ -83,6 +83,7 @@ function LeafPanel({
   const activeLeafId = useStore((s) => s.activeLeafId);
   const setActiveLeaf = useStore((s) => s.setActiveLeaf);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
+  const forkSession = useStore((s) => s.forkSession);
   const setLeafFile = useStore((s) => s.setLeafFile);
   const owners = useSessionOwners();
   const isActive = leaf.id === activeLeafId;
@@ -198,8 +199,24 @@ function LeafPanel({
           {content.kind === "agent" && session?.worktreeParent && (
             <span className={styles.worktreeBadge}>worktree</span>
           )}
+          {/* A fork (#126) shares the source's auto-title — a badge distinguishes them. */}
+          {content.kind === "agent" && session?.forkedFrom && (
+            <span className={styles.worktreeBadge}>fork</span>
+          )}
         </span>
         <span className={styles.panelActions}>
+          {/* Fork the conversation into a new parallel session (#126) — agents only. */}
+          {content.kind === "agent" && session && (
+            <button
+              type="button"
+              className={styles.panelClose}
+              onClick={() => void forkSession(session.id)}
+              title="Fork conversation into a new parallel session"
+              aria-label="Fork conversation"
+            >
+              <GitFork size={14} strokeWidth={1.5} />
+            </button>
+          )}
           {/* Copy `claude --resume <id>` (#28) — agents only, re-homed here
               post-Focus (#86). Non-agent panels have no resumable session. */}
           {content.kind === "agent" && session && (

@@ -40,7 +40,9 @@ even though it works in `tauri dev`.
 - **Spawn:** `spawn_session(cwd, name)` → `SessionManager` (`pty.rs`) opens a PTY
   running `claude --session-id <uuid>`, registers it by id, and persists a record
   (`store.rs`). A per-session reader thread pushes output to a bounded scrollback
-  buffer and an `mpsc` channel.
+  buffer and an `mpsc` channel. A **fork** (#126, `fork_session`) is a spawn variant
+  that branches a source agent's conversation into a new parallel session
+  (`--session-id <new> --resume <source> --fork-session`) — see Conventions.
 - **Output:** `lib.rs` forwards the channel to the `session://output` /
   `session://exited` / `session://state` Tauri events. The frontend `ipc.ts`
   subscription routes output **bytes** to `outputBus.ts` (a pub/sub the xterm
@@ -376,10 +378,17 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   `claude [options] [command] [prompt]` — a positional prompt that starts the
   interactive session with it sent. If a future `claude` version changes these
   flags, update `pty.rs` (`spawn_session` / `spawn_session_with_prompt` /
-  `resume_session`) and note it here. Since **#101** these spawn/resume paths resolve
-  a pluggable **`AgentSpec`** (`agents.rs`) keyed by each record's stored `agent`
-  (serde-default `"claude"`) rather than hardcoding the binary — claude remains the
-  only agent and its flags are unchanged.
+  `resume_session` / `fork_session`) and note it here. Since **#101** these
+  spawn/resume paths resolve a pluggable **`AgentSpec`** (`agents.rs`) keyed by each
+  record's stored `agent` (serde-default `"claude"`) rather than hardcoding the binary
+  — claude remains the only agent and its flags are unchanged. A **fork** (#126)
+  branches a source agent's conversation into a **new parallel session**:
+  `claude --session-id <new> --resume <source> --fork-session` (`AgentSpec::fork_args`
+  / `pty.rs fork_session` / the `fork_session` command), **verified** against claude
+  2.1.176 (all three flags parse together; the source's on-disk log is read at spawn
+  time, leaving the source untouched). The fork is a normal tracked session with its
+  own app-owned UUID + a serde-default `forked_from` (provenance + the "fork" badge),
+  spawned non-seeded like a resume (so it stays gray until first input, #116).
 - **Exit handling (#63):** the discriminator is the exit code (`store.ts`
   `onExited` / the pure `isCleanExit`). A **clean exit — `claude` exits code 0
   while running** (the user ended the agent) is forgotten like _Remove_:

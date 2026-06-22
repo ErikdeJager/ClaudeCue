@@ -62,6 +62,21 @@ impl AgentSpec {
     pub fn resume_args(&self, session_id: &str) -> Vec<String> {
         vec!["--resume".to_string(), session_id.to_string()]
     }
+
+    /// CLI args to **fork** `source_id`'s conversation into a brand-new session under
+    /// `new_id` (#126) — a resume variant, so only meaningful when `supports_resume`.
+    /// Claude: `claude --session-id <new> --resume <source> --fork-session` (verified
+    /// against claude 2.1.176 — all three flags parse together; the source's on-disk
+    /// log is read at spawn time, leaving the source session untouched).
+    pub fn fork_args(&self, new_id: &str, source_id: &str) -> Vec<String> {
+        vec![
+            "--session-id".to_string(),
+            new_id.to_string(),
+            "--resume".to_string(),
+            source_id.to_string(),
+            "--fork-session".to_string(),
+        ]
+    }
 }
 
 /// The Claude Code spec — today's exact behavior.
@@ -100,6 +115,17 @@ mod tests {
             vec!["--session-id", "abc"]
         );
         assert_eq!(spec.resume_args("abc"), vec!["--resume", "abc"]);
+        // Fork (#126): a new session id resuming the source with --fork-session.
+        assert_eq!(
+            spec.fork_args("new-id", "src-id"),
+            vec![
+                "--session-id",
+                "new-id",
+                "--resume",
+                "src-id",
+                "--fork-session"
+            ]
+        );
     }
 
     #[test]

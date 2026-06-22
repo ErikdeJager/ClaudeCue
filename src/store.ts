@@ -5,6 +5,7 @@
 import { create } from "zustand";
 
 import {
+  appendLeaf,
   collectLeaves,
   setLeafContent,
   spatialNeighbor,
@@ -92,6 +93,7 @@ function toSessionView(record: SessionRecord): SessionView {
     autoName: record.auto_name ?? null,
     hasBeenActive: record.has_been_active ?? false,
     agent: record.agent ?? "claude",
+    forkedFrom: record.forked_from ?? null,
   };
 }
 
@@ -605,6 +607,10 @@ export interface AppState {
   /** Resume a crashed / boot-failed agent's PTY; resolves true on success so the
    * caller can reset the pooled terminal (#63). */
   restartSession: (id: string) => Promise<boolean>;
+  /** Fork a source agent's conversation into a new parallel session (#126): spawn the
+   * fork, add + **select** it, and **surface** it (a new Canvas panel when in Canvas);
+   * the source keeps running untouched. Resolves true on success. */
+  forkSession: (sourceId: string) => Promise<boolean>;
   /** Forget a cleanly-exited (code 0) agent (#63): drop it from the store and its
    * persisted record (kill + forget, like Remove) so it vanishes from
    * Focus/Overview/sidebar and won't return on next boot; shows a brief toast. */
@@ -1879,6 +1885,49 @@ export const useStore = create<AppState>()((set, get) => ({
       }
       get().pushToast(
         isSessionError(err) ? err.message : "Could not restart session",
+        "error",
+      );
+      return false;
+    }
+  },
+
+  forkSession: async (sourceId) => {
+    try {
+      const record = await ipc.forkSession(sourceId);
+      const view = toSessionView(record);
+      get().upsertSession(view);
+      get().select(record.id);
+      // Surface it where the user is (#126): in Canvas, add the fork as an agent panel
+      // to the active tab (empty canvas → first panel; else append) so they can type
+      // immediately. In Overview the selected card already shows in the repo cluster.
+      if (get().view === "canvas") {
+        const content: CanvasContent = {
+          kind: "agent",
+          sessionId: record.id,
+          repoPath: record.repo_path,
+        };
+        const { canvases, activeCanvasId } = get();
+        const layout =
+          canvases.find((c) => c.id === activeCanvasId)?.layout ?? null;
+        get().setActiveCanvasLayout(
+          layout
+            ? appendLeaf(
+                layout,
+                content,
+                crypto.randomUUID(),
+                crypto.randomUUID(),
+              )
+            : { type: "leaf", id: crypto.randomUUID(), content },
+        );
+      }
+      get().pushToast("Forked conversation");
+      return true;
+    } catch (err) {
+      if (isSessionError(err) && err.kind === "BinaryNotFound") {
+        get().setClaudeMissing(true);
+      }
+      get().pushToast(
+        isSessionError(err) ? err.message : "Could not fork conversation",
         "error",
       );
       return false;

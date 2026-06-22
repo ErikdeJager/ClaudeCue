@@ -58,6 +58,12 @@ pub struct PersistedSession {
     /// resumes / behaves with the CLI it was started with.
     #[serde(default = "default_agent")]
     pub agent: String,
+    /// The source session this was forked from (#126): a fork branches the source's
+    /// conversation into a new parallel session, sharing its auto-title — this records
+    /// the provenance and drives the "fork" badge. `default` (None) for non-fork /
+    /// older records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forked_from: Option<String>,
 }
 
 /// A user-added Overview panel (a non-agent column), persisted per repo (#38).
@@ -507,6 +513,7 @@ mod tests {
             auto_name: None,
             has_been_active: false,
             agent: default_agent(),
+            forked_from: None,
         }
     }
 

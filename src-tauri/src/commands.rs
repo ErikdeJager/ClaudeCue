@@ -92,6 +92,7 @@ pub fn spawn_session(
         auto_name: None,
         has_been_active: false,
         agent,
+        forked_from: None,
     };
     store
         .add_session(record.clone())
@@ -148,6 +149,7 @@ pub fn spawn_worktree_agent(
         auto_name: None,
         has_been_active: false,
         agent,
+        forked_from: None,
     };
     store
         .add_session(record.clone())
@@ -183,6 +185,7 @@ pub fn spawn_worktree_agent_new_branch(
         auto_name: None,
         has_been_active: false,
         agent,
+        forked_from: None,
     };
     store
         .add_session(record.clone())
@@ -233,6 +236,49 @@ pub fn resume_session(
         record.name.clone(),
         &record.agent,
     )?;
+    Ok(record)
+}
+
+/// Fork a source agent's conversation into a **new parallel session** (#126). Looks
+/// up the source's persisted record for its folder / agent / worktree, spawns the
+/// fork (`claude --session-id <new> --resume <source> --fork-session`), and persists a
+/// new `PersistedSession` carrying an app-owned id + `forked_from = <source>`. The
+/// source session is left untouched (the fork has its own id). The fork inherits the
+/// source's `repo_path` + `worktree_parent` (same cwd / worktree). A source with no
+/// conversation yet makes the fork exit non-zero (the standard Restart overlay, #63).
+#[tauri::command]
+pub fn fork_session(
+    manager: State<'_, SessionManager>,
+    store: State<'_, Store>,
+    source_id: String,
+) -> Result<PersistedSession, SessionError> {
+    let source = store
+        .session(&source_id)
+        .ok_or_else(|| SessionError::SessionNotFound(source_id.clone()))?;
+    let info = manager.fork_session(
+        &source.claude_session_id,
+        &source.repo_path,
+        None,
+        &source.agent,
+    )?;
+    let record = PersistedSession {
+        id: info.id.clone(),
+        claude_session_id: info.id,
+        repo_path: source.repo_path.clone(),
+        name: None,
+        created_at: now_secs(),
+        worktree_parent: source.worktree_parent.clone(),
+        auto_name: None,
+        has_been_active: false,
+        agent: source.agent.clone(),
+        forked_from: Some(source_id),
+    };
+    store
+        .add_session(record.clone())
+        .map_err(|e| SessionError::Io(e.to_string()))?;
+    store
+        .touch_recent(&source.repo_path)
+        .map_err(|e| SessionError::Io(e.to_string()))?;
     Ok(record)
 }
 
@@ -674,6 +720,7 @@ pub fn fire_due_schedules(app: &AppHandle) {
                     auto_name: None,
                     has_been_active: false,
                     agent: sched.agent.clone(),
+                    forked_from: None,
                 };
                 let _ = store.add_session(record.clone());
                 let _ = store.touch_recent(&sched.cwd);

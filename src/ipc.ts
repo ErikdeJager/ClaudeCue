@@ -62,6 +62,12 @@ export const removeWorktree = (parent: string, dest: string, force: boolean) =>
 export const resumeSession = (id: string) =>
   invoke<SessionRecord>("resume_session", { id });
 
+/** Fork `sourceId`'s conversation into a new parallel `claude` session (#126) —
+ * `claude --session-id <new> --resume <source> --fork-session`. Returns the new
+ * persisted record (app-owned id, `forked_from = sourceId`); the source is untouched. */
+export const forkSession = (sourceId: string) =>
+  invoke<SessionRecord>("fork_session", { sourceId });
+
 export const writeStdin = (id: string, data: string) =>
   invoke<void>("write_stdin", { id, data });
 

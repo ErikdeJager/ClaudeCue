@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
-import { Clock, Copy, GripVertical, X } from "lucide-react";
+import { Clock, Copy, GitFork, GripVertical, X } from "lucide-react";
 import {
   closestCenter,
   DndContext,
@@ -130,6 +130,7 @@ interface SessionCardProps {
   ownerLabel?: string;
   onSelect: () => void;
   onCopyResume: () => void;
+  onFork: () => void;
   onRemove: () => void;
 }
 
@@ -145,6 +146,7 @@ function SessionCard({
   ownerLabel,
   onSelect,
   onCopyResume,
+  onFork,
   onRemove,
 }: SessionCardProps) {
   // Agent label (#95): a single line showing only the primary — the custom name if
@@ -167,10 +169,22 @@ function SessionCard({
       {session.worktreeParent && (
         <span className={styles.worktreeBadge}>worktree</span>
       )}
+      {/* A fork (#126) shares the source's auto-title, so a badge distinguishes them. */}
+      {session.forkedFrom && <span className={styles.worktreeBadge}>fork</span>}
     </span>
   );
   const actions = (
     <>
+      {/* Fork the conversation into a new parallel session (#126). */}
+      <button
+        type="button"
+        className={styles.action}
+        onClick={onFork}
+        title="Fork conversation into a new parallel session"
+        aria-label="Fork conversation"
+      >
+        <GitFork size={15} strokeWidth={1.5} />
+      </button>
       {/* Copy `claude --resume <id>` (#28) — re-homed here post-Focus (#86). */}
       <button
         type="button"
@@ -389,6 +403,7 @@ function Overview() {
   const select = useStore((s) => s.select);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
   const removeSession = useStore((s) => s.removeSession);
+  const forkSession = useStore((s) => s.forkSession);
   const openNewSession = useStore((s) => s.openNewSession);
   const filter = useStore((s) => s.overviewRepoFilter);
   const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
@@ -584,6 +599,7 @@ function Overview() {
                             "resume command",
                           )
                         }
+                        onFork={() => void forkSession(session.id)}
                         onRemove={() => void removeSession(session.id)}
                       />
                     );

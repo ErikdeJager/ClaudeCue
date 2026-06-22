@@ -122,6 +122,7 @@ pub fn run() {
             commands::spawn_worktree_agent,
             commands::remove_worktree,
             commands::resume_session,
+            commands::fork_session,
             commands::write_stdin,
             commands::resize_pty,
             commands::kill_session,

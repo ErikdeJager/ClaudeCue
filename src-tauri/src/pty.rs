@@ -287,6 +287,27 @@ impl SessionManager {
         )
     }
 
+    /// Fork `source_session_id`'s conversation into a **new** parallel session (#126):
+    /// generate a fresh app-owned UUID, build the fork args via the agent spec (Claude:
+    /// `--session-id <new> --resume <source> --fork-session`), and spawn it. Like
+    /// `resume_session` it's non-seeded (it reopens the source's persisted log; it
+    /// doesn't re-run a prompt), so per #116 the fork stays gray until first input. The
+    /// source session is left completely untouched (the fork carries its own id).
+    /// Returns the new session's info (its `id` is the new UUID).
+    pub fn fork_session(
+        &self,
+        source_session_id: &str,
+        cwd: impl AsRef<Path>,
+        name: Option<String>,
+        agent: &str,
+    ) -> Result<SessionInfo, SessionError> {
+        let id = Uuid::new_v4().to_string();
+        let spec = crate::agents::agent_spec(agent);
+        let args = spec.fork_args(&id, source_session_id);
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.spawn_with_id(id, spec.binary_name, &arg_refs, cwd.as_ref(), name, false)
+    }
+
     /// Spawn the user's `$SHELL` (fallback `/bin/zsh`) in `cwd` under a
     /// caller-chosen id — a plain interactive **terminal item** (#72), not a
     /// `claude` agent. The PTY plumbing (reader thread, scrollback, events,
