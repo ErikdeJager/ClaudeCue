@@ -25,9 +25,11 @@ chrome, navigation, persistence, and read-only git reading; the terminals come f
   (labelled by your custom name, else `claude`'s own session title, else the branch),
   from persisted recents so repos stay listed with no active session; isolated
   **worktree agents** nest under their parent repo, and each repo is marked by a small
-  repo-colored cube. Right-click a repo (new session, a **Views** section to add
-  viewers, change color, **kill all agents** / **close all items**, forget) or an agent
-  (**rename**, remove). Drag the sidebar's right edge to resize it.
+  repo-colored folder. Right-click a repo (new session, a **Views** section to add
+  viewers, **reveal in Finder** / **copy path**, change color, **kill all agents** /
+  **close all items**, forget), an agent (**rename**, **fork**, **copy session ID**,
+  remove), or any file / diff / terminal / schedule row (**remove**). Drag the
+  sidebar's right edge to resize it.
 - **Schedule sessions** — **⌘⇧N** (or the sidebar's **Schedule session** button) queues
   an agent to launch later at a set time, optionally pre-seeded with a prompt (which has
   **slash-command autocomplete**) and a branch — including a **new branch** created when

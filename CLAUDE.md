@@ -114,23 +114,29 @@ even though it works in `tauri dev`.
   Overview↔Canvas); the hover × removes the item (and its Overview column); every row
   (session / file / diff / terminal) is a dnd-kit **draggable source** that drops into
   the active Canvas (#47/#59 — agents → terminal, files → file viewer, diffs → diff
-  panel; new item types are draggable by default via a `payloadToContent` case). The
+  panel; new item types are draggable by default via a `payloadToContent` case). Every
+  row also has a **right-click context menu**: the agent row offers **Rename** /
+  **Fork conversation** / **Copy session ID** / **Remove** (#57/#131), and the
+  file/diff/terminal/scheduled rows a single **Remove** (or **Cancel** for a schedule)
+  item via a shared `RowContextMenu` (#132). The
   repo's context menu (#54) offers **New session** (which — like the inline per-repo
   **+** — runs `startRepoSession` (#127), **skipping the folder step**: a git folder
   opens the modal straight at the branch step, a non-git folder spawns with no modal;
   the global ⌘N / button keeps the folder step), a **Views** section to add
-  file/diff/terminal panels (#82), repo color (#35), and destructive actions —
+  file/diff/terminal panels (#82), non-destructive **Reveal in Finder** / **Copy path**
+  utilities (#130 — `reveal_path` shells out to macOS `open`, no shell), repo color
+  (#35), and destructive actions —
   **Kill all agents** / **Close all items** (#91) and **Forget folder** (#31), the
   latter two also tearing down the folder's non-agent items (killing their PTYs) and
   pending schedules (#106); each destructive step is confirm-gated unless turned off
   in Settings (#103). Each repo header carries a **static, non-interactive
-  repo-colored cube** marker (the Lucide `Box` icon, tinted via `repoColor`) before
-  the repo name, occupying the activity-dot slot (#95); the name still filters
+  repo-colored folder** marker (the Lucide `Folder` icon, tinted via `repoColor`, #128)
+  before the repo name, occupying the activity-dot slot (#95); the name still filters
   Overview (#34). _(#113 made folders collapsible with a repo-colored disclosure
   triangle + a persisted `collapsed_repos`; **#115 reverted that** at the user's
   request — folders are non-collapsible again, all child rows always render, and the
-  triangle was replaced by the cube.)_ Every tree-row label renders at a uniform
-  compact 10px (`--fs-meta-xs`, #111).
+  triangle became a cube, which **#128** then swapped for the folder icon.)_ Every
+  tree-row label renders at a uniform compact 10px (`--fs-meta-xs`, #111).
 - **Canvas (#46/#47/#58):** a third view — **multiple named tabs** (#58), each its
   own recursive **BSP split-panel** layout (a binary tree `split{dir,a,b,sizes}` /
   `leaf{id,content}`; pure ops in `Canvas/canvasTree.ts`). The tabs (`canvases` =
@@ -454,7 +460,7 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
 
 ## Tasks
 
-Work is tracked in `TASKS.md`. **#1–#113 have shipped — the backlog is fully
+Work is tracked in `TASKS.md`. **#1–#132 have shipped — the backlog is fully
 implemented, with no open tasks.** Completed tasks are condensed into an **Implemented
 (completed tasks)** summary at the top (one line each, grouped by theme), with full
 per-task detail in git history; the `## Tasks` body holds any open tasks (currently
