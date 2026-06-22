@@ -44,7 +44,7 @@ agents (#74). `claude` is assumed on `PATH` (clear in-app error if missing).
 
 ## Implemented (completed tasks)
 
-> The backlog has fully shipped (#1–#109).
+> The backlog has fully shipped (#1–#113).
 > Completed tasks are condensed here — number, title, and one line
 > on what each delivered — and their full entries removed from the list below; per-task
 > detail (subtasks, notes, acceptance, implementation reports) lives in git history.
@@ -269,6 +269,22 @@ an Overview wall, a Focus view with a git-diff inspector, and a repo-grouped sid
 
 - #109 Made `http`/`https` URLs printed in terminals **⌘-clickable** to open in the user's **default browser** — both agent `claude` PTYs **and** plain shell terminal panels (#72), since the single persistent terminal pool (`terminalPool.ts`) owns them all, so the change is one addition in `createHost()`. Loads a `WebLinksAddon` (`@xterm/addon-web-links`) whose custom `activate` handler opens **only on a ⌘-click** (`event.metaKey`) — a plain click is left to the terminal/TUI (drag-to-select, `claude`'s own mouse handling) — routing through a new **dependency-free** Rust `open_url(url)` command (registered in `lib.rs`, typed IPC `openUrl`) that **rejects any non-`http`/`https` scheme** and shells out to macOS `open <url>` **without a shell** (no injection), mirroring the `open_data_folder` precedent (no opener/shell plugin, no new capability). Only `http`/`https` is linkified (bare `host:port`, `file://`, `mailto:`, other schemes are out of scope); the scheme check (`is_http_url`) is unit-tested. Hover/⌘-click runtime behavior is best-effort (xterm rendering isn't unit-testable).
 
+**Fix: a closed file viewer no longer resurrects on boot (#110).**
+
+- #110 Made the #59 legacy `open_files` → `overview_panels` fold-in **one-shot and non-resurrecting**: boot no longer re-folds `open_files` (every real install migrated long ago) and instead **clears** the stale map (main-window only), so a closed/forgotten file viewer (e.g. a stuck `CLAUDE.md`) is gone on the next launch and never returns. Added the missing typed `setOpenFiles` IPC wrapper (the Rust `set_open_files` command already existed) to empty each repo's entry once. Closing a panel and Forget-folder now stick across restarts; `overview_panels` persistence is untouched.
+
+**Compact sidebar — uniform 10px tree rows (#111).**
+
+- #111 Dropped **every** sidebar tree-row label to a uniform **10px** via a new `--fs-meta-xs` token (`tokens.css`): the agent label `.rowPrimary` + rename editor, the repo header name `.repoName` + agent `.count`, and the file/diff/terminal/scheduled **item** row labels — so the left panel reads at one compact, consistent size. **Font-size only** (padding/heights/gaps and the busy-indicator slot #95 unchanged); non-row chrome (New/Schedule buttons, footer gear, context menus, section headers) untouched. Targeted class changes, not a blanket `--fs-meta-sm` swap. Pure CSS.
+
+**Activity indicator — a third "finished / needs input" state (#112).**
+
+- #112 Gave the `BusyIndicator` (#42/#55/#71/#88/#95) a **third state**: gray `--status-idle` (fresh / never-active) → blue shimmer (working) → solid **yellow** `--status-awaiting` dot with a soft glow and **no animation** ("finished — needs input") once an agent has been active and gone idle, leaving only when it goes busy again. Backed by a **persisted** `has_been_active` flag (`PersistedSession` + a persist-once `mark_session_active`, set on the first `busy==true` edge in `lib.rs`; threaded Rust → IPC → TS `hasBeenActive` and seeded into the store on load + set live in `setBusy`) so a previously-active agent shows yellow immediately on boot. Rendered in the sidebar rows + Overview cards in the same fixed 14px slot (no layout shift); reduce-motion → solid dots. Narrows the v1 "no awaiting-glow" rule the way #42 narrowed "no status system" (a third color on the dot, not an approval pill).
+
+**Collapsible sidebar folders — a repo-color disclosure triangle (#113).**
+
+- #113 Made sidebar **folders collapsible**, replacing the 8px repo-color circle (`.repoDot`, #35) with a **repo-colored disclosure triangle** (▶ collapsed / ▼ expanded, a `clip-path` shape so the inline `background: repoColor` still colors it, rotated via an `.expanded` modifier; sized to the `BusyIndicator` footprint #95). The header now carries **two independent controls** — its own toggle button collapses the folder (hiding **all** child rows: sessions, nested worktree agents #74, and file/diff/terminal/scheduled items, header + count kept) with `aria-expanded`, while the repo name **still filters Overview** (#34/#68, unchanged). Reverses the non-collapsible part of #34. State **persists** via a dedicated Rust `collapsed_repos` value (`get_collapsed_repos` / `set_collapsed_repos`, IPC + store `collapsedRepos` / `toggleRepoCollapsed`), separate from the Settings blob (mirroring #108). No change to Overview/Canvas or pooled terminals.
+
 ---
 
 ## Design reference (dark theme only)
@@ -305,9 +321,9 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#109 are complete — see **Implemented (completed tasks)** above for the index,
-and git history for full per-task detail. Open tasks are listed below. New work goes
-here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
+Tasks #1–#113 are complete — see **Implemented (completed tasks)** above for the index,
+and git history for full per-task detail. **There are currently no open tasks.** New work
+goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
 > **Implementing tasks — never skip one.** The agent implementing this backlog
@@ -321,381 +337,145 @@ its `Depends on:` prerequisites.
 
 ---
 
-### 110. [x] Fix: a closed/forgotten file viewer reopens on every launch (stale legacy `open_files` resurrected each boot)
+### 114. [ ] Slash-command skill autocomplete in the scheduled-session prompt field
 
-**Status:** Complete
-**Depends on:** none
-**Created:** 2026-06-21
-
-**Description**
-
-A specific markdown file viewer (`CLAUDE.md`) reopens on **every** app launch. Closing
-its panel — and even using **Forget folder** on the whole repo — doesn't stop it; it
-returns on the next startup.
-
-Root cause (verified against the code and the user's on-disk `sessions.json`):
-
-- The #59 migration that folds the **legacy** per-repo `open_files` map (#45) into
-  `overviewPanels` as markdown panels runs in `store.ts` `refresh()` on **every** boot
-  (the `mergedPanels` fold-in loop), not once.
-- `open_files` is effectively **write-once, read-only from the frontend**: `src/ipc.ts`
-  exposes only `listOpenFiles` (read). There is **no `setOpenFiles` wrapper**, even
-  though the Rust command `set_open_files` exists and is registered (`commands.rs` →
-  `store.rs`, wired in `lib.rs`). So no frontend action ever clears `open_files`.
-- Closing a panel (`removeOverviewPanel`) and Forget-folder / Close-all-items
-  (`closeRepoItems`, `forgetRepo`) both clear `overviewPanels` but never touch
-  `open_files`.
-- Net effect: each boot the migration sees the file still in `open_files`, notices it's
-  absent from `overviewPanels`, and **re-creates it as a fresh markdown panel** (new
-  UUID) — forever.
-
-The user's `sessions.json` confirms the stuck entry:
-`open_files = { "/Users/erikdejager/repos/ClaudeCue": ["CLAUDE.md"] }`.
-
-**Fix (decided):** make the legacy `open_files` migration **one-shot and
-non-resurrecting**. On boot, **stop folding `open_files` into `overviewPanels`** (every
-real install has long since migrated and persisted its panels) and **clear the legacy
-`open_files` map** so the stale data is permanently removed. Result: the file is gone on
-the **very next launch** and never returns; closing a panel or forgetting a folder now
-sticks.
-
-Out of scope: how panels themselves persist (`overview_panels` unchanged); fully removing
-the legacy `open_files` field / `list_open_files` command from the backend (left in
-place — emptied — as a follow-up).
-
-**Subtasks**
-
-1. [x] Add a typed `setOpenFiles(path, files)` wrapper in `src/ipc.ts` mapping to the
-   existing `set_open_files` Rust command (already registered in `lib.rs`).
-2. [x] In `store.ts` `refresh()`, remove the `open_files → overviewPanels` fold-in (the
-   `mergedPanels` resurrection loop) so `overviewPanels` loads from persisted panels
-   only — nothing is re-added from `open_files`.
-3. [x] After loading, **main-window only** (mirroring the old migration's
-   `IS_MAIN_WINDOW` guard), clear every legacy entry: for each repo in `listOpenFiles()`,
-   call `ipc.setOpenFiles(repo, [])` so `sessions.json`'s `open_files` empties once and
-   stays empty (the Rust setter drops empty keys).
-4. [x] Confirm no other path depends on the fold-in; verify closing a panel and
-   Forget-folder now leave nothing behind that can resurrect an item.
-5. [x] Tests: keep the Rust `open_files_set_and_persist` test green; add/extend a Vitest
-   store test for "boot does not resurrect a closed file and empties `open_files`" if the
-   harness can mock the IPC layer.
-
-**Acceptance criteria**
-
-- [x] Launching the app no longer auto-opens `CLAUDE.md` (or any previously-closed/
-      forgotten file viewer); it does not reappear across restarts.
-- [x] Closing a file/markdown panel (×) and relaunching: it stays closed.
-- [x] Forget-folder on a repo and relaunching: none of its file viewers reappear.
-- [x] After one launch with the fix, `sessions.json`'s `open_files` is empty (the stuck
-      `{ ClaudeCue: ["CLAUDE.md"] }` entry is gone).
-- [x] No regression to `overview_panels` persistence: panels kept open still persist and
-      restore.
-- [x] `npm run build`, `npm run lint`, `npm test`, and the Rust build / `cargo test` /
-      clippy all pass.
-
-**Notes**
-
-- Decision: "gone on next launch, not re-added" (vs. honoring the legacy entry one final
-  time). Safe because the #59 fold has demonstrably already run for any real install (the
-  file has reappeared for several updates), so dropping it loses nothing the user wants.
-- Verified anchors: `src/store.ts` (`refresh()` `mergedPanels` loop, `closeRepoItems`,
-  `removeOverviewPanel`); `src/ipc.ts` (`listOpenFiles`, no setter);
-  `src-tauri/src/commands.rs` (`list_open_files` / `set_open_files`);
-  `src-tauri/src/store.rs` (`open_files` / `set_open_files`); `src-tauri/src/lib.rs`
-  (both registered).
-- Follow-up (not this task): fully retire the legacy `open_files` field +
-  `list_open_files` / `set_open_files` commands once confirmed empty in the wild.
-
----
-
-### 111. [x] Compact sidebar — unify every tree-row label to 10px (font size only)
-
-**Status:** Complete
-**Depends on:** none
-**Created:** 2026-06-21
+**Status:** Not started
+**Owner:** _(unassigned)_
+**Depends on:** none · _(builds on shipped scheduled sessions #93/#94 and the read-only file/picker patterns #44/#56 — all complete)_
+**Created:** 2026-06-22
 
 **Description**
 
-The left sidebar's agent rows render **larger** than the rows beneath them, which looks
-bulky and inconsistent: the agent label `.rowPrimary` (`src/components/Sidebar/Sidebar.module.css`)
-is `--fs-meta` (12px), the repo header name `.repoName` is also `--fs-meta` (12px), while
-the file / diff / terminal / scheduled **item** rows are already `--fs-meta-sm` (11px).
+The scheduled-session **prompt** field should help the user write a prompt that
+starts with a slash command, the way typing into a real `claude` session does.
+When the user types **`/`** at the start of the prompt (or at the start of a new
+word), a **small dropdown** should appear listing the **skills** available to
+`claude`, filtering as the user keeps typing, so they can pick one and have
+`/<skill-name>` inserted — instead of guessing the exact name.
 
-Make the whole sidebar tree **more compact and uniform** by dropping **every tree-row label
-to 10px** — agents included — so the left panel reads at one consistent, smaller size. This
-is a **font-size-only** change (per the user): row padding, heights, gaps, and the
-busy-indicator slot (#95) all stay exactly as they are, and **non-row chrome** (the New
-session / Schedule buttons, the footer gear row, context menus, section headers) is
-untouched.
+This matters because a scheduled session boots `claude` **pre-seeded with this
+prompt** (the positional `claude --session-id <id> "<prompt>"` invocation, #93),
+so a prompt like `/deep-research ...` will actually run that skill on launch — but
+today the user has to type the skill name blind, with no discovery and no
+guard against typos.
 
-The smallest existing font token is `--fs-meta-sm` (11px), so add a new **`--fs-meta-xs:
-10px`** token (`src/styles/tokens.css`, font-size group) and point the sidebar row labels at
-it — staying on-system (token-driven) rather than hardcoding 10px.
+**Where the field lives.** A scheduled session's prompt is editable in **two**
+places, both of which must get the autocomplete (they edit the same field):
 
-**Labels that move to 10px** (all classes in `Sidebar.module.css`):
-- Agent / session label `.rowPrimary`, plus the inline rename editor `.renameInput` (so the
-  text doesn't jump size when you start renaming).
-- The file / diff / terminal / scheduled **item** row label text (currently `--fs-meta-sm`).
-- The repo header name `.repoName` and the agent `.count` (so "all rows" are uniform).
+1. **`NewSessionModal`** schedule step — the `promptInput` textarea
+   (`src/components/NewSessionModal/NewSessionModal.tsx`, ~lines 698–706) where a
+   schedule is created.
+2. **`ScheduledPanel`** — the auto-saving `prompt` textarea
+   (`src/components/ScheduledPanel/ScheduledPanel.tsx`, ~lines 124–136) shown as a
+   sidebar row / Overview card / Canvas panel (#94) where a pending schedule is
+   edited. Auto-save (debounced `update_schedule`) must keep working when the
+   component inserts text programmatically (fire the same change path the textarea
+   `onChange` does).
 
-**Out of scope:** any padding / height / gap change; the Overview and Canvas agent labels
-(this is the **left panel only**); the busy indicator; and any non-row sidebar chrome.
+Build this as **one reusable component** (e.g. `SkillAutocomplete`, a textarea +
+dropdown with its own CSS Module consuming `tokens.css`) used by both call sites,
+rather than duplicating the logic.
 
-**Subtasks**
+**What "skills" means / where they come from.** Enumerate the slash-invokable
+items `claude` would offer, read from the standard on-disk directories — the same
+files `claude` itself reads:
 
-1. [x] Add `--fs-meta-xs: 10px` to the font-size group in `src/styles/tokens.css`.
-2. [x] Point the agent label `.rowPrimary` (and `.renameInput`) at `--fs-meta-xs`.
-3. [x] Point the file / diff / terminal / scheduled **item** row label text at `--fs-meta-xs`.
-4. [x] Point the repo header `.repoName` + `.count` at `--fs-meta-xs`.
-5. [x] Verify no padding / height / chrome changed; run build + lint + format.
+- **Project-scoped** (the schedule's `cwd`): `<cwd>/.claude/skills/*/SKILL.md`
+  (take `name` + `description` from the YAML frontmatter) and
+  `<cwd>/.claude/commands/**/*.md` (name from the file path; optional
+  `description` from frontmatter).
+- **User-scoped:** `~/.claude/skills/*/SKILL.md` and `~/.claude/commands/**/*.md`.
 
-**Acceptance criteria**
+Dedupe by name (project shadows user) and sort. Plugin / marketplace skills
+(under `~/.claude/plugins/…`, e.g. `qskill:*`, `supabase:*`, with enabled-state
+and namespacing complexity) are **out of scope for v1** — note them as a possible
+follow-up. This list is **best-effort**: a missing or unreadable directory simply
+yields fewer entries; the prompt field must never break or block when no skills
+are found (the dropdown just doesn't appear).
 
-- [x] Every sidebar tree-row label — repo header name, agent label, and file / diff /
-      terminal / scheduled item labels — renders at 10px.
-- [x] Row padding, heights, gaps, and the busy-indicator slot are unchanged (font size only).
-- [x] Non-row sidebar chrome (New session / Schedule buttons, footer, context menus, section
-      headers) is visually unchanged.
-- [x] A `--fs-meta-xs: 10px` token exists and the sidebar rows reference it — no hardcoded 10px.
-- [x] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass.
+**Trigger & interaction.**
 
-**Notes**
+- The dropdown opens when a `/` is typed in **command position** — at the very
+  start of the textarea, or immediately preceded by whitespace/newline — so a `/`
+  inside a path or URL (`src/foo`, `https://…`) does **not** trigger it.
+- As the user types after the `/`, filter the list case-insensitively
+  (substring on the skill name; description may also match). Closes when the
+  token ends (a space typed after it), on selection, on Escape, on blur, or when
+  there are no matches.
+- Keyboard: **↑/↓** move the highlight, **Enter** or **Tab** accept the
+  highlighted skill (replace the partial `/typed` token at the cursor with
+  `/<skill-name> ` and close), **Escape** dismisses without inserting. Clicking an
+  item accepts it.
+- **Container-key guard (important):** while the dropdown is open, Enter must
+  **not** submit the `NewSessionModal` form (it currently submits → creates the
+  schedule, see the form `onSubmit`), and Escape must **not** close the modal
+  (the modal binds Escape to close). The component must `preventDefault` /
+  `stopPropagation` for Enter/Escape/Tab/↑/↓ while the menu is open so those keys
+  drive the menu, not the surrounding modal/canvas.
 
-- From the user: "All sidebar rows should be roughly the same size … aim for 10px," font
-  size only. This broadened the original ask (just the agent custom title) to the whole tree.
-- **Targeted, not a global swap:** change only the named row-label classes — do **not**
-  blanket-replace `--fs-meta-sm`, which is also used by the footer / menus / section headers
-  that must stay their current size.
-- **Hierarchy note:** this flattens the repo header to the same 10px as its child rows. If
-  that reads too flat, the one-line fallback is to keep `.repoName` at `--fs-meta-sm` (11px)
-  and apply 10px to the leaf rows only — but the request was "all rows," so default to uniform.
-- 10px mono is intentionally small; `--fs-meta-sm` (11px) is the obvious fallback if 10px
-  reads too tight in practice.
-- Pure CSS / token change — no TS or Rust. **Depends on: none** (all touched code exists;
-  unrelated to #109 / #110).
-
----
-
-### 112. [x] Activity indicator — a third "finished / needs input" state (yellow), distinct from never-active gray
-
-**Status:** Complete
-**Depends on:** none
-**Created:** 2026-06-21
-
-**Description**
-
-Today the agent activity indicator (`BusyIndicator`, #42/#55/#71/#88/#95) has **two**
-states driven by one boolean `sessionBusy[id]`: a calm gray `--status-idle` dot (idle) and
-a blue `--status-running` dot with a sweeping shimmer (busy). There's no way to tell, at a
-glance on the agent wall, the difference between an agent that has **never done anything**
-and one that **just finished a turn and is now waiting for you** — both read as the same
-gray.
-
-Add a **third state** so the dot tells that story:
-
-- **Gray (fresh / never active)** — `--status-idle`, exactly as today. Shown from the
-  moment a session is created until its first activity.
-- **Blue (working)** — `--status-running` with the existing shimmer, unchanged.
-- **Yellow (finished / needs input)** — `--status-awaiting` (`#f9e2af`), a **solid dot
-  with a soft glow** (mirroring the busy dot's `box-shadow` glow), **no animation/shimmer**.
-  Shown once an agent has been active and has gone idle again.
-
-State machine per session: **gray → (first activity) → blue → (idle) → yellow → (active
-again) → blue → yellow → …**. Yellow never reverts to gray; only going busy again (blue)
-leaves it, and finishing returns it to yellow.
-
-**Trigger — "any activity" (decided):** a session leaves gray on its **first** busy=true
-transition (any activity, *not* gated on user input). claude prints a startup banner on
-spawn, which the busy heuristic counts as activity (`inp == 0` → any recent output counts,
-`pty.rs monitor_loop`), so in practice a brand-new agent shows gray only until its first
-output (sub-second), then blue, then yellow — the user accepted this tradeoff over an
-input-gated rule. Gray is therefore effectively the truly-fresh, no-output-yet moment.
-
-**Persist across restarts (decided):** "has been active" survives an app restart. A session
-that had been active in a previous run shows **yellow immediately on boot** (it resumes
-"reconnecting" → idle, not gray). This needs a persisted backend flag, not just frontend
-state.
-
-This deliberately extends the busy/idle indicator with an "awaiting" color — narrowing the
-v1 "no awaiting-glow" rule the same way #42 narrowed "no status system." It is **not** an
-approval pill / floating glow; it's a third color on the existing dot.
-
-**Scope:** the `BusyIndicator` component + its render sites (`Sidebar.tsx`,
-`Overview.tsx`), the store's activity tracking, and a new persisted `has_been_active` field
-threaded Rust → IPC → store. **Out of scope:** any "mark as seen / acknowledge" interaction
-(yellow clears only by the agent going busy again); a true "awaiting input" detection (we
-can't distinguish "finished" from "literally at an input prompt" — yellow means "was
-active, now idle", covering both); changing the busy heuristic itself; Canvas (the dot isn't
-rendered there today).
+**Styling.** Match the app's design system — `tokens.css` colors only (no
+off-system colors), the popover shadow used elsewhere, no layout shift, and the
+`prefers-reduced-motion` / `body.reduce-motion` killswitch respected. Follow the
+existing `FilePicker` (#56) popover/list patterns for look and keyboard feel.
 
 **Subtasks**
 
-1. [x] **Backend persisted flag.** Add `has_been_active: bool` (`#[serde(default)]`, default
-   false) to `PersistedSession` (`store.rs`); add a persist-once setter (e.g.
-   `mark_session_active(id)` that flips false→true and saves, no-op if already true).
-2. [x] **Set it on first busy.** In `lib.rs`'s `SessionEvent::State` handler, when
-   `busy == true`, call the setter so the flag is recorded the first time the session works.
-   (Idempotent — only the false→true write persists.)
-3. [x] **Thread to the frontend.** Add `has_been_active?: boolean` to TS `SessionRecord`,
-   `hasBeenActive?: boolean` to `SessionView`, and map it in the record→view conversion
-   (mirroring `auto_name` → `autoName`).
-4. [x] **Live store tracking.** Track "active at least once this session" in the store so
-   the dot turns yellow the instant a turn ends, without a reload: seed it from each
-   session's persisted `hasBeenActive` on load (`refresh`), and set it true in
-   `setBusy(id, true)`. Clear it with the other per-session state on session removal/forget
-   (alongside `sessionBusy`).
-5. [x] **Three-state component.** Give `BusyIndicator` a three-state input (e.g. a
-   `state: "fresh" | "busy" | "settled"` prop, or `busy` + `hasBeenActive` booleans it
-   derives from): busy → blue shimmer (unchanged); else has-been-active → yellow solid +
-   glow; else gray (unchanged). Update the `aria-label`/`title` per state ("Working…" /
-   "Finished — needs input" / "Idle").
-6. [x] **CSS.** Add a `.settled` (yellow) rule in `BusyIndicator.module.css`:
-   `--status-awaiting` fill + a soft `box-shadow` glow like `.busy::before`, **no `::after`
-   shimmer / no animation**. Keep the fixed 14px slot / 10px dot (#95) so there's still zero
-   layout shift between states.
-7. [x] **Wire the call sites.** Pass the new state at both usages — `Sidebar.tsx:201` and
-   `Overview.tsx:201` (SessionCard/SessionRow `busy={…}`) — from `sessionBusy` + the new
-   live flag.
-8. [x] Tests + checks: extend a store unit test for the gray→blue→yellow transition and that
-   yellow persists/seed-from-record works; keep Rust store tests green (add one for
-   `has_been_active` round-tripping). Run `npm run build`, `npm run lint`, `npm test`,
-   `npm run format:check`, and the Rust build / `cargo test` / clippy.
+1. [ ] **Backend skill enumeration.** Add `src-tauri/src/skills.rs` (mirroring
+   `files.rs`): scan the project + user `.claude/skills/*/SKILL.md` and
+   `.claude/commands/**/*.md`, parse frontmatter `name`/`description`, dedupe
+   (project over user), sort → `Vec<SkillInfo { name, description, source }>`. Add
+   a `list_skills(cwd)` Tauri command in `commands.rs`, register it in `lib.rs`
+   (`mod skills;` + the `invoke_handler` list), with Rust unit tests over a temp
+   dir.
+2. [ ] **IPC + types.** Add a typed `listSkills(cwd)` wrapper in `src/ipc.ts` and
+   a `SkillInfo` type in `src/types/`.
+3. [ ] **Reusable `SkillAutocomplete` component** (`src/components/…` + CSS
+   Module): textarea + dropdown implementing the `/`-trigger, filter, keyboard
+   nav, token insertion, and dismissal described above. Factor the pure logic
+   (detect the active `/token` + cursor, filter, compute the post-insert string +
+   caret) into testable helpers.
+4. [ ] **Wire into `NewSessionModal`** schedule step — replace the `promptInput`
+   textarea; load skills for the chosen `cwd`; implement the container-key guard
+   so the menu intercepts Enter/Escape.
+5. [ ] **Wire into `ScheduledPanel`** — replace the `prompt` textarea; preserve
+   the debounced auto-save on both typing and programmatic insert.
+6. [ ] **Tests** — Vitest over the pure filter/insert/trigger-detection helpers;
+   Rust unit tests over the skills scan.
 
 **Acceptance criteria**
 
-- [x] A newly created agent shows **gray** until its first activity, then **blue** while
-      working.
-- [x] When an agent that has worked goes idle, its dot is **yellow** (`--status-awaiting`),
-      not gray — a solid dot with a soft glow, no shimmer/animation.
-- [x] Sending a new message turns it **blue** again, and it returns to **yellow** when the
-      turn ends.
-- [x] **Yellow survives an app restart:** a previously-active session shows yellow right
-      after boot (reconnecting → idle), never reverting to gray.
-- [x] All three states appear consistently in both the **sidebar rows** and the **Overview
-      cards**; the dot's footprint (14px slot) never shifts between states.
-- [x] Under `prefers-reduced-motion` / Settings reduce-motion: blue stays a solid glowing
-      dot (as today) and yellow is likewise solid — both clearly distinct from gray.
-- [x] `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, and the Rust
-      build / `cargo test` / clippy all pass.
+- [ ] Typing `/` in command position in the schedule prompt (both in
+  `NewSessionModal`'s schedule step **and** `ScheduledPanel`) opens a small
+  dropdown listing the available skills.
+- [ ] Continuing to type filters the list; ↑/↓ move the highlight; Enter, Tab, or
+  a click inserts `/<skill-name> `; Escape dismisses the menu.
+- [ ] A `/` in the middle of a word/path/URL does **not** open the dropdown.
+- [ ] While the menu is open, Enter does **not** submit the new-schedule form and
+  Escape does **not** close the modal; with the menu closed they behave as today.
+- [ ] Skills are read from project `.claude/skills` (+ `.claude/commands`) and
+  user `~/.claude/…`, deduped (project shadows user) and sorted; a missing/empty
+  directory degrades gracefully (no dropdown, no error).
+- [ ] `ScheduledPanel`'s debounced auto-save still persists the prompt after an
+  autocomplete insertion.
+- [ ] No layout shift, no off-system colors, reduced-motion respected.
+- [ ] `npm run build`, `npm run lint`, `npm test`, `cargo test`, and
+  `npm run lint:rust` all pass.
 
 **Notes**
 
-- Decisions (from the user): third color = **yellow `--status-awaiting`** (reads as "needs
-  your input," vs. green "done"); **persist across restarts**; **solid dot + soft glow, no
-  animation**; trigger = **any activity, not input-gated**.
-- Reserved tokens already exist (`tokens.css`): `--status-awaiting #f9e2af`,
-  `--status-done #a6e3a1` — use awaiting.
-- "Needs input" is a semantic label, not a detection: the indicator means "was active, now
-  idle." If the sub-second gray flash on spawn (from claude's startup banner) ever bothers,
-  the one-line fallback is to **input-gate** the trigger — flip the flag only on a busy=true
-  transition where `last_input != 0` (the monitor already has `inp`) — keeping a
-  never-touched agent gray. Considered and declined for now.
-- Verified anchors: `src/components/BusyIndicator/BusyIndicator.tsx` + `.module.css`;
-  `src/store.ts` (`sessionBusy`, `setBusy`, `refresh`, per-session cleanup);
-  `src/components/Sidebar/Sidebar.tsx:201` + `Overview/Overview.tsx:201`;
-  `src/types/index.ts` (`SessionRecord`, `SessionView`); `src-tauri/src/store.rs`
-  (`PersistedSession`); `src-tauri/src/commands.rs` (`list_sessions`);
-  `src-tauri/src/lib.rs` (`SessionEvent::State` handler); `src-tauri/src/pty.rs`
-  (`monitor_loop`, the busy heuristic — unchanged).
-
----
-
-### 113. [x] Collapsible sidebar folders — a repo-color disclosure triangle (replaces the color dot), sized to the activity icon
-
-**Status:** Complete
-**Depends on:** none
-**Created:** 2026-06-21
-
-**Description**
-
-Each sidebar folder header currently shows an **8px repo-color circle** (`.repoDot`,
-`Sidebar.tsx:754` / `.module.css:200`) — the per-repo color identity (#35) — as a
-non-interactive `<span>` inside the `.repoTitle` filter button. Folders are
-**non-collapsible** by design (#34).
-
-Replace that circle with a **repo-colored triangular disclosure arrow** that makes folders
-**collapsible**: it points **right (▶) when collapsed** and **down (▼) when expanded**, is
-**filled with the repo's identity color** (#35), and is **sized to match the activity
-icon** — the `BusyIndicator` footprint (#95: a ~10px glyph in a ~14px slot, vs. the current
-8px) so it lines up with the agent rows' activity dots.
-
-This reverses the **non-collapsible** part of #34 while **keeping** its click-to-filter: the
-header gets **two independent controls** — the **triangle toggles collapse**, and the
-**repo name still filters Overview** (#34/#68, unchanged). Collapsing a folder hides
-**all** its child rows — its session rows, nested worktree agents (#74), and its non-agent
-items (file/diff/terminal viewers, scheduled sessions) — while the header and its session
-**count** stay visible. State is **persisted across restarts** via a dedicated Rust store
-value (mirroring #108's `sidebar_width`), kept separate from the Settings blob so a Settings
-draft can't clobber it.
-
-**Out of scope:** Overview/Canvas (sidebar-only change; Canvas non-agent panel dots #95 are
-untouched); the repo context menu / New session; any change to which agents run or to the
-pooled terminals (sidebar rows aren't terminals, so hiding them is purely visual). Default
-state is **expanded**; only a user toggle collapses.
-
-**Subtasks**
-
-1. [x] **Backend persistence.** Add a persisted `collapsed_repos: Vec<String>` value to
-   `store.rs` with `get_collapsed_repos` / `set_collapsed_repos` commands, registered in
-   `lib.rs` — mirroring the #108 `sidebar_width` pattern, separate from the Settings blob.
-2. [x] **IPC.** Add typed `getCollapsedRepos` / `setCollapsedRepos` wrappers in `ipc.ts`.
-3. [x] **Store.** Add `collapsedRepos` state (set/record of collapsed repo paths) + a
-   `toggleRepoCollapsed(repo)` action; seed it from the persisted value on boot
-   (`init`/`refresh`); persist on every toggle.
-4. [x] **Markup split.** In `Sidebar.tsx`, pull the indicator out of the `.repoTitle` filter
-   button into its **own toggle `<button>`** (a sibling before the name button) that renders
-   the repo-colored triangle, calls `toggleRepoCollapsed`, and carries `aria-expanded` + an
-   aria-label (e.g. "Collapse/Expand {repo}"). Leave the name button's Overview-filter
-   behavior (#34) intact.
-5. [x] **Conditional render.** When a repo is collapsed, skip rendering its child rows —
-   session rows, nested worktree agents (#74), and non-agent items
-   (file/diff/terminal/scheduled). Keep the header + `.count` visible.
-6. [x] **CSS.** Replace `.repoDot` (circle) with a triangle filled with the repo color —
-   recommended via `clip-path` polygon on the colored box so the existing inline
-   `background: repoColor` still colors it — pointing right (▶) collapsed, rotated to down
-   (▼) when expanded (an `.expanded` modifier with `transform: rotate(90deg)`, smooth
-   transition, reduced-motion-safe). Size it to the `BusyIndicator` footprint (~14px slot /
-   ~10px glyph), replacing the 8px.
-7. [x] **a11y + checks.** Toggle is a real, keyboard-operable button with `aria-expanded`.
-   Confirm pooled terminals are unaffected. Run `npm run build`, `npm run lint`, `npm test`,
-   `npm run format:check`, and the Rust build / `cargo test` / clippy.
-
-**Acceptance criteria**
-
-- [x] Each folder header shows a **repo-colored triangle** (▶ collapsed / ▼ expanded) in
-      place of the old circle, filled with the repo's identity color (#35) and sized to
-      match the activity icon (~14px slot / ~10px glyph).
-- [x] Clicking the **triangle** collapses/expands the folder: all child rows (sessions,
-      worktree agents, file/diff/terminal/scheduled items) hide when collapsed; the header +
-      session count stay visible.
-- [x] Clicking the **repo name** still filters Overview (#34) and does **not** toggle
-      collapse — the two controls are independent.
-- [x] Collapsed/expanded state **persists across restarts** (a collapsed folder stays
-      collapsed after relaunch), via a dedicated Rust store value separate from Settings.
-- [x] The toggle is keyboard-operable with `aria-expanded`; the ▶↔▼ rotation respects
-      reduce-motion (no jarring spin).
-- [x] No change to Overview/Canvas, the repo context menu, or pooled terminals.
-- [x] `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, and the Rust
-      build / `cargo test` / clippy all pass.
-
-**Notes**
-
-- Decisions (user): **collapsible folders** (reverses the non-collapsible part of #34, keeps
-  its click-to-filter on the name); triangle **right collapsed / down expanded**, **filled
-  with the repo color**; sized to the **BusyIndicator footprint** (#95); **persisted** via a
-  dedicated Rust value (mirroring #108 `sidebar_width`), separate from the Settings blob.
-- "Same size as the activity icon" = the existing `BusyIndicator` size (#95: 10px dot in a
-  14px slot) — independent of #112, which only adds a color state and keeps that size.
-- Touches the same files as **#112** (`Sidebar.tsx` / `Sidebar.module.css`) but different
-  elements (repo-header triangle vs. agent activity dot) — **no hard dependency**; if both
-  are open, lowest-number-first (#112) then #113.
-- Recommended shape technique: `clip-path` triangle so the inline `background: repoColor`
-  keeps coloring it; a CSS border-triangle or inline SVG `<polygon fill>` are alternatives.
-- Verified anchors: `src/components/Sidebar/Sidebar.tsx` (`.repoTitle` button + `.repoDot`
-  span ~L744–758; the per-repo render loop for sessions / worktrees / items);
-  `Sidebar.module.css` (`.repoDot` L200, `.repoHeader` / `.repoTitle`); `src/store.ts`
-  (sidebar state + `init`/`refresh`); `src/ipc.ts` (mirror `getSidebarWidth` /
-  `setSidebarWidth`); `src-tauri/src/store.rs` + `commands.rs` + `lib.rs` (mirror the #108
-  `sidebar_width` get/set value).
-- Optional follow-up (not required): prune a repo's collapsed entry when the folder is
-  forgotten (#31) so a re-added folder doesn't remember a stale collapse.
+- **Assumptions made (autonomous authoring — no clarifying questions asked):**
+  (a) both prompt-edit surfaces (#93 create + #94 edit) get the autocomplete via
+  one shared component; (b) the skill source is the on-disk
+  `.claude/skills` + `.claude/commands` dirs at **project** (`cwd`) and **user**
+  (`~`) scope — the files `claude` itself reads — with project shadowing user;
+  (c) `.claude/commands/*.md` are included alongside `SKILL.md` skills since both
+  are `/`-invokable in a real session; (d) **plugin/marketplace** skills
+  (`~/.claude/plugins/…`) are out of scope for v1 (follow-up); (e) the trigger is
+  command-position `/` only, with the standard mention-style keyboard model.
+  Adjust if any of these is wrong.
+- The scheduled prompt is sent to `claude` positionally on launch (#93), so an
+  inserted `/<skill>` runs that skill when the session boots — this is the point
+  of the feature.
+- Follow the `FilePicker` (#56) / `FileSwitcher` (#90) popover + keyboard patterns
+  for consistency; the backend follows the `files.rs` → `commands.rs` → `lib.rs`
+  → `ipc.ts` pattern (read-only, path-validated).
