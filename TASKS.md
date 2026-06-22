@@ -365,3 +365,84 @@ per-task detail. New work goes here as a fresh `### N.` entry in
 > into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
 > one of those is implemented — skipping is never the answer. Every task is carried to a
 > finished, building, lint-clean state.
+
+---
+
+### 128. [ ] Replace the sidebar repo folder cube icon with a folder icon
+
+**Status:** Not started
+**Owner:** _(unassigned)_
+**Depends on:** none · _(a cosmetic swap on the already-shipped #115 cube marker; #120/#121 — the refining passes it builds on — are complete, so nothing open gates it)_
+**Created:** 2026-06-22
+
+**Description**
+
+Each sidebar **repo header** currently shows a small repo-colored **cube** as its
+identity marker — the Lucide **`Box`** icon added in **#115** (which replaced #113's
+disclosure triangle). The user wants that **cube replaced with a folder icon**, since
+the marker stands for a folder/repo. Swap the glyph from the cube to a **closed folder
+(Lucide `Folder`)**, **keeping the existing per-repo color tint** (outline tinted to
+the repo color, exactly as the cube is today) and everything else about the marker
+unchanged.
+
+This is a **purely visual** change — the marker stays a **static, non-interactive**
+identity glyph (`aria-hidden`, no button/toggle), in the **same ~14px slot / ~12px
+icon footprint** so row alignment with the agent activity dots (#95) and the compact
+10px labels (#111) is preserved. The repo name still **filters Overview** on click
+(#34/#68) and right-click still opens the context menu (#31/#54) — both untouched.
+
+**Grounded in the code.** The marker is rendered in
+`src/components/Sidebar/Sidebar.tsx` (~lines 751–757): a `<span className={styles.repoCube}>`
+with `style={{ color: repoColor(repo, repoColors) }}` and `aria-hidden`, wrapping
+`<Box size={12} strokeWidth={2} />`; `Box` is imported from `lucide-react` (~line 10).
+The slot styling is `.repoCube` in `src/components/Sidebar/Sidebar.module.css` (~lines
+205–213; a 14×14 flex box). The repo-color tint comes from `repoColor(repo, repoColors)`.
+
+**Decisions captured from the user (interactive refinement):**
+- **Icon:** the **closed folder** — Lucide **`Folder`** (not `FolderOpen` / `FolderGit`,
+  not a CSS cube silhouette).
+- **Tint:** **keep the per-repo color tint** — an **outline** folder drawn in the repo's
+  assigned color (the current `color: repoColor(...)` approach), **not** a solid/filled
+  fill and **not** a neutral untinted folder.
+
+**Scope — in:** the single sidebar repo-header marker — swap `Box` → `Folder` (import +
+JSX), keep the `repoColor` tint, and rename the now-misnamed `repoCube` class/comment to a
+folder name (e.g. `repoFolder`) for clarity (CSS rule unchanged otherwise). **Out:**
+Overview/Canvas (repo clusters read their color from a colored top band, not a cube — no
+cube there to change), the activity-dot slot/alignment (#95), the compact-label sizing
+(#111), repo color assignment (#35), and the context menu (#31/#54) — all untouched. No
+backend, IPC, store, or persistence changes.
+
+**Subtasks**
+
+1. [ ] In `Sidebar.tsx`, import `Folder` from `lucide-react` (replace the `Box`
+   import) and render `<Folder size={12} strokeWidth={2} />` in place of `<Box .../>`,
+   keeping the `style={{ color: repoColor(repo, repoColors) }}` tint and `aria-hidden`.
+2. [ ] Rename the `repoCube` class (TS + `Sidebar.module.css`) to a folder-appropriate
+   name (e.g. `repoFolder`) and update the explanatory comment (it references the #115
+   cube); the slot dimensions/alignment stay identical.
+3. [ ] Verify alignment with the agent activity dots and that the repo name still filters
+   Overview / right-click still opens the menu (no behavior change).
+
+**Acceptance criteria**
+
+- [ ] Every sidebar repo header shows a **closed folder (Lucide `Folder`)** instead of
+  the cube, **tinted to the repo's color** (outline, not filled, not neutral).
+- [ ] The marker stays **static / non-interactive** (`aria-hidden`), in the **same slot**
+  with **no layout shift** or alignment change versus the cube; no off-system colors;
+  reduced-motion unaffected (no animation involved).
+- [ ] Clicking the repo name still filters Overview; right-click still opens the repo
+  context menu — both unchanged.
+- [ ] No `Box`/cube reference remains for this marker (import, JSX, class name, comment).
+- [ ] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass (no
+  Rust changes expected).
+
+**Notes**
+
+- This **supersedes the #115 cube** (which itself replaced the #113 triangle) as the
+  repo-header identity marker; update the #115 line context if/when docs are next synced.
+- Lucide also offers `FolderOpen` and `FolderGit`; the user explicitly chose the plain
+  **closed `Folder`**. Filled/neutral variants were offered and **declined** — keep the
+  repo-color **outline** tint.
+- Files in play: `src/components/Sidebar/Sidebar.tsx` (~10 import, ~751–757 marker),
+  `src/components/Sidebar/Sidebar.module.css` (`.repoCube` ~205–213).
