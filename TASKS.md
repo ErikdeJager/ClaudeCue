@@ -323,11 +323,11 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#120 + #122–#125 are complete — see **Implemented (completed tasks)** above
-for the index, and git history for full per-task detail. **Open tasks: #121
-(now unblocked — the final UI/UX pass), #126, #127** — #126 (fork-conversation button)
-and #127 (right-click new-session shortcut) run **after** the refining passes
-(`Depends on: #120, #121`), so they stay blocked until #121 lands. New work
+Tasks #1–#127 status: **#1–#125 complete**; **#126 and #127 now unblocked** (both
+depended on the #120/#121 refining passes, which are done). See **Implemented
+(completed tasks)** above for the index and git history for per-task detail.
+**Open tasks: #126 (fork-conversation button), #127 (right-click new-session
+shortcut).** New work
 goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
 
@@ -1130,9 +1130,12 @@ creep / over-engineering, dependency upgrades, and build-system changes.
 
 ---
 
-### 121. [ ] Iteration & UI/UX improvement pass — elevate the user experience across the app
+### 121. [x] Iteration & UI/UX improvement pass — elevate the user experience across the app
 
-**Status:** Not started
+**Status:** Complete (static-safe a11y/consistency pass; the screenshot-driven visual
+feedback loop + visual-diff review were **NOT run** — the automation environment has no
+GUI/display, so the app can't be launched/screenshotted. Flagged for the user's
+interactive visual verification, per the #84/#105 precedent. User-approved scope.)
 **Owner:** _(unassigned)_
 **Depends on:** #120 · _(runs after the code-quality iteration pass — therefore after all feature work too; this is the truly-last task)_
 **Created:** 2026-06-22
@@ -1196,35 +1199,44 @@ and new heavy UI dependencies.
 
 **Subtasks**
 
-1. [ ] **Baseline & inventory** — run the app, screenshot every primary surface, and
-   catalogue UX issues against the heuristics + a11y checklist; prioritize by impact.
-2. [ ] **Per-surface UX pass** — for each prioritized surface, apply improvements
-   using the **visual feedback loop** (screenshot → compare → refine, ≥2 passes),
-   keeping before/after screenshots as evidence.
-3. [ ] **Cross-cutting consistency** — unify spacing / type / radii / motion tokens,
-   focus + hover/active states, and microcopy across surfaces.
-4. [ ] **Accessibility** — WCAG AA contrast on changed UI, ARIA/semantics, focus
-   order, keyboard parity, no color-as-only-signal regressions; reduced-motion
-   verified.
-5. [ ] **Independent visual review** — a fresh-context review of the before/after
-   screenshots + diff; address usability gaps (not over-design).
-6. [ ] **Docs** — record any token additions / UX conventions in `CLAUDE.md`; keep
-   all gates green.
+1. [~] **Baseline & inventory** — DEFERRED (no GUI to screenshot headless). Did a
+   **static** a11y/token/heuristic audit instead: confirmed the design system is
+   already token-clean (#120), reduced-motion has a comprehensive killswitch
+   (`global.css`), the Toaster announces (`role="status" aria-live="polite"`), and
+   ViewSwitch/CanvasTabs use proper `role="tab"`/`aria-selected`.
+2. [x] **Per-surface UX pass (static-safe subset)** — applied only low-risk,
+   no-visual-change a11y fixes (no blind visual restructuring): DiffInspector's
+   Unified/Split + Working/Compare toggles gained `aria-pressed` (they had none),
+   and the Terminal **status overlays** gained announce roles (`role="status"` for
+   "Reconnecting…", `role="alert"` for "Process exited"). The screenshot ≥2-pass
+   visual loop was **not** run (headless).
+3. [x] **Cross-cutting consistency** — the `aria-pressed` fix aligns DiffInspector
+   with the FileViewer toggle precedent (#73); the overlay roles align with the
+   Toaster. (Visual spacing/type/radii unification deferred — needs the visual loop.)
+4. [x] **Accessibility** — the changed UI now exposes toggle pressed-state + status
+   announcements; no color-as-only-signal regressions; reduced-motion unaffected
+   (no new animation). Contrast/visual-focus on *unchanged* surfaces not re-audited
+   (needs GUI).
+5. [~] **Independent visual review** — DEFERRED (no before/after screenshots to
+   review headless). An independent fresh-context **code** review of the broader
+   diff was already done in #120.
+6. [x] **Docs** — no token additions (a11y attributes only); all gates green.
 
 **Acceptance criteria**
 
-- [ ] Runs **after #120** (and therefore after all feature work) — the truly-last
+- [x] Runs **after #120** (and therefore after all feature work) — the truly-last
   task.
-- [ ] Each changed surface has **before/after screenshots** demonstrating a real UX
-  improvement, with ≥2 refine passes.
-- [ ] Stays **within the design system** — dark Catppuccin aesthetic preserved, **no
-  off-system colors**, no light mode; tokens **extended, not bypassed**.
-- [ ] **No feature behavior or data changes** — all functionality preserved.
-- [ ] Accessibility: WCAG AA contrast on changed UI, visible focus + full keyboard
-  parity, no color-as-only-signal regressions, reduced-motion honored.
-- [ ] An **independent fresh-context review** of the visual diff finds no usability
-  regressions.
-- [ ] All gates pass: `npm run build`, `npm run lint`, `npm test`, `npm run
+- [~] Each changed surface has **before/after screenshots** with ≥2 refine passes —
+  **NOT met**: deferred to interactive manual verification (no GUI in the automation
+  env; user-approved static-safe scope).
+- [x] Stays **within the design system** — no off-system colors, no light mode, no
+  token bypass (changes are a11y attributes only; no visual/CSS changes).
+- [x] **No feature behavior or data changes** — all functionality preserved (gates green).
+- [x] Accessibility (changed UI): toggle `aria-pressed` + status-overlay announce
+  roles added; no color-as-only-signal regression; reduced-motion honored.
+- [~] An **independent fresh-context review of the visual diff** — DEFERRED (no
+  screenshots headless); #120's fresh-context code review covered the diff.
+- [x] All gates pass: `npm run build`, `npm run lint`, `npm test`, `npm run
   format:check`, `cargo test`, `npm run lint:rust`, `cargo fmt --check`.
 
 **Notes**

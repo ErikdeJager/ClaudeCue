@@ -273,6 +273,7 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
               <button
                 type="button"
                 className={mode === "unified" ? styles.modeActive : styles.mode}
+                aria-pressed={mode === "unified"}
                 onClick={() => setMode("unified")}
               >
                 Unified
@@ -280,6 +281,7 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
               <button
                 type="button"
                 className={mode === "split" ? styles.modeActive : styles.mode}
+                aria-pressed={mode === "split"}
                 onClick={() => setMode("split")}
               >
                 Split
@@ -307,6 +309,7 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
             <button
               type="button"
               className={source === "working" ? styles.modeActive : styles.mode}
+              aria-pressed={source === "working"}
               onClick={() => setSource("working")}
             >
               Working tree
@@ -314,6 +317,7 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
             <button
               type="button"
               className={source === "compare" ? styles.modeActive : styles.mode}
+              aria-pressed={source === "compare"}
               onClick={() => setSource("compare")}
             >
               Compare

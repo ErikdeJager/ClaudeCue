@@ -55,12 +55,12 @@ function Terminal({ sessionId, repoPath }: TerminalProps) {
     <div className={styles.wrapper}>
       <div ref={slotRef} className={styles.slot} />
       {exitedCode === undefined && reconnecting && (
-        <div className={styles.exitOverlay}>
+        <div className={styles.exitOverlay} role="status">
           <p className={styles.exitText}>Reconnecting…</p>
         </div>
       )}
       {exitedCode !== undefined && (
-        <div className={styles.exitOverlay}>
+        <div className={styles.exitOverlay} role="alert">
           <p className={styles.exitText}>
             Process exited{exitedCode != null ? ` (code ${exitedCode})` : ""}
           </p>
