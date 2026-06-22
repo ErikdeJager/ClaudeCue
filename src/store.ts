@@ -22,6 +22,7 @@ import { emitSessionOutput } from "./outputBus";
 import { repoName } from "./paths";
 import { DETACHED_CANVAS_ID, IS_MAIN_WINDOW } from "./windowContext";
 import type {
+  BranchList,
   CanvasContent,
   CanvasNode,
   CanvasTab,
@@ -437,6 +438,10 @@ export interface AppState {
   /** The same modal opened in **schedule** mode (#93): folder → branch → a final
    * time/prompt/name step that creates a scheduled session instead of spawning. */
   scheduleMode: boolean;
+  /** Branches preloaded by the per-repo start path (#127): when set, the modal opens
+   * **directly at the branch step** for `newSessionRepo`, seeded with this list (no
+   * folder step, no second `list_branches`). `null` for the folder-step open. */
+  newSessionInitialBranches: BranchList | null;
   /** Pending scheduled sessions (#93), newest-first; main window only. */
   schedules: ScheduledSession[];
   /** Application settings (#100), merged with defaults on load. */
@@ -472,6 +477,11 @@ export interface AppState {
   pushToast: (message: string, tone?: ToastTone) => string;
   dismissToast: (id: string) => void;
   openNewSession: (repo?: string) => void;
+  /** Start a session for a known repo (#127): the sidebar context-menu "New session"
+   * + the inline per-repo "+". Skips the redundant folder step — a git folder opens
+   * the modal **straight at the branch step**; a non-git folder spawns immediately
+   * with **no modal**. (The global ⌘N / button still uses `openNewSession`.) */
+  startRepoSession: (repo: string) => Promise<void>;
   /** Open the modal in schedule mode (#93). */
   openSchedule: (repo?: string) => void;
   closeNewSession: () => void;
@@ -760,6 +770,7 @@ export const useStore = create<AppState>()((set, get) => ({
   newSessionOpen: false,
   newSessionRepo: null,
   scheduleMode: false,
+  newSessionInitialBranches: null,
   schedules: [],
   settings: DEFAULT_SETTINGS,
   settingsOpen: false,
@@ -875,15 +886,45 @@ export const useStore = create<AppState>()((set, get) => ({
       newSessionOpen: true,
       newSessionRepo: repo ?? null,
       scheduleMode: false,
+      // Folder-step open (global ⌘N / button): the modal loads branches itself (#127).
+      newSessionInitialBranches: null,
     }),
+  startRepoSession: async (repo) => {
+    // The folder is known (#127), so skip the folder step. Resolve its branches once:
+    // a git folder opens the modal straight at the branch step (seeded, no second
+    // list_branches); a non-git / empty / detection-failed folder spawns immediately
+    // with no modal (mirrors the modal's advanceFromFolder non-git path, #66).
+    let bl: BranchList;
+    try {
+      bl = await ipc.listBranches(repo);
+    } catch {
+      bl = { all: [], current: "" };
+    }
+    if (bl.all.length > 0) {
+      set({
+        newSessionOpen: true,
+        newSessionRepo: repo,
+        scheduleMode: false,
+        newSessionInitialBranches: bl,
+      });
+    } else {
+      void get().spawnSession(repo);
+    }
+  },
   openSchedule: (repo) =>
     set({
       newSessionOpen: true,
       newSessionRepo: repo ?? null,
       scheduleMode: true,
+      newSessionInitialBranches: null,
     }),
   closeNewSession: () =>
-    set({ newSessionOpen: false, newSessionRepo: null, scheduleMode: false }),
+    set({
+      newSessionOpen: false,
+      newSessionRepo: null,
+      scheduleMode: false,
+      newSessionInitialBranches: null,
+    }),
 
   init: async () => {
     // Subscribe exactly once. The flag is set *before* the await so StrictMode's

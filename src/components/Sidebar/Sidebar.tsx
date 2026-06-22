@@ -487,6 +487,7 @@ function Sidebar() {
   const removeSession = useStore((s) => s.removeSession);
   const renameSession = useStore((s) => s.renameSession);
   const openNewSession = useStore((s) => s.openNewSession);
+  const startRepoSession = useStore((s) => s.startRepoSession);
   const openSchedule = useStore((s) => s.openSchedule);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const confirmDestructive = useStore((s) => s.settings.confirmDestructive);
@@ -774,7 +775,7 @@ function Sidebar() {
                 <button
                   type="button"
                   className={`${styles.plus} ${isEmpty ? styles.plusCoral : ""}`}
-                  onClick={() => openNewSession(repo)}
+                  onClick={() => void startRepoSession(repo)}
                   title="New session in this repo"
                   aria-label="New session in this repo"
                 >
@@ -1056,7 +1057,7 @@ function Sidebar() {
                   role="menuitem"
                   className={styles.menuItem}
                   onClick={() => {
-                    openNewSession(menu.repo);
+                    void startRepoSession(menu.repo);
                     closeMenu();
                   }}
                 >

@@ -115,7 +115,10 @@ even though it works in `tauri dev`.
   (session / file / diff / terminal) is a dnd-kit **draggable source** that drops into
   the active Canvas (#47/#59 — agents → terminal, files → file viewer, diffs → diff
   panel; new item types are draggable by default via a `payloadToContent` case). The
-  repo's context menu (#54) offers **New session**, a **Views** section to add
+  repo's context menu (#54) offers **New session** (which — like the inline per-repo
+  **+** — runs `startRepoSession` (#127), **skipping the folder step**: a git folder
+  opens the modal straight at the branch step, a non-git folder spawns with no modal;
+  the global ⌘N / button keeps the folder step), a **Views** section to add
   file/diff/terminal panels (#82), repo color (#35), and destructive actions —
   **Kill all agents** / **Close all items** (#91) and **Forget folder** (#31), the
   latter two also tearing down the folder's non-agent items (killing their PTYs) and

@@ -323,11 +323,10 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#126 are complete** — see **Implemented (completed tasks)** above for the
-index and git history for per-task detail. **The only open task is #127**
-(right-click new-session skips the folder step). New work
-goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
-its `Depends on:` prerequisites.
+Tasks **#1–#127 are all complete** — the backlog is fully implemented, with no open
+tasks. See **Implemented (completed tasks)** above for the index and git history for
+per-task detail. New work goes here as a fresh `### N.` entry in
+[TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:` prerequisites.
 
 > **Implementing tasks — never skip one.** The agent implementing this backlog
 > (`/develop-tasks`, `/isolate-agent`, `/handoff`) MUST implement **every** open task
@@ -1792,9 +1791,9 @@ any conversation-merge.
 
 ---
 
-### 127. [ ] Right-click "New session" on a repo skips the folder step (git → branch step; non-git → start immediately)
+### 127. [x] Right-click "New session" on a repo skips the folder step (git → branch step; non-git → start immediately)
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** _(unassigned)_
 **Depends on:** #120, #121 · _(per the user, built after the refining passes; otherwise independent — the git-vs-folder branching it needs already exists in `advanceFromFolder`, #66)_
 **Created:** 2026-06-22
@@ -1870,40 +1869,40 @@ entry path), not inside the rendered modal.
 
 **Subtasks**
 
-1. [ ] **Per-repo start path** — make the repo-supplied `openNewSession(repo)` (used by
-   both the context menu and the inline "+") resolve `listBranches(repo)` first;
-   non-git/empty/error → `spawnSession(repo)` directly (no modal); git → open the modal
-   pre-targeted at the branch step. (Either extend `openNewSession` for the repo case or
-   add a dedicated action the two callers use.)
-2. [ ] **Modal: open at the branch step** — support an initial step of `"branch"` with
-   the folder preset **and** the preloaded branch list threaded in (avoid the
-   folder-step render and a second `listBranches`); current branch pre-selected; Back
-   still returns to the folder step.
-3. [ ] **Wire the two entry points** — the sidebar context-menu "New session"
-   (`Sidebar.tsx:1059`) and the inline per-repo "+" (`Sidebar.tsx:777`) use the new
-   behavior; the global button / ⌘N (`Sidebar.tsx:679`, no repo) is untouched.
-4. [ ] **Verify untouched paths** — global new-session folder step, schedule mode,
-   worktree (⌘⏎), and "+ add branch" all behave exactly as before.
-5. [ ] **Tests** — Vitest over the decision logic (git → branch-step intent vs non-git
-   → direct spawn) as a pure/store-level helper following the project's patterns; cover
-   the empty-list / error → direct-spawn case.
+1. [x] **Per-repo start path** — a dedicated `startRepoSession(repo)` store action (the
+   two callers use it) resolves `listBranches(repo)` first; non-git/empty/error →
+   `spawnSession(repo)` directly (no modal); git → opens the modal with
+   `newSessionInitialBranches` set (branch-step open). `openNewSession` (global) is
+   left untouched.
+2. [x] **Modal: open at the branch step** — the open-effect branches on
+   `newSessionInitialBranches`: when set, it opens at `step:"branch"` seeded with the
+   preloaded list + current branch, no folder render; a `preloadCwd` ref makes the
+   branch-detection effect **keep** those (no second `list_branches`, no flash) until
+   cwd settles. Back still returns to the folder step.
+3. [x] **Wire the two entry points** — the sidebar context-menu "New session" and the
+   inline per-repo "+" call `startRepoSession`; the global button / ⌘N (no repo) still
+   calls `openNewSession` (folder step).
+4. [x] **Verify untouched paths** — global folder-step open, schedule mode (`openSchedule`
+   leaves `newSessionInitialBranches` null), worktree (⌘⏎), and "+ add branch" all
+   unchanged (gates green).
+5. [x] **Tests** — Vitest over `startRepoSession`: git → modal-at-branch intent (preloaded
+   branches, no spawn); non-git → direct spawn; `listBranches` failure → direct spawn.
 
 **Acceptance criteria**
 
-- [ ] Right-clicking a repo → "New session" (and the inline per-repo "+") on a **git**
+- [x] Right-clicking a repo → "New session" (and the inline per-repo "+") on a **git**
   folder opens the modal **directly at the branch step** with the current branch
   selected — the folder step is **not** shown.
-- [ ] The same actions on a **non-git** plain folder **start the agent immediately with
+- [x] The same actions on a **non-git** plain folder **start the agent immediately with
   no modal appearing**.
-- [ ] The global "New session" button / ⌘N still opens at the **folder step**
+- [x] The global "New session" button / ⌘N still opens at the **folder step**
   (unchanged).
-- [ ] Branch-step Back still returns to the folder step; the destructive-checkout
+- [x] Branch-step Back still returns to the folder step; the destructive-checkout
   warning, ⌘⏎ worktree, and "+ add branch" all behave as before.
-- [ ] An empty/non-git or detection-failed folder degrades to the direct-start path (no
+- [x] An empty/non-git or detection-failed folder degrades to the direct-start path (no
   error wall).
-- [ ] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass (no
-  Rust changes expected; run `cargo test` / `npm run lint:rust` if the backend is
-  touched).
+- [x] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass (no
+  Rust changes — backend untouched).
 
 **Notes**
 

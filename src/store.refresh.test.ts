@@ -23,6 +23,9 @@ vi.mock("./ipc", () => ({
   spawnTerminal: vi.fn(),
   listSchedules: vi.fn(),
   forkSession: vi.fn(),
+  listBranches: vi.fn(),
+  spawnSession: vi.fn(),
+  currentBranches: vi.fn(),
 }));
 
 import * as ipc from "./ipc";
@@ -55,6 +58,15 @@ function primeIpc(): void {
   m(ipc.setCanvasTemplates).mockResolvedValue(undefined);
   m(ipc.spawnTerminal).mockResolvedValue(undefined);
   m(ipc.listSchedules).mockResolvedValue([]);
+  m(ipc.listBranches).mockResolvedValue({ all: [], current: "" });
+  m(ipc.spawnSession).mockResolvedValue({
+    id: "spawned",
+    claude_session_id: "spawned",
+    repo_path: "/repo/plain",
+    name: null,
+    created_at: 0,
+  });
+  m(ipc.currentBranches).mockResolvedValue({});
 }
 
 beforeEach(() => {
@@ -181,5 +193,57 @@ describe("forkSession (#126)", () => {
 
     expect(ok).toBe(false);
     expect(useStore.getState().sessions).toHaveLength(0);
+  });
+});
+
+describe("startRepoSession (#127)", () => {
+  it("git folder: opens the modal at the branch step with preloaded branches (no spawn)", async () => {
+    useStore.setState({
+      newSessionOpen: false,
+      newSessionRepo: null,
+      newSessionInitialBranches: null,
+      scheduleMode: false,
+    });
+    const bl = { all: ["main", "dev"], current: "main" };
+    m(ipc.listBranches).mockResolvedValue(bl);
+
+    await useStore.getState().startRepoSession("/repo/g");
+
+    const s = useStore.getState();
+    expect(s.newSessionOpen).toBe(true);
+    expect(s.newSessionRepo).toBe("/repo/g");
+    expect(s.newSessionInitialBranches).toEqual(bl);
+    expect(s.scheduleMode).toBe(false);
+    expect(ipc.spawnSession).not.toHaveBeenCalled();
+  });
+
+  it("non-git folder: spawns directly with no modal", async () => {
+    useStore.setState({
+      sessions: [],
+      newSessionOpen: false,
+      newSessionRepo: null,
+      newSessionInitialBranches: null,
+    });
+    m(ipc.listBranches).mockResolvedValue({ all: [], current: "" });
+
+    await useStore.getState().startRepoSession("/repo/plain");
+
+    expect(useStore.getState().newSessionOpen).toBe(false);
+    expect(ipc.spawnSession).toHaveBeenCalledWith("/repo/plain", undefined);
+  });
+
+  it("listBranches failure: treated as non-git → direct spawn", async () => {
+    useStore.setState({
+      sessions: [],
+      newSessionOpen: false,
+      newSessionRepo: null,
+      newSessionInitialBranches: null,
+    });
+    m(ipc.listBranches).mockRejectedValue(new Error("nope"));
+
+    await useStore.getState().startRepoSession("/repo/err");
+
+    expect(useStore.getState().newSessionOpen).toBe(false);
+    expect(ipc.spawnSession).toHaveBeenCalledWith("/repo/err", undefined);
   });
 });

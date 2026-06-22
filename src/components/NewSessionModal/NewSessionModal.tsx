@@ -67,6 +67,9 @@ function NewSessionModal() {
   );
   const scheduleMode = useStore((s) => s.scheduleMode);
   const scheduleSession = useStore((s) => s.scheduleSession);
+  // Branches preloaded by the per-repo start path (#127): when set, open straight at
+  // the branch step seeded with these (no folder step, no second list_branches).
+  const initialBranches = useStore((s) => s.newSessionInitialBranches);
 
   const [step, setStep] = useState<"folder" | "branch" | "schedule">("folder");
   const [cwd, setCwd] = useState<string | null>(null);
@@ -103,6 +106,10 @@ function NewSessionModal() {
   const branchesRef = useRef<HTMLDivElement>(null);
   const newBranchNameRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  // The repo whose branches were preloaded for a branch-step open (#127): while set,
+  // the branch-detection effect keeps the seeded branches (skips its own reload) until
+  // cwd settles to this repo, then clears it (a later folder change reloads normally).
+  const preloadCwd = useRef<string | null>(null);
   // The element focused before the dialog opened, restored on close (a11y #49).
   const openerRef = useRef<HTMLElement | null>(null);
 
@@ -111,13 +118,10 @@ function NewSessionModal() {
   useEffect(() => {
     if (!open) return;
     const mostRecent = useStore.getState().recents[0] ?? null;
-    setStep("folder");
-    setCwd(prefillRepo ?? mostRecent);
+    // Common resets (#93/#114/#123/#124) — independent of which step we open at.
     setQuery("");
     setBusy(false);
-    setBranches(null);
     setBranchQuery("");
-    setSelectedBranch(null);
     setFireAt(toLocalInput(new Date(Date.now() + DEFAULT_LEAD_MS)));
     setPrompt("");
     setSchedName("");
@@ -125,7 +129,29 @@ function NewSessionModal() {
     setAddBranchActive(false);
     setNewBranchName("");
     setBranchError(null);
-  }, [open, prefillRepo]);
+    if (initialBranches && prefillRepo) {
+      // #127: per-repo start on a git folder — open straight at the branch step with
+      // the preloaded branch list (folder step skipped; no second list_branches).
+      const current = initialBranches.all.includes(initialBranches.current)
+        ? initialBranches.current
+        : (sortBranches(initialBranches.all)[0] ?? null);
+      setStep("branch");
+      setCwd(prefillRepo);
+      setBranches(initialBranches);
+      setSelectedBranch(current);
+      setNewBranchBase(
+        initialBranches.current || sortBranches(initialBranches.all)[0] || "",
+      );
+      // Tell the detection effect to keep these seeded branches (skip its reload).
+      preloadCwd.current = prefillRepo;
+    } else {
+      setStep("folder");
+      setCwd(prefillRepo ?? mostRecent);
+      setBranches(null);
+      setSelectedBranch(null);
+      preloadCwd.current = null;
+    }
+  }, [open, prefillRepo, initialBranches]);
 
   // Focus the recents search whenever the folder step is shown (open or Back) —
   // or the folder picker when there are no recents to search.
@@ -143,6 +169,13 @@ function NewSessionModal() {
   // empty list for a non-git folder, so it never rejects in practice — the catch
   // is a safety net that also reads as "non-git".
   useEffect(() => {
+    // #127: while a per-repo branch-step preload is pending, keep the seeded branches
+    // — don't reload or clear them; consume the marker once cwd settles to that repo
+    // (then a later folder change reloads normally).
+    if (preloadCwd.current) {
+      if (cwd === preloadCwd.current) preloadCwd.current = null;
+      return;
+    }
     if (!open || !cwd) {
       setBranches(null);
       setSelectedBranch(null);
