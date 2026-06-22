@@ -7,6 +7,7 @@ import {
   computeSessionOwners,
   leafIds,
   leafRects,
+  moveLeaf,
   removeLeaf,
   sessionIdsInLayout,
   spatialNeighbor,
@@ -90,6 +91,38 @@ describe("canvas BSP tree (#46)", () => {
     tree = splitLeaf(tree, "p2", "bottom", ph, "p3", "s2");
     expect(collectLeaves(tree).map((l) => l.id)).toEqual(["p1", "p2", "p3"]);
     expect(collectLeaves(null)).toEqual([]);
+  });
+
+  it("moves a leaf to reorder siblings, preserving its id + content (#135)", () => {
+    // split(s1){ a: agent(p1,A), b: p2 }; move p1 onto p2's right → order p2, p1.
+    const tree = splitLeaf(agentLeaf("p1", "A"), "p1", "right", ph, "p2", "s1");
+    const moved = moveLeaf(tree, "p1", "p2", "right", "s2");
+    expect(leafIds(moved)).toEqual(["p2", "p1"]);
+    // The moved leaf keeps its id AND its agent content (so the pool reparents).
+    expect(collectLeaves(moved).find((l) => l.id === "p1")?.content).toEqual({
+      kind: "agent",
+      sessionId: "A",
+    });
+  });
+
+  it("repositions a leaf across branches (#135)", () => {
+    // split(s1){ a: split(s2){p1,p3}, b: p2 }; move p2 onto p1's top.
+    let tree = splitLeaf(leaf("p1"), "p1", "right", ph, "p2", "s1");
+    tree = splitLeaf(tree, "p1", "bottom", ph, "p3", "s2");
+    const moved = moveLeaf(tree, "p2", "p1", "top", "s3");
+    // p2 removed from its branch (its split collapses), re-split above p1.
+    expect(leafIds(moved).sort()).toEqual(["p1", "p2", "p3"]);
+    expect(leafIds(moved).indexOf("p2")).toBeLessThan(
+      leafIds(moved).indexOf("p1"),
+    );
+  });
+
+  it("is a no-op for self-drop, single-leaf, or a missing target (#135)", () => {
+    const tree = splitLeaf(leaf("p1"), "p1", "right", ph, "p2", "s1");
+    expect(moveLeaf(tree, "p1", "p1", "right", "s2")).toBe(tree); // self-drop
+    expect(moveLeaf(leaf("p1"), "p1", "p1", "right", "s2")).toEqual(leaf("p1")); // single leaf
+    expect(moveLeaf(tree, "p9", "p1", "right", "s2")).toBe(tree); // source missing
+    expect(moveLeaf(tree, "p1", "p9", "right", "s2")).toBe(tree); // target missing → keep panel
   });
 
   it("merges partial content into a leaf, keeping other subtrees' identity (#90)", () => {

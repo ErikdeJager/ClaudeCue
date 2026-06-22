@@ -239,6 +239,31 @@
   gap: var(--space-6);
 }
 
+/* Drag handle to move a panel (#135): a grip glyph that reads as draggable. Sized
+   like the title text, muted until hover; `grab`/`grabbing` cursors signal the
+   drag affordance. Only this element carries the dnd-kit listeners. */
+.panelGrip {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.panelGrip:hover {
+  color: var(--text-primary);
+}
+
+.panelGrip:active {
+  cursor: grabbing;
+}
+
 .panelDot {
   width: 7px;
   height: 7px;

@@ -7,6 +7,7 @@ import { create } from "zustand";
 import {
   appendLeaf,
   collectLeaves,
+  moveLeaf,
   setLeafContent,
   spatialNeighbor,
   updateLeafContent,
@@ -24,6 +25,7 @@ import { DETACHED_CANVAS_ID, IS_MAIN_WINDOW } from "./windowContext";
 import type {
   BranchList,
   CanvasContent,
+  CanvasEdge,
   CanvasNode,
   CanvasTab,
   CanvasTemplate,
@@ -528,6 +530,13 @@ export interface AppState {
   reorderOverview: (repoPath: string, orderedKeys: string[]) => Promise<void>;
   /** Replace the active Canvas tab's layout tree and persist (#58). */
   setActiveCanvasLayout: (tree: CanvasNode | null) => void;
+  /** Move an existing panel to another panel's edge within the active tab (#135),
+   * reusing the source leaf's id/content so its pooled terminal reparents. */
+  moveCanvasLeaf: (
+    sourceLeafId: string,
+    targetId: string,
+    edge: CanvasEdge,
+  ) => void;
   /** Add a new empty Canvas tab (default "Canvas N") and select it (#58). */
   addCanvas: () => void;
   /** Close a Canvas tab; always keeps ≥1 (closing the last leaves an empty one) (#58). */
@@ -1410,6 +1419,21 @@ export const useStore = create<AppState>()((set, get) => ({
       canvases.find((c) => c.id === activeCanvasId)?.layout ?? null;
     if (!layout) return;
     get().setActiveCanvasLayout(updateLeafContent(layout, leafId, { file }));
+  },
+
+  // Reorder/reposition an existing panel within the active tab (#135). One atomic
+  // tree update via the pure `moveLeaf` — the panel-absent intermediate never
+  // reaches the store, so a canvas-only terminal isn't disposed mid-move and the
+  // #18 pool just reparents the moved panel's xterm. Persists via
+  // setActiveCanvasLayout (which a detached window's write merges, #84).
+  moveCanvasLeaf: (sourceLeafId, targetId, edge) => {
+    const { canvases, activeCanvasId } = get();
+    const layout =
+      canvases.find((c) => c.id === activeCanvasId)?.layout ?? null;
+    if (!layout) return;
+    get().setActiveCanvasLayout(
+      moveLeaf(layout, sourceLeafId, targetId, edge, crypto.randomUUID()),
+    );
   },
 
   // Canvas templates (#117): the editor builds a draft layout of inert blocks with

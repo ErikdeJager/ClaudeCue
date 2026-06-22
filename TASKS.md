@@ -360,12 +360,12 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#134 are complete** — see **Implemented (completed tasks)** above for the
-index and git history for per-task detail. There are **no open tasks** right now (the
-full entries for the most recently completed #133–#134 remain below until the next
-`/update-docs` condenses them into the summary). New work goes here as a fresh `### N.`
-entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:`
-prerequisites.
+Tasks **#1–#135 are complete** — see **Implemented (completed tasks)** above for the
+index and git history for per-task detail. The **open** tasks are **#136–#137** (both
+`Depends on: none`). The full entries for the recently completed #133–#135 remain below
+until the next `/update-docs` condenses them into the summary. New work goes here as a
+fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its
+`Depends on:` prerequisites.
 
 > **Implementing tasks — never skip one.** The agent implementing this backlog
 > (`/develop-tasks`, `/isolate-agent`, `/handoff`) MUST implement **every** open task
@@ -550,9 +550,9 @@ metadata-only / real-turn / empty-file / missing-file (fail-open). All gates pas
 
 ---
 
-### 135. [ ] Drag to reorder / reposition existing Canvas panels
+### 135. [x] Drag to reorder / reposition existing Canvas panels
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none · _(builds on the #46/#47/#58 Canvas BSP + edge-drop machinery, the #18 terminal pool, and #84 detached canvas windows — all shipped)_
 **Created:** 2026-06-22
 
@@ -626,28 +626,36 @@ per-panel center "swap" zone (edge-drop reorder already covers swapping).
 
 **Subtasks**
 
-1. [ ] Add the pure `moveLeaf` op + unit tests in `canvasTree.ts` / `canvasTree.test.ts`.
-2. [ ] Add a grip-handle drag source to `LeafPanel`'s header (listeners on the grip only).
-3. [ ] Add the `moveCanvasLeaf` store action (applies `moveLeaf` to the active tab via
+1. [x] Add the pure `moveLeaf` op + unit tests in `canvasTree.ts` / `canvasTree.test.ts`.
+2. [x] Add a grip-handle drag source to `LeafPanel`'s header (listeners on the grip only).
+3. [x] Add the `moveCanvasLeaf` store action (applies `moveLeaf` to the active tab via
    `setActiveCanvasLayout`).
-4. [ ] Branch the main `onDragEnd` (`App.tsx`) on `move-leaf` → `moveCanvasLeaf`, ignoring
+4. [x] Branch the main `onDragEnd` (`App.tsx`) on `move-leaf` → `moveCanvasLeaf`, ignoring
    self-target and `canvas-center`; leave the add-content path intact.
-5. [ ] Wire `dragActive` + the `move-leaf` `onDragStart`/`onDragEnd` into `CanvasWindow` so
+5. [x] Wire `dragActive` + the `move-leaf` `onDragStart`/`onDragEnd` into `CanvasWindow` so
    reordering works in a detached window too.
-6. [ ] _(Optional)_ a title-only `DragOverlay` ghost.
+6. [ ] _(Optional, skipped)_ a title-only `DragOverlay` ghost — deliberately left out (the
+   spec's "layout stays put during the drag" is met by *not* applying any transform; the
+   lit edge zones are the drop feedback). Easy to add later if desired.
 
 **Acceptance criteria**
 
-- [ ] An existing panel can be dragged by a header grip and dropped on another panel's edge
+- [x] An existing panel can be dragged by a header grip and dropped on another panel's edge
   to reorder / reposition it within the active Canvas tab.
-- [ ] Moving an **agent or shell-terminal** panel never disposes its xterm — the terminal
-  keeps its scrollback and just reparents (the #18 pool invariant holds).
-- [ ] During the drag the layout doesn't move; the relayout happens once on drop; a
+- [x] Moving an **agent or shell-terminal** panel never disposes its xterm — the terminal
+  keeps its scrollback and just reparents (the #18 pool invariant holds). _(`moveLeaf`
+  reuses the source leaf's **id + content**, so its React key + pool mapping are stable
+  and `reconcileTerminals` only ever sees a tree that still contains it — unit-tested.)_
+- [x] During the drag the layout doesn't move; the relayout happens once on drop; a
   cancelled / Escape drag leaves the layout unchanged; dropping a panel on its **own** edge
-  is a no-op.
-- [ ] Reordering works in both the main Canvas view and a **detached** canvas window (#84),
-  and the change persists + syncs across windows.
-- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+  is a no-op. _(No transform is applied during drag; the move is one atomic tree update on
+  `onDragEnd`; self-drop is a no-op in both `applyCanvasMove` and `moveLeaf`.)_
+- [x] Reordering works in both the main Canvas view and a **detached** canvas window (#84),
+  and the change persists + syncs across windows. _(Both `DndContext`s share
+  `applyCanvasMove` → `moveCanvasLeaf` → `setActiveCanvasLayout`, which persists + the #84
+  cross-window broadcast carries it. **Runtime-unverified in a real detached window** —
+  no GUI/multi-monitor in this environment, per the #84/#105 precedent.)_
+- [x] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
 
 **Notes**
 
@@ -656,6 +664,34 @@ per-panel center "swap" zone (edge-drop reorder already covers swapping).
   drag-start.
 - Reusing the source leaf's **id + content** in the re-split (vs. `splitLeaf`'s usual fresh
   ids) is what keeps the moved panel's React key + pool mapping stable.
+
+**Implementation report**
+
+Implemented exactly the recommended approach. **Pure op** `moveLeaf(tree, sourceId,
+targetId, edge, newSplitId)` in `canvasTree.ts`: captures the source leaf via
+`collectLeaves`, `removeLeaf`s it, then `splitLeaf`s the target **reusing the source's
+original id + content** — so identity (React key + #18 pool mapping) is preserved and
+the terminal reparents. No-op on self-drop / missing source / source-is-whole-canvas /
+missing-target-after-prune (the last returns the *original* tree so a stale drop never
+loses the panel). Five unit tests (reorder, cross-branch reposition, self-drop,
+single-leaf, missing source/target, id+content preserved). **Drag source:** a
+`GripVertical` button in `LeafPanel`'s header (`CanvasSurface.tsx`) via
+`useDraggable({ id: "move:"+leaf.id, data: { kind:"move-leaf", leafId } })` — listeners
+on the grip only (FileSwitcher / fork / copy / close untouched), **no transform applied**
+so the layout stays put during the drag; `.panelGrip` CSS with grab/grabbing cursors.
+**Store:** `moveCanvasLeaf(sourceLeafId, targetId, edge)` applies `moveLeaf` to the active
+tab via `setActiveCanvasLayout` (one atomic update; the panel-absent intermediate never
+reaches the store, so a canvas-only terminal isn't disposed mid-move). **Drop:** a shared
+`applyCanvasMove(sourceLeafId, overId)` in `canvasDrop.ts` (parses `panel:<target>:<edge>`,
+ignores `canvas-center` + self-target) called from a new `move-leaf` branch in both
+`App.tsx` `onDragEnd` (add-content path intact) and `CanvasWindow.tsx` (now a full
+`DndContext` with `pointerWithin` + `dragActive` state + onDragStart/End/Cancel, passing
+real `dragActive` to its `CanvasSurface`) — so reorder works in a detached window too and
+persists/broadcasts via the existing #84 sync. DragOverlay ghost skipped (optional). All
+gates pass: `npm run build`, `npm run lint`, `npm test` (143), `cargo test` (68),
+`prettier --check`. The detached-window path is **runtime-unverified** (no GUI here, per
+#84/#105). _(This commit also normalizes a one-object Prettier wrap in `Sidebar.tsx` from
+#133 — eslint hadn't flagged it.)_
 
 ---
 

@@ -82,6 +82,23 @@ const leaf = (content: CanvasContent): CanvasNode => ({
   content,
 });
 
+/**
+ * Apply a panel-reorder drop (#135): a grip-drag (`move-leaf`) landing on a panel
+ * edge zone moves the existing `sourceLeafId` there. Parses `over.id` as
+ * `panel:<target>:<edge>`, ignoring `canvas-center` and a self-target. Shared by the
+ * main window and a detached canvas window's `DndContext` (#84). `moveCanvasLeaf`
+ * targets the active tab, which a detached window forces to its own id.
+ */
+export function applyCanvasMove(sourceLeafId: string, overId: string): void {
+  const match = /^panel:(.+):(left|right|top|bottom)$/.exec(overId);
+  if (!match) return;
+  const targetId = match[1] as string;
+  if (targetId === sourceLeafId) return;
+  useStore
+    .getState()
+    .moveCanvasLeaf(sourceLeafId, targetId, match[2] as CanvasEdge);
+}
+
 /** Apply a drop onto a Canvas zone — the center (first panel) or a panel edge. */
 export function applyCanvasDrop(overId: string, content: CanvasContent): void {
   const store = useStore.getState();

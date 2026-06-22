@@ -649,7 +649,10 @@ function WorktreeHeader({ path, branch }: { path: string; branch: string }) {
       <RowContextMenu
         menu={menu}
         items={[
-          { label: "Reveal in Finder", onActivate: () => void revealPath(path) },
+          {
+            label: "Reveal in Finder",
+            onActivate: () => void revealPath(path),
+          },
           {
             label: "Copy absolute path",
             onActivate: () => void copyToClipboard(path, "path"),

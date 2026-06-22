@@ -1,6 +1,6 @@
 import { type ReactElement, useEffect } from "react";
-import { useDroppable } from "@dnd-kit/core";
-import { Copy, ExternalLink, GitFork, X } from "lucide-react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { Copy, ExternalLink, GitFork, GripVertical, X } from "lucide-react";
 import { Group, type Layout, Panel, Separator } from "react-resizable-panels";
 
 import { useSessionOwners } from "../../ownership";
@@ -88,6 +88,20 @@ function LeafPanel({
   const owners = useSessionOwners();
   const isActive = leaf.id === activeLeafId;
 
+  // Drag source for reorder/reposition (#135): the grip handle only (not the whole
+  // header), so the FileSwitcher (#90) + fork/copy/close buttons keep working. The
+  // 4px PointerSensor activation constraint keeps a click (select) from dragging.
+  // We don't apply the transform — the layout stays put during the drag; the move
+  // is computed atomically on drop (App/CanvasWindow `onDragEnd` → moveCanvasLeaf).
+  const {
+    attributes: dragAttributes,
+    listeners: dragListeners,
+    setNodeRef: setDragRef,
+  } = useDraggable({
+    id: `move:${leaf.id}`,
+    data: { kind: "move-leaf", leafId: leaf.id },
+  });
+
   const content = leaf.content;
   const session =
     content.kind === "agent"
@@ -174,6 +188,19 @@ function LeafPanel({
     >
       <header className={styles.panelHeader}>
         <span className={styles.panelTitleBlock}>
+          {/* Drag handle to reorder/reposition this panel (#135). Listeners live on
+              the grip only; dropping on another panel's edge moves it there. */}
+          <button
+            type="button"
+            ref={setDragRef}
+            className={styles.panelGrip}
+            title="Drag to move this panel"
+            aria-label="Move panel"
+            {...dragAttributes}
+            {...dragListeners}
+          >
+            <GripVertical size={14} strokeWidth={1.5} />
+          </button>
           {/* Agent panels drop the repo dot (#95); non-agent panels keep it. */}
           {repoPath && content.kind !== "agent" && (
             <span

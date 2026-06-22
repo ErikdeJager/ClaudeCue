@@ -11,6 +11,7 @@ import {
 import Canvas from "./components/Canvas/Canvas";
 import {
   applyCanvasDrop,
+  applyCanvasMove,
   payloadToContent,
 } from "./components/Canvas/canvasDrop";
 import {
@@ -96,6 +97,11 @@ function MainApp() {
     setDragActive(false);
     const { active, over } = event;
     if (!over) return;
+    // Reorder/reposition an existing panel (#135): a grip-drag carries `move-leaf`.
+    if (active.data.current?.kind === "move-leaf") {
+      applyCanvasMove(String(active.data.current.leafId), String(over.id));
+      return;
+    }
     const content = payloadToContent(active.data.current);
     if (content) applyCanvasDrop(String(over.id), content);
   };

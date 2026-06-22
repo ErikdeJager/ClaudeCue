@@ -62,6 +62,41 @@ export function removeLeaf(
   return { ...tree, a, b };
 }
 
+/**
+ * Move an existing leaf to another panel's `edge` (#135) — one op for both reorder
+ * and reposition within the active tab. Computed **atomically on drop**: capture the
+ * source leaf's id + content, `removeLeaf` it (its sibling reflows to fill the gap),
+ * then `splitLeaf` the target reusing the source's **original id + content** (not
+ * fresh ones) so the moved panel keeps its React key + #18 pool mapping and its
+ * terminal reparents rather than being disposed/recreated.
+ *
+ * No-op (returns the original tree) when: `sourceId === targetId`, the source isn't
+ * in the tree, the source is the whole canvas (`removeLeaf` → null), or the target
+ * isn't present after the removal — so a stale/invalid drop never loses the panel.
+ */
+export function moveLeaf(
+  tree: CanvasNode,
+  sourceId: string,
+  targetId: string,
+  edge: CanvasEdge,
+  newSplitId: string,
+): CanvasNode {
+  if (sourceId === targetId) return tree;
+  const source = collectLeaves(tree).find((l) => l.id === sourceId);
+  if (!source) return tree;
+  const pruned = removeLeaf(tree, sourceId);
+  if (pruned === null) return tree; // source was the whole canvas
+  if (!leafIds(pruned).includes(targetId)) return tree; // target gone → don't drop it
+  return splitLeaf(
+    pruned,
+    targetId,
+    edge,
+    source.content,
+    sourceId,
+    newSplitId,
+  );
+}
+
 /** Set the two sizes of the split `splitId` (returns a new tree if changed). */
 export function updateSizes(
   tree: CanvasNode,
