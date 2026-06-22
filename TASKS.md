@@ -546,3 +546,130 @@ menu doesn't exist there).
 - Files in play: `src/components/Canvas/CanvasTabs.tsx` (~150–175 menu state/handlers,
   ~227–279 button + `.templatesMenu` render), `src/components/Canvas/Canvas.module.css`
   (`.tabStrip` ~20–30, `.templatesWrap` ~133–137, `.templatesMenu` ~139–152).
+
+---
+
+### 129. [ ] Add "Reveal in Finder" and "Copy path" to the repo (folder) context menu
+
+**Status:** Not started
+**Owner:** _(unassigned)_
+**Depends on:** none · _(builds on the shipped #54 repo context menu and the `open`-shell-out precedent #100/#109; the #120/#121 refining passes are complete, so nothing open gates it)_
+**Created:** 2026-06-22
+
+**Description**
+
+The sidebar **repo-header** right-click context menu (#54) currently offers **New
+session**, a **Views** section, **Change color…**, and the destructive **Kill all agents
+/ Close all items / Forget folder**. Add two **non-destructive utility** items: **Reveal
+in Finder** (opens the repo's folder in Finder) and **Copy path** (copies the folder's
+absolute path to the clipboard with a confirming toast).
+
+**Grounded in the code.** The repo menu is rendered in
+`src/components/Sidebar/Sidebar.tsx` — the `menu`/`menuMode` block (~lines 952–1170); the
+default-mode branch begins at the "New session" item (~line 1054). The repo's absolute
+path is `menu.repo`. **Copy path** reuses the existing store action
+**`copyToClipboard(text, label)`** (`src/store.ts` ~line 2166, which toasts "Copied …").
+**Reveal in Finder** needs a **new Rust command** because the existing `open_url` only
+accepts `http(s)` — add one mirroring `open_data_folder` (`src-tauri/src/commands.rs`
+~line 906: `std::process::Command::new("open").arg(path).spawn()`, no shell → no injection
+vector), register it in `src-tauri/src/lib.rs`'s `invoke_handler`, and wrap it in
+`src/ipc.ts` (like `openUrl`, `ipc.ts:286`).
+
+**Decision (from the user):** "Reveal in Finder" **opens the folder** — `open <path>` —
+not `open -R` (reveal-selected-in-parent).
+
+**Scope — in:** the single repo-header context menu; the two new items + the one new
+backend command/IPC wrapper. **Out:** the agent row menu (#130), the
+file/diff/terminal/schedule rows (suggested separately but not authored), and any change
+to the existing menu items.
+
+**Subtasks**
+
+1. [ ] Backend: add `reveal_path(path: String)` to `commands.rs` (macOS `open <path>`, no
+   shell; mirror `open_data_folder`), and register it in `lib.rs`'s `invoke_handler`.
+2. [ ] IPC: wrap it as `revealPath(path)` in `ipc.ts`.
+3. [ ] Sidebar repo menu: in the default-mode branch, add **Reveal in Finder** (→
+   `revealPath(menu.repo)`) and **Copy path** (→ `copyToClipboard(menu.repo, "path")`),
+   grouped in their own separator section (e.g. between the Views section and Change
+   color…); `closeMenu()` after each.
+4. [ ] Verify `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, `cargo
+   clippy`, `cargo fmt`.
+
+**Acceptance criteria**
+
+- [ ] Right-clicking a repo header shows **Reveal in Finder** and **Copy path** alongside
+  the existing items.
+- [ ] **Reveal in Finder** opens the repo's folder in a Finder window (`open <path>`).
+- [ ] **Copy path** copies the folder's absolute path and shows a "Copied path" toast.
+- [ ] The new Rust command runs `open` **without a shell**; the menu closes after either
+  action; existing items are unchanged.
+- [ ] All build/lint/test/format + clippy/fmt checks pass.
+
+**Notes**
+
+- Reuses `copyToClipboard` (`store.ts`) — no new clipboard plumbing — and follows the
+  `open`-shell-out precedent (`open_url` #109, `open_data_folder` #100).
+- The same **Reveal in Finder / Copy path** vocabulary was proposed for the
+  file/diff/terminal sidebar rows (which have **no** context menu today); those rows are
+  **out of scope** here.
+
+---
+
+### 130. [ ] Add "Copy session ID" and "Fork conversation" to the agent (session) context menu
+
+**Status:** Not started
+**Owner:** _(unassigned)_
+**Depends on:** none · _(reuses the shipped fork action #126 and the existing SessionRow menu; the #120/#121 refining passes are complete, so nothing open gates it)_
+**Created:** 2026-06-22
+
+**Description**
+
+The sidebar **agent row** (`SessionRow`) right-click context menu currently offers only
+**Rename** and **Remove** (`src/components/Sidebar/Sidebar.tsx` ~lines 248–285). Add two
+items: **Fork conversation** (branches the agent's conversation into a new parallel
+session) and **Copy session ID** (copies the agent's `claude` session UUID — the
+`--session-id` / `claude --resume` id).
+
+**Grounded in the code.** **Fork already ships (#126)** as a header button in
+`src/components/Overview/Overview.tsx` (~line 183) and
+`src/components/Canvas/CanvasSurface.tsx` (~line 213), both calling the existing store
+action **`forkSession(sourceId)`** (`src/store.ts:1935` → `ipc.forkSession` →
+`fork_session`). **This task only surfaces that same action in the row menu — it does not
+reimplement fork.** **Copy session ID** reuses **`copyToClipboard(text, label)`**
+(`store.ts` ~2166) on **`session.claudeSessionId`** — the UUID (set as
+`claude_session_id: info.id` in `commands.rs`, so it equals the app session id and is
+valid for `claude --resume`). `SessionRow` already consumes the full `session` object; it
+would also read `forkSession` / `copyToClipboard` via `useStore`.
+
+**Scope — in:** the `SessionRow` context menu — add the two items. **Out:** the repo menu
+(#129) and the file/diff/terminal/schedule rows; no backend/fork-logic changes.
+
+**Subtasks**
+
+1. [ ] In `SessionRow`, pull `forkSession` and `copyToClipboard` from the store
+   (`useStore`).
+2. [ ] Add menu items so the order is **Rename · Fork conversation · Copy session ID ·
+   (separator) · Remove**: Fork → `forkSession(session.id)`; Copy session ID →
+   `copyToClipboard(session.claudeSessionId, "session ID")`; `setMenu(null)` after each.
+   Use the `GitFork` Lucide icon to match the existing fork buttons.
+3. [ ] Verify `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, `cargo
+   clippy`, `cargo fmt`.
+
+**Acceptance criteria**
+
+- [ ] Right-clicking an agent row shows **Rename**, **Fork conversation**, **Copy session
+  ID**, and **Remove**.
+- [ ] **Fork conversation** creates a new parallel forked session — identical behavior to
+  the existing Overview/Canvas fork buttons (reuses `forkSession`, no new backend).
+- [ ] **Copy session ID** copies the agent's `claude` session UUID and shows a "Copied
+  session ID" toast.
+- [ ] The menu closes after each action; Rename/Remove are unchanged.
+- [ ] All build/lint/test/format + clippy/fmt checks pass.
+
+**Notes**
+
+- **Do not reimplement fork** — #126 already provides `forkSession`; this is purely a new
+  menu entry.
+- Session ID = the `claude` UUID (`claudeSessionId`), usable with `claude --resume`;
+  equals the app session id (`claude_session_id: info.id`).
+- Reuses `copyToClipboard` (`store.ts`).
