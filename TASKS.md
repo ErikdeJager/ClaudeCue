@@ -1006,7 +1006,7 @@ user-confirmed **720 × 600** (height clamped to 90vh).
 
 **Status:** Not started
 **Owner:** _(unassigned)_
-**Depends on:** #116, #117, #118, #119, #122 · _(#116–#119 plus the custom-slider #122, added afterward so the slider lands before the UI/UX pass #121; #120 runs after all of them and before #121)_
+**Depends on:** #116, #117, #118, #119, #122, #123 · _(all feature/fix tasks; #122 and #123 added afterward so they land before the improvement iterations; #120 runs after all of them and before the UI/UX pass #121)_
 **Created:** 2026-06-22
 
 **Description**
@@ -1329,3 +1329,94 @@ instances elsewhere.
   iteration pass reviews the new component.
 - Files in play: `src/components/Settings/Settings.tsx` (~178–215),
   `src/components/Settings/Settings.module.css` (`.range`, ~116).
+
+---
+
+### 123. [ ] New-session / schedule folder step — make the "Choose folder" picker reachable by arrow keys
+
+**Status:** Not started
+**Owner:** _(unassigned)_
+**Depends on:** none · _(self-contained keyboard-UX fix in the #66 new-session flow)_
+**Created:** 2026-06-22
+
+**Description**
+
+In the **folder step** of the New-session / Schedule-session modal, ArrowUp/Down
+navigate the **recents** list, but the **"Choose another…/Choose folder…" picker
+button** can't be reached with the arrow keys — pressing ArrowDown on the last
+recent just stays on the last recent. The user wants ArrowDown past the last recent
+to **move the highlight onto the folder picker** (so it's keyboard-selectable), and
+**Enter** to open it.
+
+**Both modals are the same component.** New-session and Schedule-session are one
+component — `NewSessionModal` (schedule mode via `scheduleMode`) — so the single
+folder step covers **both**.
+
+**Root cause (traced).** `onSearchKeyDown` (`NewSessionModal.tsx` ~line 372) moves
+`activeIndex` (~248, `list.findIndex(r => r === cwd)`) over the recents `list`,
+clamped to `[0, list.length - 1]` (~383–387) and early-returning when
+`list.length === 0` (~381). The picker button (`chooseRef`, in `.pickRow` ~553–557,
+opening `pick()` ~269) is outside that range, so arrows never reach it.
+
+**Desired behavior.**
+
+- Treat the folder picker as a **virtual extra option after the recents**: ArrowDown
+  on the last recent highlights the picker; ArrowUp from the picker returns to the
+  last recent.
+- When highlighted, the picker shows the **same active/selected visual** as a
+  highlighted recent (and the equivalent `aria-selected`/selected state). The search
+  input keeps focus — matching how recents are highlighted today (by state, not DOM
+  focus) — and the picker scrolls into view.
+- **Enter** (form submit) while the picker is highlighted opens the native folder
+  picker (`pick()`) instead of advancing with the current `cwd`; a click still works
+  as today.
+- Works in **both** new-session and schedule modes, and when the recents list is
+  **filtered** — including **filtered-to-empty** (the current `list.length === 0`
+  early-return must not block reaching the picker).
+- ⌘1–9, existing recents nav, and Tab access to the button stay unchanged.
+
+**Scope — in:** the folder-step keyboard nav in `NewSessionModal.tsx` (+ minor CSS
+for the picker's active state). **Out:** the branch step (its nav is fine), other
+modals, and mouse behavior.
+
+**Subtasks**
+
+1. [ ] Add a "picker is the active option" notion (e.g. a `pickerActive` flag, or
+   extend `activeIndex` to range `[0, list.length]` where `list.length` = the
+   picker) and update `onSearchKeyDown` so ArrowDown past the last recent selects the
+   picker and ArrowUp returns to the recents (handling the filtered-to-empty case).
+2. [ ] Render the picker button with the active/selected style + accessible selected
+   state when highlighted; keep search-input focus; scroll it into view.
+3. [ ] Make **Enter** (and the existing click) activate the highlighted picker →
+   `pick()`; reset the picker-active state on query change / step change.
+4. [ ] Verify both new-session and schedule modes; confirm ⌘1–9 and recents nav are
+   unchanged.
+5. [ ] Add a test for the nav logic (pure helper if extracted) following the
+   project's testing patterns, if feasible.
+
+**Acceptance criteria**
+
+- [ ] In **both** modes, with recents present, ArrowDown on the last recent
+  highlights the "Choose folder" picker; ArrowUp returns to the last recent.
+- [ ] The highlighted picker shows the same active style + accessible selected state
+  as a highlighted recent.
+- [ ] **Enter** while the picker is highlighted opens the native folder picker;
+  Enter on a recent still advances as before.
+- [ ] The picker is reachable even when the recents filter matches nothing; ⌘1–9 and
+  existing recents navigation are unchanged.
+- [ ] `npm run build`, `npm run lint`, `npm test`, and `npm run format:check` pass.
+
+**Notes**
+
+- The New-session and Schedule-session modals are the **same component**
+  (`NewSessionModal`, schedule = `scheduleMode`); fixing the one folder step covers
+  both.
+- **Ordering:** must land **before the improvement iterations** — wired by adding
+  **#123 to #120's `Depends on`** (so #123 → #120 → #121).
+- Files in play: `src/components/NewSessionModal/NewSessionModal.tsx`
+  (`onSearchKeyDown` ~372, `activeIndex` ~248, `pick` ~269, `.pickRow`/`chooseRef`
+  ~553–557) and `NewSessionModal.module.css`.
+- **Assumptions (autonomous authoring):** Enter activates the highlighted picker;
+  ArrowUp from the picker returns to recents; the picker highlight is **state-based**
+  (search keeps focus), mirroring how recents are highlighted. Adjust if you'd rather
+  the picker take real DOM focus.
