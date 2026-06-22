@@ -9,11 +9,12 @@ import {
   Plus,
 } from "lucide-react";
 
-import { listBranches, pickDirectory } from "../../ipc";
+import { listBranches, listSkills, pickDirectory } from "../../ipc";
 import { repoName } from "../../paths";
 import { useStore } from "../../store";
 import { toLocalInput } from "../../time";
-import type { BranchList } from "../../types";
+import type { BranchList, SkillInfo } from "../../types";
+import SkillAutocomplete from "../SkillAutocomplete/SkillAutocomplete";
 import styles from "./NewSessionModal.module.css";
 
 // Well-known branches pinned to the top of the branch list, in this order (#66).
@@ -75,6 +76,9 @@ function NewSessionModal() {
   const [fireAt, setFireAt] = useState("");
   const [prompt, setPrompt] = useState("");
   const [schedName, setSchedName] = useState("");
+  // Slash-command skills for the chosen folder (#114) — feeds the prompt
+  // autocomplete; best-effort, so it degrades to an empty list (no dropdown).
+  const [skills, setSkills] = useState<SkillInfo[]>([]);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const fireAtRef = useRef<HTMLInputElement>(null);
@@ -171,6 +175,26 @@ function NewSessionModal() {
     const timer = setTimeout(() => fireAtRef.current?.focus(), 0);
     return () => clearTimeout(timer);
   }, [open, step]);
+
+  // Load the chosen folder's slash-command skills for the prompt autocomplete
+  // (#114, schedule mode only). Best-effort: any failure leaves the list empty.
+  useEffect(() => {
+    if (!open || !scheduleMode || !cwd) {
+      setSkills([]);
+      return;
+    }
+    let cancelled = false;
+    void listSkills(cwd)
+      .then((s) => {
+        if (!cancelled) setSkills(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSkills([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, scheduleMode, cwd]);
 
   // Escape closes the popover.
   useEffect(() => {
@@ -696,13 +720,14 @@ function NewSessionModal() {
             />
 
             <p className={styles.label}>Prompt (optional)</p>
-            <textarea
+            <SkillAutocomplete
               className={styles.promptInput}
               value={prompt}
+              onChange={setPrompt}
+              skills={skills}
               placeholder="Initial prompt for claude…"
-              onChange={(event) => setPrompt(event.currentTarget.value)}
               rows={3}
-              aria-label="Initial prompt"
+              ariaLabel="Initial prompt"
             />
 
             <p className={styles.label}>Name (optional)</p>

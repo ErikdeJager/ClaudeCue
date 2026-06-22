@@ -10,6 +10,7 @@ mod files;
 mod git;
 mod path_env;
 mod pty;
+mod skills;
 mod store;
 mod title;
 
@@ -151,6 +152,7 @@ pub fn run() {
             commands::update_schedule,
             commands::list_files,
             commands::read_text_file,
+            commands::list_skills,
             commands::current_branch,
             commands::current_branches,
             commands::working_diff,

@@ -321,7 +321,7 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks #1–#113 are complete — see **Implemented (completed tasks)** above for the index,
+Tasks #1–#114 are complete — see **Implemented (completed tasks)** above for the index,
 and git history for full per-task detail. **There are currently no open tasks.** New work
 goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with
 its `Depends on:` prerequisites.
@@ -337,9 +337,9 @@ its `Depends on:` prerequisites.
 
 ---
 
-### 114. [ ] Slash-command skill autocomplete in the scheduled-session prompt field
+### 114. [x] Slash-command skill autocomplete in the scheduled-session prompt field
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** _(unassigned)_
 **Depends on:** none · _(builds on shipped scheduled sessions #93/#94 and the read-only file/picker patterns #44/#56 — all complete)_
 **Created:** 2026-06-22
@@ -420,45 +420,45 @@ existing `FilePicker` (#56) popover/list patterns for look and keyboard feel.
 
 **Subtasks**
 
-1. [ ] **Backend skill enumeration.** Add `src-tauri/src/skills.rs` (mirroring
+1. [x] **Backend skill enumeration.** Add `src-tauri/src/skills.rs` (mirroring
    `files.rs`): scan the project + user `.claude/skills/*/SKILL.md` and
    `.claude/commands/**/*.md`, parse frontmatter `name`/`description`, dedupe
    (project over user), sort → `Vec<SkillInfo { name, description, source }>`. Add
    a `list_skills(cwd)` Tauri command in `commands.rs`, register it in `lib.rs`
    (`mod skills;` + the `invoke_handler` list), with Rust unit tests over a temp
    dir.
-2. [ ] **IPC + types.** Add a typed `listSkills(cwd)` wrapper in `src/ipc.ts` and
+2. [x] **IPC + types.** Add a typed `listSkills(cwd)` wrapper in `src/ipc.ts` and
    a `SkillInfo` type in `src/types/`.
-3. [ ] **Reusable `SkillAutocomplete` component** (`src/components/…` + CSS
+3. [x] **Reusable `SkillAutocomplete` component** (`src/components/…` + CSS
    Module): textarea + dropdown implementing the `/`-trigger, filter, keyboard
    nav, token insertion, and dismissal described above. Factor the pure logic
    (detect the active `/token` + cursor, filter, compute the post-insert string +
    caret) into testable helpers.
-4. [ ] **Wire into `NewSessionModal`** schedule step — replace the `promptInput`
+4. [x] **Wire into `NewSessionModal`** schedule step — replace the `promptInput`
    textarea; load skills for the chosen `cwd`; implement the container-key guard
    so the menu intercepts Enter/Escape.
-5. [ ] **Wire into `ScheduledPanel`** — replace the `prompt` textarea; preserve
+5. [x] **Wire into `ScheduledPanel`** — replace the `prompt` textarea; preserve
    the debounced auto-save on both typing and programmatic insert.
-6. [ ] **Tests** — Vitest over the pure filter/insert/trigger-detection helpers;
+6. [x] **Tests** — Vitest over the pure filter/insert/trigger-detection helpers;
    Rust unit tests over the skills scan.
 
 **Acceptance criteria**
 
-- [ ] Typing `/` in command position in the schedule prompt (both in
+- [x] Typing `/` in command position in the schedule prompt (both in
   `NewSessionModal`'s schedule step **and** `ScheduledPanel`) opens a small
   dropdown listing the available skills.
-- [ ] Continuing to type filters the list; ↑/↓ move the highlight; Enter, Tab, or
+- [x] Continuing to type filters the list; ↑/↓ move the highlight; Enter, Tab, or
   a click inserts `/<skill-name> `; Escape dismisses the menu.
-- [ ] A `/` in the middle of a word/path/URL does **not** open the dropdown.
-- [ ] While the menu is open, Enter does **not** submit the new-schedule form and
+- [x] A `/` in the middle of a word/path/URL does **not** open the dropdown.
+- [x] While the menu is open, Enter does **not** submit the new-schedule form and
   Escape does **not** close the modal; with the menu closed they behave as today.
-- [ ] Skills are read from project `.claude/skills` (+ `.claude/commands`) and
+- [x] Skills are read from project `.claude/skills` (+ `.claude/commands`) and
   user `~/.claude/…`, deduped (project shadows user) and sorted; a missing/empty
   directory degrades gracefully (no dropdown, no error).
-- [ ] `ScheduledPanel`'s debounced auto-save still persists the prompt after an
+- [x] `ScheduledPanel`'s debounced auto-save still persists the prompt after an
   autocomplete insertion.
-- [ ] No layout shift, no off-system colors, reduced-motion respected.
-- [ ] `npm run build`, `npm run lint`, `npm test`, `cargo test`, and
+- [x] No layout shift, no off-system colors, reduced-motion respected.
+- [x] `npm run build`, `npm run lint`, `npm test`, `cargo test`, and
   `npm run lint:rust` all pass.
 
 **Notes**

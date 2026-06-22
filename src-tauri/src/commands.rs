@@ -287,6 +287,14 @@ pub fn read_text_file(repo: String, file: String) -> Result<String, SessionError
     crate::files::read_text_file(&repo, &file).map_err(SessionError::Io)
 }
 
+/// Best-effort slash-invokable skills/commands for a folder (#114) — the
+/// scheduled-prompt autocomplete. Reads project `<cwd>/.claude` + user `~/.claude`
+/// (project shadows user); a missing/unreadable dir simply yields fewer entries.
+#[tauri::command]
+pub fn list_skills(cwd: String) -> Vec<crate::skills::SkillInfo> {
+    crate::skills::list_skills(cwd)
+}
+
 #[tauri::command]
 pub fn list_overview_panels(
     store: State<'_, Store>,

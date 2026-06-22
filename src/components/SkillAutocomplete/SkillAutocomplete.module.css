@@ -1,0 +1,74 @@
+/* Scheduled-prompt slash-command autocomplete (#114): a wrapper around the prompt
+   textarea hosting a `/`-triggered dropdown. On-system tokens only; the popover
+   uses the shared soft shadow. No animation, so reduced-motion is respected by
+   construction. Follows the FilePicker (#56) list look + keyboard feel. */
+.wrap {
+  position: relative;
+  display: block;
+}
+
+/* Opt-in fill (ScheduledPanel): the wrap grows inside a flex-column field and the
+   textarea fills it — so the prompt stays the "big" editor. The modal keeps the
+   default block sizing (fixed `rows`), so its layout never shifts. */
+.wrapFill {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.wrapFill > textarea {
+  flex: 1;
+  min-height: 0;
+}
+
+.menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  left: 0;
+  display: flex;
+  max-height: 220px;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+}
+
+.option {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.optionActive {
+  background: var(--bg-hover);
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.desc {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--fs-meta-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

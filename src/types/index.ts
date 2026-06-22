@@ -24,6 +24,15 @@ export interface SessionRecord {
   agent?: string;
 }
 
+/** A slash-invokable skill/command (#114, mirrors `skills::SkillInfo`). Powers
+ * the scheduled-prompt autocomplete; `name` is bare (inserted as `/<name>`),
+ * `source` is `"project"` or `"user"`. */
+export interface SkillInfo {
+  name: string;
+  description: string;
+  source: string;
+}
+
 /** Typed command error (mirrors `pty::SessionError`, serialized `{ kind, message }`). */
 export interface SessionError {
   kind: "BinaryNotFound" | "SessionNotFound" | "Spawn" | "Io" | "Git";

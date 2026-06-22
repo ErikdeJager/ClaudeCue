@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { GitBranch } from "lucide-react";
 
+import { listSkills } from "../../ipc";
 import { repoName } from "../../paths";
 import { useStore } from "../../store";
 import { toLocalInput } from "../../time";
+import type { SkillInfo } from "../../types";
+import SkillAutocomplete from "../SkillAutocomplete/SkillAutocomplete";
 import styles from "./ScheduledPanel.module.css";
 
 // Debounce for the auto-saving fields (#94): long enough to coalesce typing,
@@ -32,7 +35,26 @@ function ScheduledPanel({ scheduleId }: { scheduleId: string }) {
   const [fireAt, setFireAt] = useState(
     schedule ? toLocalInput(new Date(schedule.fire_at * 1000)) : "",
   );
+  // Slash-command skills for this schedule's folder (#114) — the prompt
+  // autocomplete; best-effort, so a failure just leaves the list empty.
+  const [skills, setSkills] = useState<SkillInfo[]>([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cwd = schedule?.cwd;
+  useEffect(() => {
+    if (!cwd) return;
+    let cancelled = false;
+    void listSkills(cwd)
+      .then((s) => {
+        if (!cancelled) setSkills(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSkills([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cwd]);
 
   useEffect(() => {
     if (!schedule) return;
@@ -123,15 +145,17 @@ function ScheduledPanel({ scheduleId }: { scheduleId: string }) {
 
       <label className={`${styles.field} ${styles.promptField}`}>
         <span className={styles.label}>Prompt</span>
-        <textarea
+        <SkillAutocomplete
           className={styles.prompt}
           value={prompt}
-          placeholder="Initial prompt for claude (optional)…"
-          onChange={(event) => {
-            setPrompt(event.currentTarget.value);
-            queueSave(event.currentTarget.value, name, fireAt);
+          onChange={(next) => {
+            setPrompt(next);
+            queueSave(next, name, fireAt);
           }}
-          aria-label="Initial prompt"
+          skills={skills}
+          placeholder="Initial prompt for claude (optional)…"
+          ariaLabel="Initial prompt"
+          fill
         />
       </label>
 

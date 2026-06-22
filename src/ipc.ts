@@ -19,6 +19,7 @@ import type {
   ScheduleFiredPayload,
   SessionRecord,
   Settings,
+  SkillInfo,
   StatePayload,
   WorkingDiff,
 } from "./types";
@@ -147,6 +148,12 @@ export const listFiles = (repo: string) =>
 /** Read a repo-relative text file (validated inside the repo, #40/#44). */
 export const readTextFile = (repo: string, file: string) =>
   invoke<string>("read_text_file", { repo, file });
+
+/** Best-effort slash-invokable skills/commands for `cwd` (#114) — the
+ * scheduled-prompt autocomplete. Reads project + user `.claude/{skills,commands}`,
+ * project shadowing user; a missing dir just yields fewer entries (never throws). */
+export const listSkills = (cwd: string) =>
+  invoke<SkillInfo[]>("list_skills", { cwd });
 
 export const currentBranch = (cwd: string) =>
   invoke<string>("current_branch", { cwd });
