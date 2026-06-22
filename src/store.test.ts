@@ -662,3 +662,60 @@ describe("canvas template instantiation (#118)", () => {
     expect(useStore.getState().templateUseOpen).toBe(false);
   });
 });
+
+describe("canvas tab close behavior (#137)", () => {
+  const agentLayout = (sessionId: string): CanvasNode => ({
+    type: "leaf",
+    id: `leaf-${sessionId}`,
+    content: { kind: "agent", sessionId, repoPath: `/repo/${sessionId}` },
+  });
+  const s = () => useStore.getState();
+  const seed = (behavior: "ask" | "kill" | "keep") => {
+    useStore.setState({
+      sessions: [session("a1")],
+      canvases: [
+        { id: "c-full", name: "Full", layout: agentLayout("a1") },
+        { id: "c-empty", name: "Empty", layout: null },
+      ],
+      activeCanvasId: "c-full",
+      settings: { ...s().settings, canvasCloseBehavior: behavior },
+      canvasClosePromptId: null,
+    });
+  };
+
+  it("closes an empty tab silently (no prompt) in every mode", () => {
+    for (const mode of ["ask", "kill", "keep"] as const) {
+      seed(mode);
+      s().requestCloseCanvas("c-empty");
+      expect(s().canvasClosePromptId).toBeNull();
+      expect(s().canvases.some((c) => c.id === "c-empty")).toBe(false);
+    }
+  });
+
+  it("'ask' opens the prompt for a tab with contents; cancel leaves it open", () => {
+    seed("ask");
+    s().requestCloseCanvas("c-full");
+    expect(s().canvasClosePromptId).toBe("c-full");
+    expect(s().canvases.some((c) => c.id === "c-full")).toBe(true); // not closed yet
+    s().cancelCloseCanvas();
+    expect(s().canvasClosePromptId).toBeNull();
+    expect(s().canvases.some((c) => c.id === "c-full")).toBe(true);
+  });
+
+  it("'keep' closes the tab without killing its agent", () => {
+    seed("keep");
+    s().requestCloseCanvas("c-full");
+    expect(s().canvasClosePromptId).toBeNull();
+    expect(s().canvases.some((c) => c.id === "c-full")).toBe(false);
+    expect(s().sessions.some((x) => x.id === "a1")).toBe(true); // agent survives
+  });
+
+  it("confirming kill drops the tab's agent from sessions and closes the tab", async () => {
+    seed("ask");
+    s().requestCloseCanvas("c-full");
+    await s().confirmCloseCanvas("c-full", true);
+    expect(s().canvasClosePromptId).toBeNull();
+    expect(s().canvases.some((c) => c.id === "c-full")).toBe(false);
+    expect(s().sessions.some((x) => x.id === "a1")).toBe(false); // killed + dropped
+  });
+});

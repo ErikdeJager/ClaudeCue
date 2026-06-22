@@ -360,9 +360,9 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#136 are complete** — see **Implemented (completed tasks)** above for the
-index and git history for per-task detail. The only **open** task is **#137**
-(`Depends on: none`). The full entries for the recently completed #133–#136 remain below
+Tasks **#1–#137 are complete** — see **Implemented (completed tasks)** above for the
+index and git history for per-task detail. The only **open** task is **#138**
+(`Depends on: none`). The full entries for the recently completed #133–#137 remain below
 until the next `/update-docs` condenses them into the summary. New work goes here as a
 fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its
 `Depends on:` prerequisites.
@@ -797,9 +797,9 @@ pending block). All gates pass: `npm run build`, `npm run lint`, `npm test` (145
 
 ---
 
-### 137. [ ] Closing a Canvas tab — prompt to kill/keep its contents (+ default-behavior setting)
+### 137. [x] Closing a Canvas tab — prompt to kill/keep its contents (+ default-behavior setting)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none · _(builds on the #58 Canvas tabs, the #91/#106 kill/close-all mechanics, the #100/#103 Settings + Behavior section, the #84 detached windows, and the #18 terminal pool — all shipped)_
 **Created:** 2026-06-22
 
@@ -877,31 +877,58 @@ protecting contents shared with another open tab (kill is global, as above).
 
 **Subtasks**
 
-1. [ ] Add `canvasCloseBehavior` to `Settings` + `DEFAULT_SETTINGS` and a 3-segment control
+1. [x] Add `canvasCloseBehavior` to `Settings` + `DEFAULT_SETTINGS` and a 3-segment control
    in the Settings Behavior section.
-2. [ ] Add the per-tab `closeCanvasContents(layout)` teardown helper (reusing kill /
+2. [x] Add the per-tab `closeCanvasContents(layout)` teardown helper (reusing kill /
    removeOverviewPanel / cancelSchedule / worktree-cleanup primitives) with one summary toast.
-3. [ ] Add `requestCloseCanvas(id)` + `confirmCloseCanvas(id, kill)` + `canvasClosePromptId`
+3. [x] Add `requestCloseCanvas(id)` + `confirmCloseCanvas(id, kill)` + `canvasClosePromptId`
    state; point the tab × at `requestCloseCanvas`.
-4. [ ] Build the focus-trapped `CanvasCloseModal` with K / Enter / Esc keybinds and a
+4. [x] Build the focus-trapped `CanvasCloseModal` with K / Enter / Esc keybinds and a
    contents summary; render it at the App top level.
-5. [ ] Verify empty tabs close with no modal; the setting's kill/keep modes skip the modal;
-   detached tabs work.
+5. [x] Verify empty tabs close with no modal; the setting's kill/keep modes skip the modal;
+   detached tabs work. _(Empty/keep/kill branching unit-tested; detached path is the same
+   action — runtime-unverified, see report.)_
 
 **Acceptance criteria**
 
-- [ ] Clicking × on a Canvas tab **with contents** (in "Ask" mode) opens a modal with
-  **Kill & close**, **Keep & close**, and **Cancel**, each operable by a single keybind.
-- [ ] **Kill & close** kills the tab's agents + shell-terminal PTYs and removes its
+- [x] Clicking × on a Canvas tab **with contents** (in "Ask" mode) opens a modal with
+  **Kill & close**, **Keep & close**, and **Cancel**, each operable by a single keybind
+  (K / Enter / Esc).
+- [x] **Kill & close** kills the tab's agents + shell-terminal PTYs and removes its
   file/diff/terminal/scheduled items from the sidebar + Overview, then closes the tab.
-- [ ] **Keep & close** closes the tab while leaving its agents/items in the sidebar +
+- [x] **Keep & close** closes the tab while leaving its agents/items in the sidebar +
   Overview; **Cancel** leaves the tab open and untouched.
-- [ ] The Settings → Behavior control switches the default among **Ask every time** /
-  **Always kill** / **Never kill**, persists across restarts, and the non-Ask modes skip
-  the modal.
-- [ ] An empty tab closes with no modal in every mode; the always-≥1-tab invariant (#58)
-  still holds (closing the last tab leaves a fresh empty canvas).
-- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+- [x] The Settings → Behavior control switches the default among **Ask every time** /
+  **Always kill** / **Never kill**, persists across restarts (opaque `settings` blob), and
+  the non-Ask modes skip the modal.
+- [x] An empty tab closes with no modal in every mode; the always-≥1-tab invariant (#58)
+  still holds (`closeCanvas` is reused for the drop).
+- [x] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+
+**Implementation report**
+
+Implemented the recommended approach. **Setting:** added `canvasCloseBehavior:
+"ask"|"kill"|"keep"` to `Settings` + `DEFAULT_SETTINGS` (`"ask"`; opaque blob, upgrades
+cleanly) and a 3-segment control (Ask every time / Always kill / Never kill) in the
+Settings → Behavior section, reusing the `segmented` pattern. **Teardown:** a module-level
+`closeCanvasContents(layout)` walks `collectLeaves`, classifies each leaf, then in one
+batched state update kills agents (+ ref-counted #74 worktree cleanup) and shell-terminal
+PTYs (marked `intentional` #32), removes file/diff/terminal sidebar items
+(`overviewPanels`, matched via the existing `leafItemId`; a canvas-only #118 terminal is
+killed but has no sidebar entry), cancels schedules, clears a now-dangling selection, and
+persists each affected repo — emitting **one** summary toast (#83). **Flow:** the tab ×
+now calls `requestCloseCanvas(id)` — empty tab → `closeCanvas` directly; `kill`/`keep` →
+`confirmCloseCanvas(id, bool)`; `ask` → sets `canvasClosePromptId`. `confirmCloseCanvas`
+runs the teardown (kill path) then the reused `closeCanvas`. **Modal:** a new
+`CanvasCloseModal` (rendered at the App top level when `canvasClosePromptId` is set) —
+scrim + `role="dialog"`/`aria-modal`, the safe **Keep** button autofocused (native Enter),
+window keybinds **K** → kill / **Esc** → cancel, a Tab focus-trap over its buttons, and a
+contents summary ("This tab contains 2 agents, 1 terminal…"). 4 unit tests cover the
+empty/ask+cancel/keep/kill-drops-agent branches. **Detached tabs (#84):** unchanged path —
+the × still calls `requestCloseCanvas`, the kill is global over IPC, and `closeCanvas`
+already closes the detached window; **runtime-unverified** in a real detached window (no
+GUI/multi-monitor here, per the #84/#105 precedent). All gates pass: `npm run build`,
+`npm run lint`, `npm test` (149), `cargo test` (68), `prettier --check`.
 
 **Notes**
 

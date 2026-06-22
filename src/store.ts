@@ -256,6 +256,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reduceMotion: false,
   defaultView: "overview",
   confirmDestructive: true,
+  canvasCloseBehavior: "ask",
   autoName: true,
 };
 
@@ -541,6 +542,16 @@ export interface AppState {
   addCanvas: () => void;
   /** Close a Canvas tab; always keeps ≥1 (closing the last leaves an empty one) (#58). */
   closeCanvas: (id: string) => void;
+  /** Id of the canvas whose close is awaiting the kill/keep prompt (#137), or null. */
+  canvasClosePromptId: string | null;
+  /** Tab × entry point (#137): an empty tab closes silently; a tab with contents
+   * branches on the `canvasCloseBehavior` setting (kill / keep / ask-via-modal). */
+  requestCloseCanvas: (id: string) => void;
+  /** Resolve the #137 close prompt: when `kill`, tear down the tab's agents/items
+   * (`closeCanvasContents`), then close the tab either way. */
+  confirmCloseCanvas: (id: string, kill: boolean) => Promise<void>;
+  /** Dismiss the #137 close prompt, leaving the tab open and untouched. */
+  cancelCloseCanvas: () => void;
   /** Rename a Canvas tab; a blank name keeps the current one (#58). */
   renameCanvas: (id: string, name: string) => void;
   /** Reorder the Canvas tabs (#58, dnd-kit). */
@@ -748,6 +759,137 @@ async function closeRepoItems(repoPath: string): Promise<number> {
   return panels.length;
 }
 
+/**
+ * Tear down everything a closing Canvas tab's `layout` held (#137): kill its agents
+ * (with #74 worktree cleanup) and shell-terminal PTYs (intentional, #32 — no Exited
+ * toast / Restart overlay), and remove its file / diff / terminal / scheduled items
+ * from the sidebar + Overview. A **global** removal — the sidebar lists each item once,
+ * so this also removes it from any other open tab (documented; protecting cross-tab
+ * items is out of scope). Reuses the existing kill / overviewPanels / cancelSchedule
+ * primitives, batched into one state update + **one** summary toast (#83).
+ */
+async function closeCanvasContents(layout: CanvasNode): Promise<void> {
+  const { sessions, overviewPanels } = useStore.getState();
+  const sessionIds = new Set(sessions.map((s) => s.id));
+  const leaves = collectLeaves(layout);
+
+  const agentIds = new Set<string>(); // tracked agent sessions to kill + drop
+  const termPtyIds = new Set<string>(); // shell-terminal PTYs to kill
+  const scheduleIds = new Set<string>(); // schedules to cancel
+  // Overview/sidebar panel ids to drop, grouped by repo (file / diff / terminal items).
+  const panelIdsByRepo = new Map<string, Set<string>>();
+  let files = 0;
+  let diffs = 0;
+
+  for (const { content: c } of leaves) {
+    if (c.kind === "agent" && c.sessionId && sessionIds.has(c.sessionId)) {
+      agentIds.add(c.sessionId);
+    } else if (c.kind === "terminal" && c.sessionId) {
+      termPtyIds.add(c.sessionId);
+    } else if (c.kind === "scheduled" && c.scheduleId) {
+      scheduleIds.add(c.scheduleId);
+    } else if (c.kind === "file") {
+      files += 1;
+    } else if (c.kind === "diff") {
+      diffs += 1;
+    }
+    // File/diff/terminal panels that are also sidebar items (in overviewPanels) get
+    // removed from the left panel. A canvas-only template terminal (#118) isn't a
+    // sidebar item, so it's covered by the PTY kill above only.
+    const addPanel = (repo: string, id: string) => {
+      if (!panelIdsByRepo.has(repo)) panelIdsByRepo.set(repo, new Set());
+      panelIdsByRepo.get(repo)?.add(id);
+    };
+    if (c.kind === "file" || c.kind === "diff") {
+      const panelId = leafItemId(c, overviewPanels);
+      if (panelId) addPanel(c.repoPath ?? "", panelId);
+    } else if (c.kind === "terminal" && c.sessionId) {
+      const repo = c.repoPath ?? "";
+      if ((overviewPanels[repo] ?? []).some((p) => p.id === c.sessionId))
+        addPanel(repo, c.sessionId);
+    }
+  }
+
+  // Worktree dests to reclaim after the agents go (#74), captured pre-drop.
+  const worktreeDests = [
+    ...new Map(
+      sessions
+        .filter((s) => agentIds.has(s.id) && s.worktreeParent)
+        .map((s) => [
+          s.repoPath,
+          { parent: s.worktreeParent as string, dest: s.repoPath },
+        ]),
+    ).values(),
+  ];
+
+  // Kill PTYs (intentional, so the exit doesn't toast / show Restart, #32).
+  const killIds = [...agentIds, ...termPtyIds];
+  killIds.forEach((id) => intentionalKills.add(id));
+  await Promise.all(killIds.map((id) => ipc.killSession(id).catch(() => {})));
+  await Promise.all(
+    [...scheduleIds].map((id) => ipc.cancelSchedule(id).catch(() => {})),
+  );
+
+  // The full set of removed item ids, for clearing a now-dangling selection.
+  const removedIds = new Set<string>([
+    ...agentIds,
+    ...termPtyIds,
+    ...scheduleIds,
+  ]);
+  for (const ids of panelIdsByRepo.values())
+    for (const id of ids) removedIds.add(id);
+
+  // One batched state update across sessions / overviewPanels / schedules.
+  useStore.setState((s) => {
+    const map = { ...s.overviewPanels };
+    for (const [repo, ids] of panelIdsByRepo) {
+      const next = (map[repo] ?? []).filter((p) => !ids.has(p.id));
+      if (next.length) map[repo] = next;
+      else delete map[repo];
+    }
+    const clearSelection = s.selectedId != null && removedIds.has(s.selectedId);
+    return {
+      sessions: s.sessions.filter((x) => !agentIds.has(x.id)),
+      schedules: s.schedules.filter((x) => !scheduleIds.has(x.id)),
+      overviewPanels: map,
+      selectedId: clearSelection ? null : s.selectedId,
+      view: clearSelection ? "overview" : s.view,
+      sessionBusy: Object.fromEntries(
+        Object.entries(s.sessionBusy).filter(([id]) => !agentIds.has(id)),
+      ),
+      sessionActive: Object.fromEntries(
+        Object.entries(s.sessionActive).filter(([id]) => !agentIds.has(id)),
+      ),
+      terminalExits: Object.fromEntries(
+        Object.entries(s.terminalExits).filter(([id]) => !removedIds.has(id)),
+      ),
+    };
+  });
+
+  // Persist each affected repo's cleared panel list.
+  for (const repo of panelIdsByRepo.keys()) {
+    void ipc
+      .setOverviewPanels(repo, useStore.getState().overviewPanels[repo] ?? [])
+      .catch(() => {});
+  }
+
+  // Ref-counted worktree cleanup (#74): keep a dirty worktree rather than force it.
+  for (const { parent, dest } of worktreeDests) {
+    await useStore.getState().cleanupWorktreeIfEmpty(parent, dest);
+  }
+
+  // One summary toast (#83), not per-item spam.
+  const parts: string[] = [];
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  if (agentIds.size) parts.push(plural(agentIds.size, "agent"));
+  if (termPtyIds.size) parts.push(plural(termPtyIds.size, "terminal"));
+  if (files) parts.push(plural(files, "file"));
+  if (diffs) parts.push(plural(diffs, "diff"));
+  if (scheduleIds.size) parts.push(plural(scheduleIds.size, "schedule"));
+  if (parts.length)
+    useStore.getState().pushToast(`Closed tab — removed ${parts.join(", ")}`);
+}
+
 export const useStore = create<AppState>()((set, get) => ({
   sessions: [],
   selectedId: null,
@@ -765,6 +907,7 @@ export const useStore = create<AppState>()((set, get) => ({
   // so it renders the right layout before the persisted tabs load.
   activeCanvasId: DETACHED_CANVAS_ID ?? "canvas-1",
   detachedCanvasIds: [],
+  canvasClosePromptId: null,
   canvasTemplates: [],
   templateEditorOpen: false,
   templateEditorId: null,
@@ -1683,6 +1826,37 @@ export const useStore = create<AppState>()((set, get) => ({
     }
     get().pushToast("Canvas closed");
   },
+
+  // Tab × entry point (#137). An empty tab closes silently in every mode; a tab with
+  // contents follows the `canvasCloseBehavior` setting: kill / keep skip the modal,
+  // ask opens it. Self-contained — does not read #103's `confirmDestructive`.
+  requestCloseCanvas: (id) => {
+    const { canvases, settings } = get();
+    const canvas = canvases.find((c) => c.id === id);
+    const hasContents = !!canvas && collectLeaves(canvas.layout).length > 0;
+    if (!hasContents) {
+      get().closeCanvas(id);
+      return;
+    }
+    if (settings.canvasCloseBehavior === "kill") {
+      void get().confirmCloseCanvas(id, true);
+    } else if (settings.canvasCloseBehavior === "keep") {
+      void get().confirmCloseCanvas(id, false);
+    } else {
+      set({ canvasClosePromptId: id });
+    }
+  },
+
+  confirmCloseCanvas: async (id, kill) => {
+    set({ canvasClosePromptId: null });
+    const canvas = get().canvases.find((c) => c.id === id);
+    // Tear down the tab's contents first (kill path) so reconcileTerminals sees both
+    // the dropped sessions and the closed tab in one pass; then drop the tab.
+    if (kill && canvas?.layout) await closeCanvasContents(canvas.layout);
+    get().closeCanvas(id);
+  },
+
+  cancelCloseCanvas: () => set({ canvasClosePromptId: null }),
 
   renameCanvas: (id, name) => {
     const trimmed = name.trim();

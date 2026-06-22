@@ -266,6 +266,30 @@ function SettingsModal() {
                   label="Confirm destructive actions"
                   className={styles.checkRow}
                 />
+                <div className={styles.field}>
+                  <span className={styles.fieldLabel}>
+                    Closing a Canvas tab with contents
+                  </span>
+                  <div className={styles.segmented}>
+                    {(
+                      [
+                        ["ask", "Ask every time"],
+                        ["kill", "Always kill"],
+                        ["keep", "Never kill"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={`${styles.segment} ${draft.canvasCloseBehavior === v ? styles.segmentActive : ""}`}
+                        onClick={() => update("canvasCloseBehavior", v)}
+                        aria-pressed={draft.canvasCloseBehavior === v}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </>
             )}
 

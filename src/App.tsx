@@ -18,6 +18,7 @@ import {
   computeSessionOwners,
   sessionIdsInLayout,
 } from "./components/Canvas/canvasTree";
+import CanvasCloseModal from "./components/CanvasCloseModal/CanvasCloseModal";
 import CanvasWindow from "./components/CanvasWindow/CanvasWindow";
 import ClaudeMissing from "./components/ClaudeMissing/ClaudeMissing";
 import NewSessionModal from "./components/NewSessionModal/NewSessionModal";
@@ -55,6 +56,7 @@ function MainApp() {
   const templateEditorOpen = useStore((s) => s.templateEditorOpen);
   const templateManagerOpen = useStore((s) => s.templateManagerOpen);
   const templateUseOpen = useStore((s) => s.templateUseOpen);
+  const canvasClosePromptId = useStore((s) => s.canvasClosePromptId);
   const init = useStore((s) => s.init);
   const [dragActive, setDragActive] = useState(false);
 
@@ -132,6 +134,7 @@ function MainApp() {
       <Toaster />
       <NewSessionModal />
       <Settings />
+      {canvasClosePromptId && <CanvasCloseModal />}
       {templateUseOpen && <TemplateUseModal />}
       {templateManagerOpen && <TemplateManager />}
       {templateEditorOpen && <TemplateEditor />}

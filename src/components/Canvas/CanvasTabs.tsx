@@ -43,7 +43,7 @@ const TEAROFF_THRESHOLD_PX = 50;
  */
 function Tab({ tab, active }: { tab: CanvasTab; active: boolean }) {
   const selectCanvas = useStore((s) => s.selectCanvas);
-  const closeCanvas = useStore((s) => s.closeCanvas);
+  const requestCloseCanvas = useStore((s) => s.requestCloseCanvas);
   const renameCanvas = useStore((s) => s.renameCanvas);
   const popOutCanvas = useStore((s) => s.popOutCanvas);
   const focusCanvasWindow = useStore((s) => s.focusCanvasWindow);
@@ -124,7 +124,7 @@ function Tab({ tab, active }: { tab: CanvasTab; active: boolean }) {
       <button
         type="button"
         className={styles.tabClose}
-        onClick={() => closeCanvas(tab.id)}
+        onClick={() => requestCloseCanvas(tab.id)}
         title="Close canvas"
         aria-label={`Close ${tab.name}`}
       >

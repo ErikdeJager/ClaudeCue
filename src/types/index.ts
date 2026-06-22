@@ -186,6 +186,10 @@ export interface Settings {
   defaultView: View;
   /** Confirm destructive Sidebar actions (Remove / Kill all / Close all). */
   confirmDestructive: boolean;
+  /** What closing a Canvas tab *with contents* does (#137): `ask` shows a modal,
+   * `kill` tears down its agents/items, `keep` just drops the tab (today's behavior).
+   * Self-contained — independent of `confirmDestructive`. */
+  canvasCloseBehavior: "ask" | "kill" | "keep";
   // Sessions
   /** Use claude's `ai-title` (#97) for unnamed agents; off → the branch label. */
   autoName: boolean;
