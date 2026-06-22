@@ -549,7 +549,7 @@ menu doesn't exist there).
 
 ---
 
-### 129. [x] Add "Reveal in Finder" and "Copy path" to the repo (folder) context menu
+### 130. [x] Add "Reveal in Finder" and "Copy path" to the repo (folder) context menu
 
 **Status:** Done
 **Owner:** _(unassigned)_
@@ -579,7 +579,7 @@ vector), register it in `src-tauri/src/lib.rs`'s `invoke_handler`, and wrap it i
 not `open -R` (reveal-selected-in-parent).
 
 **Scope — in:** the single repo-header context menu; the two new items + the one new
-backend command/IPC wrapper. **Out:** the agent row menu (#130), the
+backend command/IPC wrapper. **Out:** the agent row menu (#131), the
 file/diff/terminal/schedule rows (suggested separately but not authored), and any change
 to the existing menu items.
 
@@ -615,7 +615,7 @@ to the existing menu items.
 
 ---
 
-### 130. [ ] Add "Copy session ID" and "Fork conversation" to the agent (session) context menu
+### 131. [ ] Add "Copy session ID" and "Fork conversation" to the agent (session) context menu
 
 **Status:** Not started
 **Owner:** _(unassigned)_
@@ -642,7 +642,7 @@ valid for `claude --resume`). `SessionRow` already consumes the full `session` o
 would also read `forkSession` / `copyToClipboard` via `useStore`.
 
 **Scope — in:** the `SessionRow` context menu — add the two items. **Out:** the repo menu
-(#129) and the file/diff/terminal/schedule rows; no backend/fork-logic changes.
+(#130) and the file/diff/terminal/schedule rows; no backend/fork-logic changes.
 
 **Subtasks**
 
@@ -676,7 +676,7 @@ would also read `forkSession` / `copyToClipboard` via `useStore`.
 
 ---
 
-### 131. [ ] Add simple right-click context menus to the non-agent left-panel rows (file / diff / terminal / schedule)
+### 132. [ ] Add simple right-click context menus to the non-agent left-panel rows (file / diff / terminal / schedule)
 
 **Status:** Not started
 **Owner:** _(unassigned)_
@@ -716,7 +716,7 @@ schedule). Reuse the existing `.menuOverlay` / `.menu` / `.menuItemDanger` class
   removal-type actions), matching the agent Remove.
 
 **Scope — in:** the four non-agent sidebar rows; add an `onContextMenu` + a single-item
-menu to each. **Out:** the agent `SessionRow` menu (#130), the repo menu (#129), any new
+menu to each. **Out:** the agent `SessionRow` menu (#131), the repo menu (#130), any new
 menu items beyond Remove/Cancel, and any backend change.
 
 **Subtasks**
@@ -752,6 +752,6 @@ menu items beyond Remove/Cancel, and any backend change.
 - Deliberately minimal ("just Remove/Cancel for now"); future items (Open in Canvas,
   Reveal in Finder, Copy path, Refresh diff, etc. — the earlier suggestion table) can
   extend these same menus.
-- Sibling tasks **#129** (repo menu) and **#130** (agent `SessionRow` menu) edit the same
+- Sibling tasks **#130** (repo menu) and **#131** (agent `SessionRow` menu) edit the same
   file (`Sidebar.tsx`) but different components — no logical dependency, just adjacent
   edits if developed close together.
