@@ -615,9 +615,9 @@ to the existing menu items.
 
 ---
 
-### 131. [ ] Add "Copy session ID" and "Fork conversation" to the agent (session) context menu
+### 131. [x] Add "Copy session ID" and "Fork conversation" to the agent (session) context menu
 
-**Status:** Not started
+**Status:** Done
 **Owner:** _(unassigned)_
 **Depends on:** none · _(reuses the shipped fork action #126 and the existing SessionRow menu; the #120/#121 refining passes are complete, so nothing open gates it)_
 **Created:** 2026-06-22
@@ -646,25 +646,25 @@ would also read `forkSession` / `copyToClipboard` via `useStore`.
 
 **Subtasks**
 
-1. [ ] In `SessionRow`, pull `forkSession` and `copyToClipboard` from the store
+1. [x] In `SessionRow`, pull `forkSession` and `copyToClipboard` from the store
    (`useStore`).
-2. [ ] Add menu items so the order is **Rename · Fork conversation · Copy session ID ·
+2. [x] Add menu items so the order is **Rename · Fork conversation · Copy session ID ·
    (separator) · Remove**: Fork → `forkSession(session.id)`; Copy session ID →
    `copyToClipboard(session.claudeSessionId, "session ID")`; `setMenu(null)` after each.
    Use the `GitFork` Lucide icon to match the existing fork buttons.
-3. [ ] Verify `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, `cargo
+3. [x] Verify `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, `cargo
    clippy`, `cargo fmt`.
 
 **Acceptance criteria**
 
-- [ ] Right-clicking an agent row shows **Rename**, **Fork conversation**, **Copy session
+- [x] Right-clicking an agent row shows **Rename**, **Fork conversation**, **Copy session
   ID**, and **Remove**.
-- [ ] **Fork conversation** creates a new parallel forked session — identical behavior to
+- [x] **Fork conversation** creates a new parallel forked session — identical behavior to
   the existing Overview/Canvas fork buttons (reuses `forkSession`, no new backend).
-- [ ] **Copy session ID** copies the agent's `claude` session UUID and shows a "Copied
+- [x] **Copy session ID** copies the agent's `claude` session UUID and shows a "Copied
   session ID" toast.
-- [ ] The menu closes after each action; Rename/Remove are unchanged.
-- [ ] All build/lint/test/format + clippy/fmt checks pass.
+- [x] The menu closes after each action; Rename/Remove are unchanged.
+- [x] All build/lint/test/format + clippy/fmt checks pass.
 
 **Notes**
 

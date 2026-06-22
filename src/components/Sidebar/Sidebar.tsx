@@ -12,6 +12,7 @@ import {
   FileText,
   Folder,
   GitBranch,
+  GitFork,
   Plus,
   Settings as SettingsIcon,
   Terminal as TerminalIcon,
@@ -125,6 +126,11 @@ function SessionRow({
   onRemove,
   onRename,
 }: SessionRowProps) {
+  // Fork (#126) + copy session ID (#131) reuse the store directly — the row menu
+  // surfaces the same fork action as the Overview/Canvas header buttons.
+  const forkSession = useStore((s) => s.forkSession);
+  const copyToClipboard = useStore((s) => s.copyToClipboard);
+
   // Draggable into Canvas (#47); a small activation distance keeps the click
   // (select) working. The drag snaps back outside Canvas's drop zones.
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -195,7 +201,9 @@ function SessionRow({
         event.stopPropagation();
         setMenu({
           x: Math.max(8, Math.min(event.clientX, window.innerWidth - 160)),
-          y: Math.max(8, Math.min(event.clientY, window.innerHeight - 96)),
+          // Clamp for the taller menu (#131 added Fork / Copy session ID, so it
+          // now has 4 items + a separator) so it never overflows the bottom edge.
+          y: Math.max(8, Math.min(event.clientY, window.innerHeight - 160)),
         });
       }}
     >
@@ -270,6 +278,38 @@ function SessionRow({
             >
               Rename
             </button>
+            {/* Fork the agent's conversation (#131) — reuses the #126 action,
+                same as the Overview/Canvas header fork buttons. The icon+label
+                layout reuses the Views items' flex styling (#82). */}
+            <button
+              type="button"
+              role="menuitem"
+              className={`${styles.menuItem} ${styles.menuItemView}`}
+              onClick={() => {
+                setMenu(null);
+                void forkSession(session.id);
+              }}
+            >
+              <GitFork
+                size={14}
+                strokeWidth={1.5}
+                className={styles.menuIcon}
+              />
+              Fork conversation
+            </button>
+            {/* Copy the claude session UUID (#131) — usable with `claude --resume`. */}
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.menuItem}
+              onClick={() => {
+                setMenu(null);
+                void copyToClipboard(session.claudeSessionId, "session ID");
+              }}
+            >
+              Copy session ID
+            </button>
+            <div className={styles.menuSeparator} role="separator" />
             <button
               type="button"
               role="menuitem"
