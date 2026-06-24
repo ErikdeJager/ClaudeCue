@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Canvas re drag and drop
-	Inside a canvas, I can drag and drop elements that are already present. But this mechanic doesnt work very well. I dont have the freedom to drop it anywhere because the element I am currently dragging is still present in the current layout. I want the item to automatically “removed” from the canvas when I start a drop so I can clearly see where I can drop it next. If I stop the drop action it should reposition that element at its previous position.
 - [ ] Scrollable Kanban
 	The Kanban is not scrollable on the X axis in overview mode. In canvas mode this works fine
 - [ ] Big mode per item
@@ -17,6 +15,9 @@ kanban-plugin: board
 
 ## READY
 
+- [ ] #155 — Canvas panel drag: lift on drag-start, restore on cancel
+	Plan: TASK-155.md
+	Depends on: none
 
 ## DONE
 
