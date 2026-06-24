@@ -15,27 +15,37 @@
   flex-direction: column;
 }
 
-/* Board ⟷ Raw toggle bar (#147, mirroring the #73 FileViewer toolbar). */
+/* Board ⟷ Raw toggle bar (#147, mirroring the #73 FileViewer toolbar). Responsive
+   at narrow widths (#161, folding in #158's fix): the status truncates and the
+   toggle never clips. */
 .toolbar {
   display: flex;
   flex-shrink: 0;
+  min-width: 0;
   align-items: center;
   justify-content: flex-end;
+  gap: var(--space-8);
   padding: var(--space-4) var(--space-6);
   border-bottom: 1px solid var(--border-hairline);
   background: var(--bg-panel);
 }
 
 /* Subtle auto-save hint (#148/#149) — "Saving… / Saved". `margin-right: auto`
-   keeps the Board/Raw toggle on the right when both are shown. */
+   keeps the Board/Raw toggle on the right when both are shown; it truncates rather
+   than pushing the toggle off at narrow widths (#161). */
 .status {
+  min-width: 0;
   margin-right: auto;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: var(--fs-meta-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .segmented {
   display: flex;
+  flex-shrink: 0;
   gap: var(--space-1);
   padding: var(--space-1);
   border: 1px solid var(--border-strong);
@@ -129,7 +139,9 @@
   appearance: none;
   background: none;
   border: none;
-  padding: 0;
+  padding: var(--space-2) var(--space-4);
+  margin-left: calc(-1 * var(--space-4));
+  border-radius: var(--radius-chip);
   text-align: left;
   cursor: text;
   font-size: var(--fs-meta-sm);
@@ -140,6 +152,15 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+/* Hover cue that the column name is click-to-rename (#161). */
+.columnName:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 .columnNameInput {
@@ -165,11 +186,25 @@
   border-radius: var(--radius-chip);
 }
 
+/* The lone Delete action reveals on column hover / keyboard focus-within (#161),
+   so the header reads clean by default but stays reachable (and a11y-visible). */
 .columnActions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.column:hover .columnActions,
+.columnHeader:focus-within .columnActions {
+  opacity: 1;
+}
+
+/* The confirm-delete state must always be visible (it's mid-interaction). */
+.columnActions:has(.colBtnDanger) {
+  opacity: 1;
 }
 
 .colBtn {
@@ -220,6 +255,38 @@
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-chip);
   padding: var(--space-6) var(--space-8);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+/* Subtle lift on hover / keyboard focus (#161) — the card reads as interactive. */
+.card:hover {
+  border-color: var(--border-strong);
+}
+
+.card:focus-within {
+  border-color: var(--accent);
+}
+
+/* The origin slot while a card is dragged (#161): a dashed gap acting as the
+   insertion indicator while the live preview rides the cursor in the DragOverlay. */
+.cardPlaceholder {
+  border-style: dashed;
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  opacity: 0.7;
+}
+
+.cardPlaceholder * {
+  visibility: hidden;
+}
+
+/* The floating drag preview (#161): elevated + grabbing, grip always shown. */
+.cardOverlay {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-popover);
+  cursor: grabbing;
 }
 
 .cardTop {
@@ -228,6 +295,7 @@
   gap: var(--space-4);
 }
 
+/* Grip reveals on card hover / focus-within (#161) so cards read uncluttered. */
 .cardGrip {
   display: inline-flex;
   align-items: center;
@@ -237,6 +305,14 @@
   padding: 0;
   color: var(--text-muted);
   cursor: grab;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.card:hover .cardGrip,
+.card:focus-within .cardGrip,
+.cardOverlay .cardGrip {
+  opacity: 1;
 }
 
 .cardGrip:active {
@@ -283,11 +359,20 @@
   color: var(--text-muted);
 }
 
+/* Edit/Delete reveal on card hover / focus-within (#161) — uncluttered by default,
+   always shown while editing (the focused input keeps the card `:focus-within`). */
 .cardActions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.card:hover .cardActions,
+.card:focus-within .cardActions {
+  opacity: 1;
 }
 
 .cardBtn {
@@ -377,6 +462,16 @@
   margin: 0 0 var(--space-4);
   font-size: var(--fs-meta);
   color: var(--text-primary);
+}
+
+/* Empty-column cue (#161) — a quiet hint instead of a bare gap above Add card. */
+.emptyHint {
+  margin: 0;
+  padding: var(--space-12) var(--space-8);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-meta-sm);
+  font-style: italic;
 }
 
 .addCard {

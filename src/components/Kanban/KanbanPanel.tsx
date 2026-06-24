@@ -11,6 +11,8 @@ import {
   closestCorners,
   DndContext,
   type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
   PointerSensor,
   useDroppable,
   useSensor,
@@ -109,7 +111,6 @@ function SortableCard({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
   };
   // Commit-on-confirm (#160): while editing, the title/body bind to the local
   // `draft` (no per-keystroke write). The edit commits once when focus leaves the
@@ -125,7 +126,9 @@ function SortableCard({
     <article
       ref={setNodeRef}
       style={style}
-      className={`${styles.card} ${card.checked ? styles.cardDone : ""}`}
+      className={`${styles.card} ${card.checked ? styles.cardDone : ""} ${
+        isDragging ? styles.cardPlaceholder : ""
+      }`}
       onBlur={onEditBlur}
     >
       <div className={styles.cardTop}>
@@ -228,6 +231,41 @@ function SortableCard({
   );
 }
 
+/** The floating card shown under the cursor while dragging (#161 DragOverlay): a
+ * clean, static preview (no action buttons) with an elevated shadow, so the drag
+ * reads as a lifted card while its origin slot shows the dashed insertion gap. */
+function CardPreview({ card }: { card: Card }) {
+  return (
+    <article
+      className={`${styles.card} ${styles.cardOverlay} ${
+        card.checked ? styles.cardDone : ""
+      }`}
+    >
+      <div className={styles.cardTop}>
+        <span className={styles.cardGrip} aria-hidden>
+          <GripVertical size={13} strokeWidth={1.5} />
+        </span>
+        <Checkbox
+          checked={card.checked}
+          onChange={() => {}}
+          ariaLabel="Card done"
+          className={styles.cardCheck}
+        />
+        <span className={styles.cardTitle}>
+          {card.title.trim() || (
+            <span className={styles.untitled}>Untitled</span>
+          )}
+        </span>
+      </div>
+      {card.body.trim() && (
+        <div className={styles.cardBody}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{card.body}</ReactMarkdown>
+        </div>
+      )}
+    </article>
+  );
+}
+
 interface ColumnProps {
   col: number;
   name: string;
@@ -322,6 +360,10 @@ function BoardColumn(props: ColumnProps) {
             />
           ))}
         </SortableContext>
+        {/* Empty-column hint (#161): a subtle cue instead of a bare gap. */}
+        {props.cards.length === 0 && (
+          <p className={styles.emptyHint}>No cards yet</p>
+        )}
         <button
           type="button"
           className={styles.addCard}
@@ -378,6 +420,8 @@ function KanbanPanel({
   const [renamingCol, setRenamingCol] = useState<number | null>(null);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [confirmDeleteCol, setConfirmDeleteCol] = useState<number | null>(null);
+  // The card currently being dragged (#161), for the DragOverlay floating preview.
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
   // The per-file Board/Raw default is applied once on first load (#147), so later
   // hot-reload polls never override the user's toggle choice.
   const didInitView = useRef(false);
@@ -428,6 +472,7 @@ function KanbanPanel({
   );
 
   const onDragEnd = (event: DragEndEvent) => {
+    setActiveCardId(null);
     const { active: a, over } = event;
     if (!over || !board) return;
     const from = parseCardId(String(a.id));
@@ -548,6 +593,12 @@ function KanbanPanel({
     mutate(deleteColumn(board, col));
   };
 
+  // The card being dragged (#161) → its floating DragOverlay preview.
+  const activePos = activeCardId ? parseCardId(activeCardId) : null;
+  const activeCard = activePos
+    ? board.columns[activePos[0]]?.cards[activePos[1]]
+    : undefined;
+
   return (
     <div className={styles.panel}>
       {/* Board ⟷ Raw toggle (#147, mirroring the #73 FileViewer control) + the
@@ -601,13 +652,15 @@ function KanbanPanel({
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
-          onDragStart={() => {
+          onDragStart={(event: DragStartEvent) => {
             // Commit any in-flight card/column edit before a drag (don't lose it).
             stopCardEdit();
             stopColumnRename();
             setConfirmDeleteCol(null);
+            setActiveCardId(String(event.active.id));
           }}
           onDragEnd={onDragEnd}
+          onDragCancel={() => setActiveCardId(null)}
         >
           <div className={styles.board}>
             {board.columns.map((column, col) => (
@@ -652,6 +705,10 @@ function KanbanPanel({
               <Plus size={14} strokeWidth={1.5} /> Add column
             </button>
           </div>
+          {/* Floating preview of the dragged card (#161). */}
+          <DragOverlay dropAnimation={null}>
+            {activeCard ? <CardPreview card={activeCard} /> : null}
+          </DragOverlay>
         </DndContext>
       )}
     </div>

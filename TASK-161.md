@@ -1,6 +1,6 @@
-### 161. [ ] Kanban board UI/UX polish pass
+### 161. [x] Kanban board UI/UX polish pass
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #159, #160
 **Created:** 2026-06-24
 
@@ -138,3 +138,33 @@ in Subtasks.
   `closestCorners` ≈ 495-501), `KanbanPanel.module.css` (all `.board/.column/.card/
   .toolbar/...` rules), TASK-158 (FileViewer toolbar fix to mirror), `tokens.css`
   (design tokens), `global.css` (reduced-motion killswitch).
+
+**Implementation note (done 2026-06-24)**
+
+Polish pass over `KanbanPanel.tsx` + `KanbanPanel.module.css` — all behavior
+preserved, `.md` round-trip untouched (`kanban.test`/`kanbanOps.test` still pass):
+- **Hover/focus-revealed actions (1):** the card grip + Edit/Delete (and the column
+  Delete) are `opacity: 0` by default and reveal on `:hover` / `:focus-within`, so
+  cards/headers read uncluttered but stay reachable; editing keeps actions visible
+  (the focused input holds `:focus-within`), and the confirm-delete state stays shown.
+- **Card hierarchy (2):** card gains a hover (`--border-strong`) / focus-within
+  (`--accent`) border transition; title-first layout; done-state strike preserved.
+- **Drag affordance (3):** added a `<DragOverlay>` floating `CardPreview` (no action
+  buttons, elevated shadow) under the cursor, while the origin slot becomes a dashed
+  `--accent` insertion placeholder (`.cardPlaceholder`) — replaces the old in-place
+  `opacity: 0.4`. Cross-column drag still = status change (`moveCard` unchanged).
+- **Column header (4):** rename button gets a hover cue; Delete reveals on hover/focus.
+- **Empty state (5):** an empty column shows a "No cards yet" hint above Add card.
+- **Toolbar responsiveness (6, folding in #158):** `.toolbar` min-width:0 + gap,
+  `.status` truncates (ellipsis), `.segmented` flex-shrink:0 → the Board/Raw toggle
+  never clips at narrow widths.
+- **a11y/motion (7):** on-system tokens only; the global `:focus-visible` ring and
+  the global `prefers-reduced-motion` killswitch (`global.css`) cover the new
+  transitions automatically.
+- New JS: `activeCardId` state + `DragOverlay` wiring (`onDragStart`/`onDragEnd`/
+  `onDragCancel`); `CardPreview` component; empty-hint render. `npm run build`,
+  `npm run lint`, `npm run format:check`, and `npm test` (205) all pass. Subtask 8/9
+  manual walk-through is interactive; the changes are style + an additive overlay.
+- **Note:** `.columnActions:has(.colBtnDanger)` uses `:has()` (supported in the
+  app's WKWebView) as progressive enhancement — if unsupported the rule is ignored
+  and column hover still reveals the confirm-delete state mid-interaction.
