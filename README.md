@@ -12,16 +12,23 @@ chrome, navigation, persistence, and read-only git reading; the terminals come f
 
 - **Overview wall** — active sessions as equal-width live terminal columns, **grouped
   by repo** with colored badges and a per-repo filter; columns are
-  **drag-reorderable**, and a repo can add **diff**, **file-viewer**, and **terminal**
-  columns. **Fork** any agent's conversation from its header to branch it into a new
-  parallel session.
+  **drag-reorderable**, and a repo can add **diff**, **file-viewer**, **terminal**, and
+  **Kanban-board** columns. **Fork** any agent's conversation from its header to branch
+  it into a new parallel session.
 - **Canvas** — a split-panel workspace with **multiple named tabs**; drag any sidebar
-  item (agent, file, diff, or terminal) in to tile it, split panels on their edges,
-  resize borders. A tab can **pop out into its own native window** for multi-monitor use.
-  Save reusable **Canvas templates** — a layout of action blocks (start session, open
-  terminal, file, or diff) — and open a whole workspace from one in a single step
-  (each panel resolves on its own, with an inline retry if something can't start).
-- **Sidebar** — sessions and their file / diff / terminal viewers grouped by repository
+  item (agent, file, diff, terminal, or Kanban board) in to tile it, split panels on
+  their edges, drag a panel's header to reorder it, resize borders. A tab can **pop out
+  into its own native window** for multi-monitor use, and closing a tab can optionally
+  kill everything in it. Save reusable **Canvas templates** — a layout of action blocks
+  (start session, open terminal, file, or diff) — and open a whole workspace from one in
+  a single step (each panel resolves on its own, with an inline retry if something can't
+  start).
+- **Files & Kanban boards** — open any repo text file in a viewer with markdown
+  rendering and syntax highlighting (incl. Java + config formats); **edit** raw markdown
+  / plain-text inline with **auto-save** (no save button). Open or create a markdown
+  **Kanban board** (Obsidian format) and manage its cards and columns by drag-and-drop —
+  every change is written back to the `.md`.
+- **Sidebar** — sessions and their file / diff / terminal / Kanban viewers grouped by repository
   (labelled by your custom name, else `claude`'s own session title, else the branch),
   from persisted recents so repos stay listed with no active session; isolated
   **worktree agents** nest under their parent repo, and each repo is marked by a small

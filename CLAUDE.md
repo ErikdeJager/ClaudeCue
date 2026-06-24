@@ -26,10 +26,13 @@ even though it works in `tauri dev`.
   CSS-variable design tokens (CSS Modules), **xterm.js** terminals (⌘-clickable
   `http`/`https` links via `@xterm/addon-web-links`, #109), **Lucide**
   icons, **JetBrains Mono** (bundled, offline), **react-markdown + remark-gfm**
-  (GFM markdown, no raw HTML) + **Prism.js** (curated-language read-only code
-  highlighting) — both in the universal **`FileViewer`** (#40/#44), **dnd-kit**
-  (`@dnd-kit/core` + `/sortable` — the app's one drag-and-drop system, #43),
-  **react-resizable-panels** (Canvas split resizing, #46)
+  (GFM markdown, no raw HTML) + **Prism.js** (curated-language code highlighting —
+  JS/TS/JSX, Rust, Python, JSON/YAML/TOML, CSS, markup, Bash, **Java**, **INI/.env/
+  .properties** #150) — both in the universal **`FileViewer`** (#40/#44), whose **raw
+  markdown / plain-text** view is an editable, auto-saving `<textarea>` (#148); the same
+  markdown stack also renders the markdown **Kanban board** (#141–#151). **dnd-kit**
+  (`@dnd-kit/core` + `/sortable` — the app's one drag-and-drop system, #43; also Kanban
+  card DnD #143), **react-resizable-panels** (Canvas split resizing, #46)
 - **Backend (Rust, `src-tauri/`):** **`portable-pty`** for terminals, JSON
   persistence in the app-data dir, read-only git (shells out to `git`), and the
   Tauri **dialog** (folder picker) plugin
@@ -112,18 +115,22 @@ even though it works in `tauri dev`.
   never resurrects, #110). A tree row click
   **selects/jumps to the item in the current view** (#79 — never auto-switching
   Overview↔Canvas); the hover × removes the item (and its Overview column); every row
-  (session / file / diff / terminal) is a dnd-kit **draggable source** that drops into
-  the active Canvas (#47/#59 — agents → terminal, files → file viewer, diffs → diff
+  (session / file / diff / terminal / kanban) is a dnd-kit **draggable source** that drops
+  into the active Canvas (#47/#59 — agents → terminal, files → file viewer, diffs → diff
   panel; new item types are draggable by default via a `payloadToContent` case). Every
   row also has a **right-click context menu**: the agent row offers **Rename** /
-  **Fork conversation** / **Copy session ID** / **Remove** (#57/#131), and the
-  file/diff/terminal/scheduled rows a single **Remove** (or **Cancel** for a schedule)
-  item via a shared `RowContextMenu` (#132). The
+  **Fork conversation** (dimmed + tooltip when the source has no history, #138) / **Copy
+  session ID** / **Remove** (#57/#131); a **worktree header** offers **Reveal in Finder**
+  / **Copy absolute path** (#133); and the file/diff/terminal/scheduled rows a single
+  **Remove** (or **Cancel** for a schedule) item — all via a shared `RowContextMenu`
+  (#132). The
   repo's context menu (#54) offers **New session** (which — like the inline per-repo
   **+** — runs `startRepoSession` (#127), **skipping the folder step**: a git folder
   opens the modal straight at the branch step, a non-git folder spawns with no modal;
   the global ⌘N / button keeps the folder step), a **Views** section to add
-  file/diff/terminal panels (#82), non-destructive **Reveal in Finder** / **Copy path**
+  file/diff/terminal/**kanban-board** panels (#82/#145; the single "Kanban board" entry
+  opens a `.md`-scoped `FilePicker` with an in-picker create-or-open flow #151),
+  non-destructive **Reveal in Finder** / **Copy path**
   utilities (#130 — `reveal_path` shells out to macOS `open`, no shell), repo color
   (#35), and destructive actions —
   **Kill all agents** / **Close all items** (#91) and **Forget folder** (#31), the
@@ -144,18 +151,25 @@ even though it works in `tauri dev`.
   (migrated once from the old single `canvas_layout`); the `CanvasTabs` strip adds
   (+), closes (always keeps ≥1), inline-renames, and drag-reorders tabs via a nested
   dnd-kit context. Panels host **real content** (#47): agent terminals (#18 pool),
-  file viewers (#44), diff viewers (#39), and shell terminals (#72) — a `content`
-  descriptor `{kind, ...refs}`
+  file viewers (#44), diff viewers (#39), shell terminals (#72), and **kanban boards**
+  (#145) — a `content` descriptor `{kind, ...refs}`
   resolved at render. **Drag-in:** one **app-level dnd-kit context** (`App.tsx`)
   spans the sidebar (drag sources: sessions, files, diffs #59) and Canvas (center +
   edge drop zones); `Canvas/canvasDrop.ts` maps payloads → content and applies the
   split/append **to the active tab**. Dropping on an edge splits recursively, borders
-  resize via **react-resizable-panels**, panels close. The Overview wall and the tab
+  resize via **react-resizable-panels**, panels close. An **existing** panel can also be
+  **moved/reordered** by dragging its header onto another panel's edge (#135 `moveLeaf` —
+  remove + re-split **reusing the leaf's id + content**, so the pooled terminal reparents,
+  applied atomically on drop; the **whole header bar** is the grip #144, and a long title
+  truncates with an ellipsis #146). Closing a tab that **has contents** prompts **Kill /
+  Keep / Cancel** via the `CanvasCloseModal` (#137 — Kill tears down the tab's leaves;
+  default configurable in Settings → Behavior). The Overview wall and the tab
   strip keep their own nested sortable contexts (#43/#58) — only one view mounts at a
   time, so targets never clash.
 - **Canvas templates (#117/#118):** reusable saved Canvas layouts whose leaves hold
-  inert action **blocks** (`new-agent` w/ optional prompt, `new-terminal`, `open-file`
-  w/ a relative path, `open-diff`) instead of live content. A single **block registry**
+  inert action **blocks** (`new-agent` w/ optional prompt + optional custom **name** #136,
+  `new-terminal`, `open-file` w/ a relative path, `open-diff`) instead of live content. A
+  single **block registry**
   (`Canvas/templateBlocks.ts`, mirroring #82) drives the placeable set — a new content
   kind becomes a block with one entry. The `CanvasTabs` strip's **▾ Templates menu**
   opens a full-screen **`TemplateEditor`** (reuses the BSP surface + `canvasTree` ops:
@@ -178,7 +192,28 @@ even though it works in `tauri dev`.
   the folder); the panel **retains its block** so Retry re-runs it in place. No
   spawn-count guard ("just do it"). The reconcile (`App.tsx`) now also keeps PTYs
   referenced only by a Canvas layout (`sessionIdsInLayout`) so template terminals
-  survive.
+  survive. Instantiating a template into a **sole empty canvas** replaces that tab in
+  place rather than leaving an empty tab behind (#142); 2+ tabs, or a tab with panels,
+  still append.
+- **File editing & Kanban board (#141/#143/#145/#147/#148/#149/#150/#151):** the
+  universal `FileViewer` (#40/#44) renders markdown and highlights code (Prism); its
+  **raw markdown / plain-text** view is **editable + auto-saving** via the shared
+  `useAutoSaveFile(repoPath, file, active)` hook (`src/useAutoSaveFile.ts` — read +
+  hot-reload poll + debounced `writeTextFile` + a dirty/focus reconcile that pauses the
+  poll while editing + IME-safe + a "Saving…/Saved" status), while rendered markdown, the
+  Prism **code** view, and large files stay read-only (#148). A **markdown Kanban board**
+  is a first-class content kind (`kind:"kanban"`, reusing the `file` panel's refs +
+  `overview_panels`, no new blob): the pure `parseBoard`/`serializeBoard` engine
+  (`components/Kanban/kanban.ts`, **Obsidian-Kanban** format — `## column` + `- [ ] card`,
+  frontmatter + `**Complete**` + `%% kanban:settings %%` preserved verbatim) round-trips
+  the `.md`, and the `KanbanPanel` renders columns + cards (markdown bodies, horizontal
+  scroll, hot-reload) **fully editable** — add/edit/delete/reorder cards (nested dnd-kit;
+  dragging a card between lanes = status change), column ops, and a **Board/Raw** toggle
+  (#147, Raw editable #149) — every mutation and the Raw textarea routed through the **same**
+  `useAutoSaveFile` buffer and written back via `write_text_file` (#141, the app's first
+  arbitrary file write). Opened from the repo **Views** menu's single "Kanban board" entry
+  with an in-picker **create-or-open** flow (#151), a draggable sidebar row, an Overview
+  column, and a Canvas panel.
 - **Detached canvas windows (#84):** a Canvas tab can open in its **own native
   window** for multi-monitor use, via a **pop-out button** on the tab or a **drag
   tear-off** (drag a tab out of the strip). The button/tear-off call Rust
@@ -250,8 +285,9 @@ even though it works in `tauri dev`.
   blink → the live pooled xterms via `terminalPool.applyTerminalSettings`),
   **Sessions** (the #97 auto-name toggle),
   **Appearance** (an accent swatch over the Catppuccin palette + a reduce-motion
-  toggle), **Behavior** (default launch view + confirm-destructive gating #103), and
-  **Data & About** (open data folder, clear recents, app + `claude` versions). A
+  toggle), **Behavior** (default launch view + confirm-destructive gating #103 + the
+  Canvas tab-close default `canvasCloseBehavior`: Ask / Always kill / Never kill #137),
+  and **Data & About** (open data folder, clear recents, app + `claude` versions). A
   modal-local **draft** applies only on **Save** via `applySettingsEffects` (accent
   overrides `--accent` plus its companions `--accent-hover/-dim/-fg` through
   `accentCompanions` #107; reduce-motion toggles `body.reduce-motion`). Settings
@@ -286,10 +322,13 @@ even though it works in `tauri dev`.
 │   ├── windowContext.ts    # Window identity (#84): main vs canvas-<id>, ownership helpers
 │   ├── ownership.ts        # useSessionOwners hook — which window renders each PTY (#84)
 │   ├── useKeyboardNav.ts   # Global keyboard shortcuts (#24/#76/#77/#84/#93)
+│   ├── useAutoSaveFile.ts  # Read + hot-reload + debounced-write hook (FileViewer raw + Kanban) (#148)
 │   ├── components/         # React components (CSS Module alongside each):
 │   │                       #   Sidebar, Overview, Canvas (+ CanvasSurface),
-│   │                       #   CanvasWindow (#84), Terminal, FileViewer, FilePicker,
+│   │                       #   CanvasWindow (#84), CanvasCloseModal (#137),
+│   │                       #   Terminal, FileViewer, FilePicker,
 │   │                       #   FileSwitcher (#90), DiffInspector, DetachedNote (#84),
+│   │                       #   Kanban (engine + KanbanPanel, #141–#151),
 │   │                       #   ScheduledPanel (#94), Settings (#100), BusyIndicator,
 │   │                       #   TemplateEditor + TemplateManager (#117) + TemplateUseModal (#118),
 │   │                       #   Checkbox, Slider (#122), SkillAutocomplete (#114),
@@ -357,7 +396,8 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
 - **File access is read-mostly, with one deliberate write** — `files.rs` lists +
   reads repo text files for the viewer (#40/#44) and, since **#141**, writes a repo
   text file (`write_text_file`) — the app's **first arbitrary file write**, backing
-  the markdown **Kanban board** editor (#141–#143). The write is path-validated
+  the markdown **Kanban board** (#141–#151) and the FileViewer's **editable raw
+  markdown / plain-text** view (#148/#149). The write is path-validated
   exactly like `read_text_file` (canonicalize, confine to the repo, reject
   `..`/symlink/out-of-repo targets; a new file's parent dir must exist + be inside
   the repo), narrowing the earlier "no arbitrary file writes" rule the way #74/#124
@@ -416,7 +456,12 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   2.1.176 (all three flags parse together; the source's on-disk log is read at spawn
   time, leaving the source untouched). The fork is a normal tracked session with its
   own app-owned UUID + a serde-default `forked_from` (provenance + the "fork" badge),
-  spawned non-seeded like a resume (so it stays gray until first input, #116).
+  spawned non-seeded like a resume (so it stays gray until first input, #116). A
+  **guard refuses to fork a source with no on-disk conversation log** (#134 — `title::
+  has_conversation` checks `~/.claude/projects/*/<uuid>.jsonl` for ≥1 real turn, fail-open;
+  returns a typed `NothingToFork` error instead of spawning a doomed code-1 panel), and a
+  persisted `forkable` flag (emitted on the #97 title-worker cadence) renders the Fork
+  affordance **unavailable up front** at all three sites (#138).
 - **Exit handling (#63):** the discriminator is the exit code (`store.ts`
   `onExited` / the pure `isCleanExit`). A **clean exit — `claude` exits code 0
   while running** (the user ended the agent) is forgotten like _Remove_:
@@ -468,13 +513,14 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
 
 ## Tasks
 
-Work is tracked in `TASKS.md`. **#1–#132 have shipped — the backlog is fully
-implemented, with no open tasks.** Completed tasks are condensed into an **Implemented
-(completed tasks)** summary at the top (one line each, grouped by theme), with full
-per-task detail in git history; the `## Tasks` body holds any open tasks (currently
-none). New tasks go there in `TASKS-TEMPLATE.md` format with `Depends on:`
-prerequisites. The `(#N)` provenance markers throughout this doc index back to that
-summary + git history.
+Work is tracked in `TASKS.md`. **#1–#151 have shipped; #152–#153 are open.** Completed
+tasks are condensed into an **Implemented (completed tasks)** summary at the top (one
+line each, grouped by theme), with full per-task detail in git history; the `## Tasks`
+body holds the open tasks (currently #152 — make the left panel the single source of
+truth and cascade its removals to Canvas/Overview — and #153 — an agent-row "Open in
+canvas" context-menu item). New tasks go there in `TASKS-TEMPLATE.md` format with
+`Depends on:` prerequisites. The `(#N)` provenance markers throughout this doc index back
+to that summary + git history.
 
 **Never skip a task.** When implementing the backlog (`/develop-tasks`,
 `/isolate-agent`, `/handoff`), implement **every** open task whose dependencies are
