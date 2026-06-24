@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   DndContext,
   type DragEndEvent,
+  type DragStartEvent,
   PointerSensor,
   pointerWithin,
   useSensor,
@@ -11,9 +12,9 @@ import {
 import { useStore } from "../../store";
 import { useKeyboardNav } from "../../useKeyboardNav";
 import { DETACHED_CANVAS_ID, ownedHere } from "../../windowContext";
-import { applyCanvasMove } from "../Canvas/canvasDrop";
+import { applyCanvasLiftEnd } from "../Canvas/canvasDrop";
 import { computeSessionOwners, sessionIdsInLayout } from "../Canvas/canvasTree";
-import CanvasSurface from "../Canvas/CanvasSurface";
+import CanvasSurface, { CanvasDragOverlay } from "../Canvas/CanvasSurface";
 import { reconcileTerminals } from "../Terminal/terminalPool";
 import Toaster from "../Toaster/Toaster";
 import styles from "./CanvasWindow.module.css";
@@ -33,20 +34,30 @@ function CanvasWindow() {
   const canvases = useStore((s) => s.canvases);
   const detachedCanvasIds = useStore((s) => s.detachedCanvasIds);
   const canvas = canvases.find((c) => c.id === DETACHED_CANVAS_ID);
-  // Panel reordering (#135) is the only drag a detached window has (no sidebar) —
-  // `dragActive` lights up the edge zones; `onDragEnd` handles only the `move-leaf`
-  // branch. `moveCanvasLeaf` targets the active tab (forced to this window's id, #84).
+  // Panel reordering (#135/#155) is the only drag a detached window has (no sidebar) —
+  // `dragActive` lights up the edge zones; at drag start the panel is lifted out so
+  // the rest reflow, and `onDragEnd` commits it to the target or restores it. The
+  // commit/cancel actions target the active tab (forced to this window's id, #84).
+  const beginCanvasLift = useStore((s) => s.beginCanvasLift);
+  const cancelCanvasLift = useStore((s) => s.cancelCanvasLift);
   const [dragActive, setDragActive] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
 
+  const onDragStart = (event: DragStartEvent) => {
+    setDragActive(true);
+    if (event.active.data.current?.kind === "move-leaf") {
+      beginCanvasLift(String(event.active.data.current.leafId));
+    }
+  };
+
   const onDragEnd = (event: DragEndEvent) => {
     setDragActive(false);
     const { active, over } = event;
-    if (!over || active.data.current?.kind !== "move-leaf") return;
-    applyCanvasMove(String(active.data.current.leafId), String(over.id));
+    if (active.data.current?.kind !== "move-leaf") return;
+    applyCanvasLiftEnd(over ? String(over.id) : null);
   };
 
   useEffect(() => {
@@ -77,11 +88,15 @@ function CanvasWindow() {
           <DndContext
             sensors={sensors}
             collisionDetection={pointerWithin}
-            onDragStart={() => setDragActive(true)}
+            onDragStart={onDragStart}
             onDragEnd={onDragEnd}
-            onDragCancel={() => setDragActive(false)}
+            onDragCancel={() => {
+              setDragActive(false);
+              cancelCanvasLift();
+            }}
           >
             <CanvasSurface dragActive={dragActive} />
+            <CanvasDragOverlay />
           </DndContext>
         </div>
       </div>

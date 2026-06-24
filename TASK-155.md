@@ -1,6 +1,6 @@
-### 155. [ ] Canvas panel drag: lift on drag-start, restore on cancel
+### 155. [x] Canvas panel drag: lift on drag-start, restore on cancel
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-24
 
@@ -167,3 +167,33 @@ both the main and detached Canvas windows, plus the DragOverlay ghost and the re
   pure `canvasTree` ops. Independent of the open #154 (kanban template block).
 - **References:** `CLAUDE.md` (Canvas #46/#47/#58; #135 `moveLeaf`; #144 header grip;
   #84 detached windows + `applyCanvasMove` sharing), and the files under Grounding.
+
+**Implementation note (done 2026-06-24)**
+
+All subtasks (1–9) shipped:
+- **Transient lift state** (`store.ts`): non-persisted `liftedLeaf: { canvasId,
+  leafId } | null` + `beginCanvasLift` / `commitCanvasLift` / `cancelCanvasLift`.
+  The old atomic `moveCanvasLeaf` action and `applyCanvasMove` helper were removed
+  (retired per subtask 3); the pure `moveLeaf` op is retained — `commitCanvasLift`
+  calls it for an edge drop (so it keeps the id-preservation guarantee + its tests).
+- **Derived layout** (`canvasTree.ts`): `displayedLayout(layout, liftedLeafId)` —
+  the active layout with the lifted leaf removed (identity when none), used by
+  `CanvasSurface` so the panels reflow during the lift without persisting.
+- **Commit/cancel**: edge drop → `moveLeaf` (prune + re-split reusing id+content);
+  sole-panel center drop → already the whole tree, just clear the lift; cancel /
+  drop-on-nothing → clear the lift (no layout write = exact restore).
+- **Both windows**: `App.tsx` + `CanvasWindow.tsx` get `onDragStart` →
+  `beginCanvasLift`, `onDragEnd` → shared `applyCanvasLiftEnd(over)` (commit or
+  restore; never an early `!over` return that would strand the panel), `onDragCancel`
+  → `cancelCanvasLift`, and a `<CanvasDragOverlay>` ghost.
+- **DragOverlay ghost**: `CanvasDragOverlay` + `PanelDragGhost` (exported from
+  `CanvasSurface`) render a header-like chip (grip + the same title via the new
+  `leafTitleText` helper) since the lifted panel's DOM node leaves the tree.
+- **Terminal preservation**: the reconcile effect keys on the *persisted* `canvases`
+  (unchanged during a lift) so a lifted agent/terminal PTY is never disposed; its
+  pooled xterm parks on unmount and reparents on commit/cancel (no reload).
+- **Tests**: `displayedLayout` (remove / identity) in `canvasTree.test.ts`; lift
+  begin/commit/center/cancel in `store.test.ts`. `npm run build`, `npm run lint`,
+  `npm test` (196) and `prettier --check` all pass.
+- **Out of scope, left untouched**: sidebar→Canvas new-content drops, cross-window
+  drag, Overview/sidebar dnd contexts, reflow/ghost animation.

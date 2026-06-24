@@ -442,6 +442,12 @@ export interface AppState {
   templateUseOpen: boolean;
   /** The keyboard-focused Canvas panel (leaf id), or null (#76). */
   activeLeafId: string | null;
+  /** Transient (non-persisted) lift state while an existing panel is being dragged
+   * (#155): the active tab + the leaf lifted out. The Canvas renders a **derived**
+   * layout with this leaf removed (so panels reflow + it can't self-target); the
+   * persisted `canvases` blob is untouched until a committed drop, so a cancel /
+   * interrupted drag restores the panel exactly. `null` when no panel is lifted. */
+  liftedLeaf: { canvasId: string; leafId: string } | null;
   /** Sessions currently working, from the output-activity heuristic (#42); an
    * absent/false entry means idle. (The task's `sessionState`, as a boolean map.) */
   sessionBusy: Record<string, boolean>;
@@ -557,13 +563,18 @@ export interface AppState {
   reorderOverview: (repoPath: string, orderedKeys: string[]) => Promise<void>;
   /** Replace the active Canvas tab's layout tree and persist (#58). */
   setActiveCanvasLayout: (tree: CanvasNode | null) => void;
-  /** Move an existing panel to another panel's edge within the active tab (#135),
-   * reusing the source leaf's id/content so its pooled terminal reparents. */
-  moveCanvasLeaf: (
-    sourceLeafId: string,
-    targetId: string,
-    edge: CanvasEdge,
-  ) => void;
+  /** Begin lifting an existing panel out of the active tab at drag start (#155):
+   * record the transient `liftedLeaf` so the Canvas renders without it (reflow).
+   * No layout write — the persisted `canvases` blob is untouched until commit. */
+  beginCanvasLift: (leafId: string) => void;
+  /** Commit a lifted panel onto a drop target (#155): for a panel edge, move it
+   * there reusing its original id/content (so the #18 pooled terminal reparents);
+   * for the empty-canvas center (the lifted panel was the sole one) it's already
+   * the whole tree, so just clear the lift. Persists via `setActiveCanvasLayout`. */
+  commitCanvasLift: (targetId: string, edge: CanvasEdge) => void;
+  /** Cancel a lift (#155): Esc / drop on nothing → clear `liftedLeaf` with no
+   * layout write, so the panel snaps back to its exact previous position. */
+  cancelCanvasLift: () => void;
   /** Add a new empty Canvas tab (default "Canvas N") and select it (#58). */
   addCanvas: () => void;
   /** Close a Canvas tab; always keeps ≥1 (closing the last leaves an empty one) (#58). */
@@ -1017,6 +1028,7 @@ export const useStore = create<AppState>()((set, get) => ({
   templateManagerOpen: false,
   templateUseOpen: false,
   activeLeafId: null,
+  liftedLeaf: null,
   sessionBusy: {},
   sessionActive: {},
   terminalExits: {},
@@ -1721,19 +1733,55 @@ export const useStore = create<AppState>()((set, get) => ({
     get().setActiveCanvasLayout(updateLeafContent(layout, leafId, { file }));
   },
 
-  // Reorder/reposition an existing panel within the active tab (#135). One atomic
-  // tree update via the pure `moveLeaf` — the panel-absent intermediate never
-  // reaches the store, so a canvas-only terminal isn't disposed mid-move and the
-  // #18 pool just reparents the moved panel's xterm. Persists via
-  // setActiveCanvasLayout (which a detached window's write merges, #84).
-  moveCanvasLeaf: (sourceLeafId, targetId, edge) => {
-    const { canvases, activeCanvasId } = get();
+  // Lift an existing panel out of the active tab at drag start (#155, supersedes
+  // #135's atomic-on-drop move). The lift is purely transient view state — the
+  // persisted `canvases` blob is NOT mutated — so the Canvas renders a derived
+  // layout without this leaf (the panels reflow, exposing drop targets) while a
+  // cancel restores it exactly and an interrupted drag can never strand a panel.
+  beginCanvasLift: (leafId) => {
+    const { activeCanvasId } = get();
+    set({ liftedLeaf: { canvasId: activeCanvasId, leafId } });
+  },
+
+  // Commit a lifted panel onto its drop target (#155). The persisted layout still
+  // contains the lifted leaf (the lift never mutated it), so `moveLeaf` does the
+  // whole job for an edge drop: prune the source + re-split the target **reusing
+  // the source's original id + content**, so its #18 pooled terminal reparents
+  // rather than being disposed/recreated. A center drop only occurs when the lifted
+  // panel was the sole one (the derived layout was null → the empty-canvas center
+  // showed); it's already the whole tree, so committing it is just clearing the
+  // lift (an exact restore). Persists via setActiveCanvasLayout (a detached
+  // window's write merges, #84).
+  commitCanvasLift: (targetId, edge) => {
+    const { liftedLeaf, canvases, activeCanvasId } = get();
+    if (!liftedLeaf) return;
     const layout =
       canvases.find((c) => c.id === activeCanvasId)?.layout ?? null;
-    if (!layout) return;
-    get().setActiveCanvasLayout(
-      moveLeaf(layout, sourceLeafId, targetId, edge, crypto.randomUUID()),
+    if (!layout) {
+      set({ liftedLeaf: null });
+      return;
+    }
+    if (targetId === "canvas-center") {
+      // Sole panel re-placed onto the empty center — already the whole tree.
+      set({ liftedLeaf: null });
+      return;
+    }
+    const moved = moveLeaf(
+      layout,
+      liftedLeaf.leafId,
+      targetId,
+      edge,
+      crypto.randomUUID(),
     );
+    set({ liftedLeaf: null });
+    get().setActiveCanvasLayout(moved);
+  },
+
+  // Cancel a lift (#155): Esc / drop on nothing. No layout write — since the
+  // persisted layout was never mutated, clearing the transient lift restores the
+  // panel to its exact previous position.
+  cancelCanvasLift: () => {
+    if (get().liftedLeaf) set({ liftedLeaf: null });
   },
 
   // Canvas templates (#117): the editor builds a draft layout of inert blocks with
@@ -1970,7 +2018,8 @@ export const useStore = create<AppState>()((set, get) => ({
     const layout = canvases.find((c) => c.id === canvasId)?.layout;
     const kind =
       (layout
-        ? collectLeaves(layout).find((l) => l.id === leafId)?.content.block?.kind
+        ? collectLeaves(layout).find((l) => l.id === leafId)?.content.block
+            ?.kind
         : undefined) ?? "open-file";
     const next = canvases.map((c) =>
       c.id === canvasId && c.layout

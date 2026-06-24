@@ -94,20 +94,31 @@ const leaf = (content: CanvasContent): CanvasNode => ({
 });
 
 /**
- * Apply a panel-reorder drop (#135): a grip-drag (`move-leaf`) landing on a panel
- * edge zone moves the existing `sourceLeafId` there. Parses `over.id` as
- * `panel:<target>:<edge>`, ignoring `canvas-center` and a self-target. Shared by the
- * main window and a detached canvas window's `DndContext` (#84). `moveCanvasLeaf`
- * targets the active tab, which a detached window forces to its own id.
+ * End an existing-panel lift drag (#155): commit the lifted panel to the drop
+ * target or restore it. `overId` is the dnd-kit `over.id` (or null when released on
+ * nothing). A `panel:<target>:<edge>` zone (target ≠ the lifted leaf) or the
+ * empty-canvas `canvas-center` commits; anything else (no target / a self zone)
+ * cancels, snapping the panel back. Shared by the main window and a detached canvas
+ * window's `DndContext` (#84); the commit/cancel store actions target the active
+ * tab, which a detached window forces to its own id. The lifted leaf id is read
+ * from the store's transient lift state, set at drag start.
  */
-export function applyCanvasMove(sourceLeafId: string, overId: string): void {
-  const match = /^panel:(.+):(left|right|top|bottom)$/.exec(overId);
-  if (!match) return;
-  const targetId = match[1] as string;
-  if (targetId === sourceLeafId) return;
-  useStore
-    .getState()
-    .moveCanvasLeaf(sourceLeafId, targetId, match[2] as CanvasEdge);
+export function applyCanvasLiftEnd(overId: string | null): void {
+  const store = useStore.getState();
+  const liftedId = store.liftedLeaf?.leafId;
+  if (overId === "canvas-center") {
+    store.commitCanvasLift("canvas-center", "left"); // edge unused for center
+    return;
+  }
+  const match = overId
+    ? /^panel:(.+):(left|right|top|bottom)$/.exec(overId)
+    : null;
+  if (match && match[1] !== liftedId) {
+    store.commitCanvasLift(match[1] as string, match[2] as CanvasEdge);
+    return;
+  }
+  // No valid target (or the panel's own zone) → restore to the previous position.
+  store.cancelCanvasLift();
 }
 
 /** Apply a drop onto a Canvas zone — the center (first panel) or a panel edge. */

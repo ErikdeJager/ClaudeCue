@@ -1,5 +1,5 @@
 import { type ReactElement, useEffect } from "react";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { Copy, ExternalLink, GitFork, GripVertical, X } from "lucide-react";
 import { Group, type Layout, Panel, Separator } from "react-resizable-panels";
 
@@ -11,6 +11,7 @@ import type {
   CanvasEdge,
   CanvasLeaf,
   CanvasNode,
+  SessionView,
 } from "../../types";
 import { IS_MAIN_WINDOW, ownedHere } from "../../windowContext";
 import DetachedNote from "../DetachedNote/DetachedNote";
@@ -21,7 +22,12 @@ import KanbanPanel from "../Kanban/KanbanPanel";
 import ScheduledPanel from "../ScheduledPanel/ScheduledPanel";
 import Terminal from "../Terminal/Terminal";
 import { focusTerminal } from "../Terminal/terminalPool";
-import { removeLeaf, updateSizes } from "./canvasTree";
+import {
+  collectLeaves,
+  displayedLayout,
+  removeLeaf,
+  updateSizes,
+} from "./canvasTree";
 import TemplatePendingPanel from "./TemplatePendingPanel";
 import { blockPlaceholderLabel } from "./templateBlocks";
 import styles from "./Canvas.module.css";
@@ -71,6 +77,28 @@ function panelTitle(content: CanvasContent): string {
   return content.label ?? "Panel";
 }
 
+/** A panel's single-line display title — the agent's resolved label (name/auto/
+ * branch, #95/#97) for an agent leaf, else `panelTitle`. Used by the drag ghost
+ * (#155) so a lifted panel's preview reads the same as its header. */
+function leafTitleText(
+  content: CanvasContent,
+  sessions: SessionView[],
+  branches: Record<string, string>,
+  autoNameOn: boolean,
+): string {
+  if (content.kind === "agent") {
+    const session = sessions.find((s) => s.id === content.sessionId);
+    const repoPath = content.repoPath ?? session?.repoPath ?? "";
+    const branch = branches[repoPath] ?? "";
+    return sessionLabel(
+      session?.name,
+      autoNameOn ? session?.autoName : null,
+      branch || repoName(repoPath),
+    ).primary;
+  }
+  return panelTitle(content);
+}
+
 function LeafPanel({
   leaf,
   dragActive,
@@ -94,9 +122,11 @@ function LeafPanel({
   // Drag source for reorder/reposition (#135): the **whole header bar** carries the
   // listeners (#144, mirroring Overview #70) — the FileSwitcher (#90) + fork/copy/
   // close buttons stop pointerdown so they stay clickable. The 4px PointerSensor
-  // activation constraint keeps a click (select) from dragging. We don't apply the
-  // transform — the layout stays put during the drag; the move is computed
-  // atomically on drop (App/CanvasWindow `onDragEnd` → moveCanvasLeaf).
+  // activation constraint keeps a click (select) from dragging. At drag start the
+  // panel is **lifted out** of the layout (#155, App/CanvasWindow `onDragStart` →
+  // `beginCanvasLift`): the surface renders a derived layout without this leaf so
+  // the others reflow and a `<DragOverlay>` ghost follows the cursor; a drop commits
+  // it to the target edge, while Esc / a drop on nothing restores it in place.
   const {
     attributes: dragAttributes,
     listeners: dragListeners,
@@ -320,6 +350,42 @@ function LeafPanel({
   );
 }
 
+/** The lightweight preview that follows the cursor while a panel is lifted (#155).
+ * Required because the lifted panel's real DOM node is removed during the drag, so
+ * dnd-kit has nothing of its own to render as the drag image. Reads the leaf's
+ * content from the store and shows the same title the header would. */
+function PanelDragGhost({ leafId }: { leafId: string }) {
+  const canvases = useStore((s) => s.canvases);
+  const sessions = useStore((s) => s.sessions);
+  const branches = useStore((s) => s.branches);
+  const autoNameOn = useStore((s) => s.settings.autoName);
+  const leaf = canvases
+    .flatMap((c) => collectLeaves(c.layout))
+    .find((l) => l.id === leafId);
+  if (!leaf) return null;
+  const title = leafTitleText(leaf.content, sessions, branches, autoNameOn);
+  return (
+    <div className={styles.dragGhost}>
+      <GripVertical size={14} strokeWidth={1.5} aria-hidden />
+      <span className={styles.dragGhostTitle} title={title}>
+        {title}
+      </span>
+    </div>
+  );
+}
+
+/** The Canvas drag overlay (#155): renders the {@link PanelDragGhost} while a panel
+ * is lifted, nothing otherwise (sidebar→Canvas content drags keep their default
+ * behavior). Placed inside each window's `DndContext` (main + detached, #84). */
+export function CanvasDragOverlay() {
+  const liftedLeaf = useStore((s) => s.liftedLeaf);
+  return (
+    <DragOverlay dropAnimation={null}>
+      {liftedLeaf ? <PanelDragGhost leafId={liftedLeaf.leafId} /> : null}
+    </DragOverlay>
+  );
+}
+
 /** Shown in the **main** window when its active tab is one that's been popped out
  * to its own window (#84) — the main window never renders a detached canvas's
  * PTYs, so it offers to raise / bring back that window instead. */
@@ -354,8 +420,17 @@ export function CanvasSurface({ dragActive }: { dragActive: boolean }) {
   const activeCanvasId = useStore((s) => s.activeCanvasId);
   const detachedCanvasIds = useStore((s) => s.detachedCanvasIds);
   const setActiveCanvasLayout = useStore((s) => s.setActiveCanvasLayout);
+  const liftedLeaf = useStore((s) => s.liftedLeaf);
 
-  const layout = canvases.find((c) => c.id === activeCanvasId)?.layout ?? null;
+  const rawLayout =
+    canvases.find((c) => c.id === activeCanvasId)?.layout ?? null;
+  // While a panel is lifted (#155, drag in progress), render a derived layout with
+  // that leaf removed so the rest reflow and the lifted panel can't self-target;
+  // the persisted layout is untouched (commit/cancel handle the write/restore).
+  const layout = displayedLayout(
+    rawLayout,
+    liftedLeaf?.canvasId === activeCanvasId ? liftedLeaf.leafId : null,
+  );
   // In the main window, the active tab can (rarely) be a detached canvas — show a
   // note instead of rendering its PTYs in two windows (#84). Gate on IS_MAIN_WINDOW
   // (#98): the detached window forces activeCanvasId to its own (detached) id, so

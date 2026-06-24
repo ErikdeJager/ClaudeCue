@@ -65,6 +65,7 @@ beforeEach(() => {
     overviewOrder: {},
     canvases: [{ id: "canvas-1", name: "Canvas 1", layout: null }],
     activeCanvasId: "canvas-1",
+    liftedLeaf: null,
     canvasTemplates: [],
     sessionBusy: {},
     sessionActive: {},
@@ -754,6 +755,82 @@ describe("canvas template instantiation (#118)", () => {
     expect(useStore.getState().templateUseOpen).toBe(true);
     useStore.getState().closeTemplateUse();
     expect(useStore.getState().templateUseOpen).toBe(false);
+  });
+});
+
+describe("canvas panel lift (#155)", () => {
+  // split(s1){ a: agent(L1, A), b: file(L2) } — two panels in the active tab.
+  const twoPanels = (): CanvasNode => ({
+    type: "split",
+    id: "s1",
+    dir: "row",
+    sizes: [50, 50],
+    a: { type: "leaf", id: "L1", content: { kind: "agent", sessionId: "A" } },
+    b: {
+      type: "leaf",
+      id: "L2",
+      content: { kind: "file", repoPath: "/repo/x", file: "a.md" },
+    },
+  });
+
+  const seed = (layout: CanvasNode | null) => {
+    useStore.setState({
+      canvases: [{ id: "c1", name: "T", layout }],
+      activeCanvasId: "c1",
+      liftedLeaf: null,
+    });
+  };
+
+  it("beginCanvasLift records the active tab + leaf without touching the layout", () => {
+    const layout = twoPanels();
+    seed(layout);
+    useStore.getState().beginCanvasLift("L1");
+    const s = useStore.getState();
+    expect(s.liftedLeaf).toEqual({ canvasId: "c1", leafId: "L1" });
+    // The persisted layout is unchanged (same reference) — the lift is transient.
+    expect(s.canvases[0]?.layout).toBe(layout);
+  });
+
+  it("commit moves the lifted panel to the target edge, preserving id + content", () => {
+    seed(twoPanels());
+    useStore.getState().beginCanvasLift("L1");
+    // Drop L1 onto L2's right edge → order becomes L2, L1.
+    useStore.getState().commitCanvasLift("L2", "right");
+    const s = useStore.getState();
+    expect(s.liftedLeaf).toBeNull();
+    const leaves = collectLeaves(s.canvases[0]?.layout ?? null);
+    expect(leaves.map((l) => l.id)).toEqual(["L2", "L1"]);
+    // The moved panel keeps its id AND agent content (so the pooled terminal reparents).
+    expect(leaves.find((l) => l.id === "L1")?.content).toEqual({
+      kind: "agent",
+      sessionId: "A",
+    });
+  });
+
+  it("commit of a sole panel onto the center keeps it as the single leaf", () => {
+    const sole: CanvasNode = {
+      type: "leaf",
+      id: "L1",
+      content: { kind: "agent", sessionId: "A" },
+    };
+    seed(sole);
+    useStore.getState().beginCanvasLift("L1");
+    useStore.getState().commitCanvasLift("canvas-center", "left");
+    const s = useStore.getState();
+    expect(s.liftedLeaf).toBeNull();
+    // Already the whole tree — restored in place, unchanged.
+    expect(s.canvases[0]?.layout).toEqual(sole);
+  });
+
+  it("cancel restores the panel — the persisted layout is byte-for-byte unchanged", () => {
+    const layout = twoPanels();
+    seed(layout);
+    useStore.getState().beginCanvasLift("L1");
+    useStore.getState().cancelCanvasLift();
+    const s = useStore.getState();
+    expect(s.liftedLeaf).toBeNull();
+    // Never mutated during the lift → same reference as before.
+    expect(s.canvases[0]?.layout).toBe(layout);
   });
 });
 

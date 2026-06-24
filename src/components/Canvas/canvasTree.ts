@@ -97,6 +97,22 @@ export function moveLeaf(
   );
 }
 
+/**
+ * The layout to **render** while a panel is lifted out mid-drag (#155): the active
+ * layout with `liftedLeafId` removed (so the remaining panels reflow to fill the
+ * gap and the lifted panel can't be its own drop target). Returns the original
+ * layout when nothing is lifted, and `null` when the lifted leaf was the whole
+ * canvas (→ the empty-canvas center drop target shows). Pure — the lift is
+ * transient view state, never persisted, so an interrupted drag restores exactly.
+ */
+export function displayedLayout(
+  layout: CanvasNode | null,
+  liftedLeafId: string | null | undefined,
+): CanvasNode | null {
+  if (!layout || !liftedLeafId) return layout;
+  return removeLeaf(layout, liftedLeafId);
+}
+
 /** Set the two sizes of the split `splitId` (returns a new tree if changed). */
 export function updateSizes(
   tree: CanvasNode,

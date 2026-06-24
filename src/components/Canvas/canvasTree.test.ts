@@ -5,6 +5,7 @@ import {
   appendLeaf,
   collectLeaves,
   computeSessionOwners,
+  displayedLayout,
   leafIds,
   leafRects,
   moveLeaf,
@@ -123,6 +124,22 @@ describe("canvas BSP tree (#46)", () => {
     expect(moveLeaf(leaf("p1"), "p1", "p1", "right", "s2")).toEqual(leaf("p1")); // single leaf
     expect(moveLeaf(tree, "p9", "p1", "right", "s2")).toBe(tree); // source missing
     expect(moveLeaf(tree, "p1", "p9", "right", "s2")).toBe(tree); // target missing → keep panel
+  });
+
+  it("displayedLayout removes the lifted leaf, reflowing the rest (#155)", () => {
+    const tree = splitLeaf(leaf("p1"), "p1", "right", ph, "p2", "s1");
+    // Lifting p2 collapses the split to its sibling p1 (the gap is filled).
+    expect(displayedLayout(tree, "p2")).toEqual(leaf("p1"));
+    // Lifting the sole panel exposes the empty canvas (→ the center drop target).
+    expect(displayedLayout(leaf("p1"), "p1")).toBeNull();
+  });
+
+  it("displayedLayout is identity when nothing is lifted (#155)", () => {
+    const tree = splitLeaf(leaf("p1"), "p1", "right", ph, "p2", "s1");
+    expect(displayedLayout(tree, null)).toBe(tree); // no lift → same reference
+    expect(displayedLayout(tree, undefined)).toBe(tree);
+    expect(displayedLayout(tree, "p9")).toBe(tree); // unknown id → unchanged
+    expect(displayedLayout(null, "p1")).toBeNull();
   });
 
   it("merges partial content into a leaf, keeping other subtrees' identity (#90)", () => {

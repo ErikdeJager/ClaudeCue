@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   DndContext,
   type DragEndEvent,
+  type DragStartEvent,
   PointerSensor,
   pointerWithin,
   useSensor,
@@ -11,9 +12,10 @@ import {
 import Canvas from "./components/Canvas/Canvas";
 import {
   applyCanvasDrop,
-  applyCanvasMove,
+  applyCanvasLiftEnd,
   payloadToContent,
 } from "./components/Canvas/canvasDrop";
+import { CanvasDragOverlay } from "./components/Canvas/CanvasSurface";
 import {
   computeSessionOwners,
   sessionIdsInLayout,
@@ -58,6 +60,8 @@ function MainApp() {
   const templateUseOpen = useStore((s) => s.templateUseOpen);
   const canvasClosePromptId = useStore((s) => s.canvasClosePromptId);
   const init = useStore((s) => s.init);
+  const beginCanvasLift = useStore((s) => s.beginCanvasLift);
+  const cancelCanvasLift = useStore((s) => s.cancelCanvasLift);
   const [dragActive, setDragActive] = useState(false);
 
   const sensors = useSensors(
@@ -95,15 +99,26 @@ function MainApp() {
     reconcileTerminals(active);
   }, [sessions, overviewPanels, canvases, detachedCanvasIds]);
 
+  // Lift an existing panel out of the layout at drag start (#155) so the rest
+  // reflow and a ghost follows the cursor; sidebar→Canvas content drags are unaffected.
+  const onDragStart = (event: DragStartEvent) => {
+    setDragActive(true);
+    if (event.active.data.current?.kind === "move-leaf") {
+      beginCanvasLift(String(event.active.data.current.leafId));
+    }
+  };
+
   const onDragEnd = (event: DragEndEvent) => {
     setDragActive(false);
     const { active, over } = event;
-    if (!over) return;
-    // Reorder/reposition an existing panel (#135): a grip-drag carries `move-leaf`.
+    // Existing-panel lift (#135/#155): commit to the drop target, or restore when
+    // released on nothing. Always resolve the lift — an early `!over` return would
+    // strand the panel out of the layout.
     if (active.data.current?.kind === "move-leaf") {
-      applyCanvasMove(String(active.data.current.leafId), String(over.id));
+      applyCanvasLiftEnd(over ? String(over.id) : null);
       return;
     }
+    if (!over) return;
     const content = payloadToContent(active.data.current);
     if (content) applyCanvasDrop(String(over.id), content);
   };
@@ -114,9 +129,12 @@ function MainApp() {
       <DndContext
         sensors={sensors}
         collisionDetection={pointerWithin}
-        onDragStart={() => setDragActive(true)}
+        onDragStart={onDragStart}
         onDragEnd={onDragEnd}
-        onDragCancel={() => setDragActive(false)}
+        onDragCancel={() => {
+          setDragActive(false);
+          cancelCanvasLift();
+        }}
       >
         <div className="app-body">
           <Sidebar />
@@ -130,6 +148,7 @@ function MainApp() {
             </div>
           </main>
         </div>
+        <CanvasDragOverlay />
       </DndContext>
       <Toaster />
       <NewSessionModal />

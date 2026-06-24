@@ -15,13 +15,10 @@ kanban-plugin: board
 - [ ] Kanban UI iteration
 	I dont like the UI of the kanban items. Iterate over the entire Kanban screen UI and ensure it is optimized for UX
 - [ ] Auto save settings
-	Inside the settings, the user should be able to choose between auto save and manual save optionsl Auto save is the default option, but should the user choose to manually save, the cmd+s button saves files and the auto save indicator changes to a save button instead
+	Inside the settings, the user should be able to choose between auto save and manual save optionsl Auto save is the default option, but should the user choose to manually save, the cmd+s button saves files and the auto save indicator changes to a save button instead. Ensure that the enitre plan keeps in account for all the different places that may save files
 
 ## READY
 
-- [ ] #155 — Canvas panel drag: lift on drag-start, restore on cancel
-	Plan: TASK-155.md
-	Depends on: none
 - [ ] #156 — Kanban board horizontal scroll in Overview mode
 	Plan: TASK-156.md
 	Depends on: none
@@ -31,3 +28,6 @@ kanban-plugin: board
 
 ## DONE
 
+- [ ] #155 — Canvas panel drag: lift on drag-start, restore on cancel
+	Plan: TASK-155.md
+	Depends on: none
