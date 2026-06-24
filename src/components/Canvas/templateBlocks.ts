@@ -11,6 +11,7 @@ import {
   FileDiff,
   FileText,
   type LucideIcon,
+  SquareKanban,
   TerminalSquare,
 } from "lucide-react";
 
@@ -23,7 +24,8 @@ export type BlockKind =
   | "new-agent"
   | "new-terminal"
   | "open-file"
-  | "open-diff";
+  | "open-diff"
+  | "open-kanban";
 
 /** How a block is configured in the editor: a `new-agent` prompt textarea, an
  * `open-file` relative-path input, or nothing. */
@@ -75,6 +77,13 @@ export const BLOCK_REGISTRY: BlockDescriptor[] = [
     icon: FileDiff,
     config: "none",
     liveKind: "diff",
+  },
+  {
+    kind: "open-kanban",
+    label: "Open Kanban board",
+    icon: SquareKanban,
+    config: "file",
+    liveKind: "kanban",
   },
 ];
 

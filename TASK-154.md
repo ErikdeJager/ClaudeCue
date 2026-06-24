@@ -1,6 +1,6 @@
-### 154. [ ] Kanban board block in the canvas template editor
+### 154. [x] Kanban board block in the canvas template editor
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-24
 
@@ -165,3 +165,18 @@ left panel/Overview on resolution (#152), and make the existing **Pick file** /
   the left-panel-as-source-of-truth Overview registration (#152).
 - **References:** `CLAUDE.md` (Canvas templates #117/#118; File editing & Kanban
   board #141–#151; left panel #152), the files listed under Grounding above.
+
+**Implementation note (done 2026-06-24)**
+
+- Subtask 5 (editor-copy polish) was **left as-is** per the plan ("acceptable") —
+  the shared `config:"file"` input keeps its generic `e.g. README.md` placeholder
+  for both `open-file` and `open-kanban`; no per-kind branching was added.
+- Subtasks 1–4 + 6–7 shipped: registry entry (`open-kanban`, `SquareKanban`,
+  `config:"file"`, `liveKind:"kanban"`), an explicit `kanban` case in
+  `resolvedContent` (carries `repoPath` **and** `file`), a gated `liveKind ===
+  "kanban"` resolution branch in `resolveTemplateBlock` (`fileExists` + a deduped
+  `kind:"kanban"` Overview/left-panel row), and `pickTemplateBlockFile` now reads
+  the leaf's existing `block.kind` (default `open-file`) instead of hardcoding it,
+  so Pick file keeps a kanban block kanban. Tests added in `templateBlocks.test.ts`,
+  `templateInstantiate.test.ts`, and `store.test.ts`. `npm run build`, `npm run
+  lint`, and `npm test` (190) all pass.

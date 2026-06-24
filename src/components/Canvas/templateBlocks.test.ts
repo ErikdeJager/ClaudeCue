@@ -17,9 +17,14 @@ describe("templateBlocks registry (#117)", () => {
       "new-terminal",
       "open-file",
       "open-diff",
+      "open-kanban",
     ]);
     expect(blockDescriptor("new-agent")?.liveKind).toBe("agent");
     expect(blockDescriptor("open-file")?.liveKind).toBe("file");
+    // The kanban block (#154) reuses the file-config UI and maps to the live
+    // `kanban` content kind.
+    expect(blockDescriptor("open-kanban")?.liveKind).toBe("kanban");
+    expect(blockDescriptor("open-kanban")?.config).toBe("file");
   });
 
   it("blockDescriptor returns undefined for a non-block kind", () => {
@@ -53,6 +58,13 @@ describe("blockPlaceholderLabel (#117)", () => {
     );
     // No path yet → just the label.
     expect(label({ kind: "open-file" })).toBe("Open file");
+  });
+
+  it("appends the board path for an open-kanban block (#154)", () => {
+    expect(label({ kind: "open-kanban", file: "TASKS.md" })).toBe(
+      "Open Kanban board: TASKS.md",
+    );
+    expect(label({ kind: "open-kanban" })).toBe("Open Kanban board");
   });
 
   it("appends a truncated prompt for a new-agent block", () => {

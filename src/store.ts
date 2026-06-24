@@ -1920,6 +1920,22 @@ export const useStore = create<AppState>()((set, get) => ({
             file: block.file,
           });
         }
+      } else if (liveKind === "kanban") {
+        // Read-only + gated like `file` (#154): no auto-create of a missing board.
+        const exists = await ipc.fileExists(cwd, block.file ?? "");
+        if (!exists) {
+          throw new Error(`File not found: ${block.file ?? "(no path)"}`);
+        }
+        live = resolvedContent(block, cwd, {});
+        // Show the opened board in the left panel + Overview (#152); dedups by
+        // repo+file so re-opening doesn't add a duplicate row.
+        if (block.file) {
+          registerOverviewPanel(cwd, {
+            id: crypto.randomUUID(),
+            kind: "kanban",
+            file: block.file,
+          });
+        }
       } else if (liveKind === "diff") {
         const isRepo = await ipc.isGitRepo(cwd);
         if (!isRepo) throw new Error("Not a git repository");
@@ -1946,14 +1962,22 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   pickTemplateBlockFile: (canvasId, leafId, file) => {
-    // Replace the pending open-file block's path, then retry resolving it.
+    // Replace the pending file block's path, then retry resolving it. Preserve the
+    // existing block kind (#154) — picking a file for an `open-kanban` block must
+    // keep it kanban (it resolves back into a KanbanPanel), not silently degrade to
+    // an `open-file` viewer. Default to `open-file` when the kind can't be read.
     const { canvases, activeCanvasId } = get();
+    const layout = canvases.find((c) => c.id === canvasId)?.layout;
+    const kind =
+      (layout
+        ? collectLeaves(layout).find((l) => l.id === leafId)?.content.block?.kind
+        : undefined) ?? "open-file";
     const next = canvases.map((c) =>
       c.id === canvasId && c.layout
         ? {
             ...c,
             layout: updateLeafContent(c.layout, leafId, {
-              block: { kind: "open-file", file },
+              block: { kind, file },
             }),
           }
         : c,

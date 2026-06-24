@@ -78,6 +78,10 @@ export function resolvedContent(
       return { kind: "terminal", sessionId: resolved.sessionId, repoPath: cwd };
     case "file":
       return { kind: "file", repoPath: cwd, file: block.file };
+    case "kanban":
+      // Mirror `file`: the live KanbanPanel/CanvasSurface need BOTH refs, so carry
+      // the relative path through (the default branch would drop `file`).
+      return { kind: "kanban", repoPath: cwd, file: block.file };
     case "diff":
       return { kind: "diff", repoPath: cwd };
     default:

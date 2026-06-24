@@ -726,6 +726,29 @@ describe("canvas template instantiation (#118)", () => {
     });
   });
 
+  it("pickTemplateBlockFile preserves an open-kanban block kind (#154)", () => {
+    useStore.setState({
+      canvases: [
+        {
+          id: "c1",
+          name: "T",
+          layout: pendingTab({ kind: "open-kanban", file: "missing.md" }),
+        },
+      ],
+      activeCanvasId: "c1",
+    });
+    // Picking a file for a kanban block must keep it kanban (resolves into a
+    // KanbanPanel), not silently degrade to an open-file viewer.
+    useStore.getState().pickTemplateBlockFile("c1", "L", "TASKS.md");
+    const leaf = collectLeaves(
+      useStore.getState().canvases[0]?.layout ?? null,
+    )[0];
+    expect(leaf?.content.block).toEqual({
+      kind: "open-kanban",
+      file: "TASKS.md",
+    });
+  });
+
   it("openTemplateUse / close toggle the chooser flag", () => {
     useStore.getState().openTemplateUse();
     expect(useStore.getState().templateUseOpen).toBe(true);

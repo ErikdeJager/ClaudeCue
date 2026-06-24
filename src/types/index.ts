@@ -267,8 +267,9 @@ export interface CanvasTab {
 
 /** A reusable, saved Canvas layout (#117). Same BSP shape as a `CanvasTab`, but
  * each leaf's `content.kind` is a **block kind** (`new-agent` / `new-terminal` /
- * `open-file` / `open-diff`) carrying inert action descriptors — config like the
- * agent `prompt` or the `open-file` relative `file` path — rather than live
+ * `open-file` / `open-diff` / `open-kanban` #154) carrying inert action
+ * descriptors — config like the agent `prompt` or the `open-file`/`open-kanban`
+ * relative `file` path — rather than live
  * content. Instantiated into a real canvas in #118. Persisted as the separate
  * `canvas_templates` blob (kept apart from the `canvases` blob). */
 export interface CanvasTemplate {

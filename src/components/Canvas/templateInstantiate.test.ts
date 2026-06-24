@@ -119,6 +119,12 @@ describe("pendingContent + resolvedContent (#118)", () => {
       resolvedContent({ kind: "open-file", file: "README.md" }, "/repo/x", {}),
     ).toEqual({ kind: "file", repoPath: "/repo/x", file: "README.md" });
 
+    // The kanban block (#154) carries BOTH repoPath + file (the KanbanPanel needs
+    // both); it must not fall through to the default branch that drops `file`.
+    expect(
+      resolvedContent({ kind: "open-kanban", file: "TASKS.md" }, "/repo/x", {}),
+    ).toEqual({ kind: "kanban", repoPath: "/repo/x", file: "TASKS.md" });
+
     expect(resolvedContent({ kind: "open-diff" }, "/repo/x", {})).toEqual({
       kind: "diff",
       repoPath: "/repo/x",
