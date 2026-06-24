@@ -307,7 +307,7 @@ even though it works in `tauri dev`.
 │   ├── src/commands.rs     # Tauri command surface + event payloads
 │   ├── src/store.rs        # JSON persistence (sessions, recents, canvases, canvas templates, schedules, settings, sidebar width)
 │   ├── src/git.rs          # Git: branch + diff + compare (#81) + list + checkout + worktree (#74)
-│   ├── src/files.rs        # Read-only file access (list text files/read, path-validated)
+│   ├── src/files.rs        # Repo file access (list/read text + write_text_file #141, path-validated)
 │   ├── src/skills.rs        # Read-only scan of .claude skills/commands for prompt autocomplete (#114)
 │   ├── Info.plist          # Partial plist (mic + speech-recognition usage strings), merged into the bundle
 │   ├── tauri.conf.json     # Window, bundle, build config
@@ -353,7 +353,15 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   agent, or with **⌘⏎** creates it as a worktree (`git worktree add -b`); the name is
   validated backend-side (a valid ref that must not already exist) with an inline
   error, and the destructive-checkout warning still applies to the in-folder path.
-  No commits or other writes.
+  No commits.
+- **File access is read-mostly, with one deliberate write** — `files.rs` lists +
+  reads repo text files for the viewer (#40/#44) and, since **#141**, writes a repo
+  text file (`write_text_file`) — the app's **first arbitrary file write**, backing
+  the markdown **Kanban board** editor (#141–#143). The write is path-validated
+  exactly like `read_text_file` (canonicalize, confine to the repo, reject
+  `..`/symlink/out-of-repo targets; a new file's parent dir must exist + be inside
+  the repo), narrowing the earlier "no arbitrary file writes" rule the way #74/#124
+  narrowed the git rule.
 - No app-rendered approval UI — users answer prompts directly in the terminal.
   (The v1 "no status system" rule was deliberately narrowed by **#42** — a single
   **busy/idle** indicator — and by **#112**, which adds a third "finished / needs

@@ -173,6 +173,11 @@ export const listFiles = (repo: string) =>
 export const readTextFile = (repo: string, file: string) =>
   invoke<string>("read_text_file", { repo, file });
 
+/** Write a repo-relative text file (validated inside the repo, #141 — backs the
+ * Kanban editor; the app's first arbitrary file write). Rejects traversal. */
+export const writeTextFile = (repo: string, file: string, contents: string) =>
+  invoke<void>("write_text_file", { repo, file, contents });
+
 /** Best-effort slash-invokable skills/commands for `cwd` (#114) — the
  * scheduled-prompt autocomplete. Reads project + user `.claude/{skills,commands}`,
  * project shadowing user; a missing dir just yields fewer entries (never throws). */

@@ -1,8 +1,10 @@
-//! Read-only file access for the universal file viewer (#40/#44): list a repo's
-//! viewable (text-ish) files and read a text file, with strict path validation
-//! (reject `..`/symlink escapes out of the repo). Content is returned verbatim
-//! and treated as untrusted by the frontend (markdown rendered sanitized with no
-//! raw HTML; code highlighted from escaped source).
+//! Repo file access for the universal file viewer (#40/#44) and the Kanban editor
+//! (#141): list a repo's viewable (text-ish) files, read a text file, and — the
+//! app's first arbitrary file write — write a text file (`write_text_file`), all
+//! with strict path validation (reject `..`/symlink escapes out of the repo).
+//! Read content is returned verbatim and treated as untrusted by the frontend
+//! (markdown rendered sanitized with no raw HTML; code highlighted from escaped
+//! source).
 
 use std::fs;
 use std::path::Path;
@@ -110,6 +112,45 @@ pub fn file_exists(repo: impl AsRef<Path>, file: &str) -> bool {
     canon_target.starts_with(&canon_repo) && canon_target.is_file()
 }
 
+/// Write `contents` to a repo-relative `file`, validating it stays inside `repo`
+/// (#141 — the app's first arbitrary file write, backing the Kanban editor). The
+/// path is confined to the repo the same way `read_text_file` reads:
+///   - an existing file/symlink is canonicalized whole (rejecting a symlink that
+///     escapes the repo), and
+///   - a new file's *parent* directory is canonicalized (it must exist and be
+///     inside the repo), so `..` / absolute / out-of-repo targets are rejected.
+///
+/// The parent directory must already exist (we create/overwrite a file, not dirs).
+/// Capped at the same few-MB limit as reads.
+pub fn write_text_file(repo: impl AsRef<Path>, file: &str, contents: &str) -> Result<(), String> {
+    let repo = repo.as_ref();
+    let canon_repo = repo.canonicalize().map_err(|e| e.to_string())?;
+    if contents.len() as u64 > MAX_FILE_BYTES {
+        return Err("file is too large to write".to_string());
+    }
+    let target = repo.join(file);
+    let write_path = match target.canonicalize() {
+        // Already exists: the canonical (symlink-resolved) path must stay in the repo.
+        Ok(canon) => {
+            if !canon.starts_with(&canon_repo) {
+                return Err("path is outside the repository".to_string());
+            }
+            canon
+        }
+        // New file: validate the parent dir is inside the repo, then write into it.
+        Err(_) => {
+            let parent = target.parent().ok_or("invalid path")?;
+            let canon_parent = parent.canonicalize().map_err(|e| e.to_string())?;
+            if !canon_parent.starts_with(&canon_repo) {
+                return Err("path is outside the repository".to_string());
+            }
+            let name = target.file_name().ok_or("invalid file name")?;
+            canon_parent.join(name)
+        }
+    };
+    fs::write(&write_path, contents).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,6 +221,33 @@ mod tests {
         // A directory is not a file; traversal escapes are rejected.
         assert!(!file_exists(&dir, "sub"));
         assert!(!file_exists(&dir, "../../../../etc/hosts"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn writes_a_new_and_overwrites_an_existing_file_inside_the_repo() {
+        let dir = tmp("write");
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        // New file in the repo root and in an existing subdir.
+        write_text_file(&dir, "board.md", "# hi").unwrap();
+        write_text_file(&dir, "sub/nested.md", "nested").unwrap();
+        assert_eq!(read_text_file(&dir, "board.md").unwrap(), "# hi");
+        assert_eq!(read_text_file(&dir, "sub/nested.md").unwrap(), "nested");
+        // Overwrite.
+        write_text_file(&dir, "board.md", "# bye").unwrap();
+        assert_eq!(read_text_file(&dir, "board.md").unwrap(), "# bye");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_rejects_paths_outside_the_repo() {
+        let dir = tmp("write-escape");
+        // Traversal, absolute, and a non-existent parent dir are all rejected;
+        // nothing is written outside the repo.
+        assert!(write_text_file(&dir, "../escape.md", "x").is_err());
+        assert!(write_text_file(&dir, "../../../../../../tmp/escape.md", "x").is_err());
+        assert!(write_text_file(&dir, "/etc/claudecue-escape.md", "x").is_err());
+        assert!(write_text_file(&dir, "nope/deep/x.md", "x").is_err()); // parent missing
         let _ = fs::remove_dir_all(&dir);
     }
 }

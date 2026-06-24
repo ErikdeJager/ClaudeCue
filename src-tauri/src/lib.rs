@@ -178,6 +178,7 @@ pub fn run() {
             commands::update_schedule,
             commands::list_files,
             commands::read_text_file,
+            commands::write_text_file,
             commands::list_skills,
             commands::file_exists,
             commands::is_git_repo,

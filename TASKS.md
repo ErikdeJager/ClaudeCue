@@ -35,8 +35,11 @@ ClaudeCue reads git (current branch + working-tree diff vs `HEAD`, branch compar
 and never commits; its writes are `git checkout <existing branch>` from the new-session
 flow (#27), `git worktree add`/`remove` for isolated worktree agents (#74), and
 **branch creation** (`git checkout -b` / `git worktree add -b`) via the new-session
-branch step's "+ add branch" (#124). `claude` is assumed on `PATH` (clear in-app error
-if missing).
+branch step's "+ add branch" (#124). **Files are read-mostly too** — the viewer
+lists/reads repo text files (#40/#44) and, since **#141**, `write_text_file` writes
+one (the app's **first arbitrary file write**, path-validated like reads), backing the
+markdown **Kanban board** (#141–#143). `claude` is assumed on `PATH` (clear in-app
+error if missing).
 
 > The original design spec and interactive prototype (`HANDOFF.md`,
 > `Conductor.dc.html`) are preserved in git history (commit `b02efd8`
@@ -361,10 +364,10 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 ## Tasks
 
 Tasks **#1–#138 are complete** — see **Implemented (completed tasks)** above for the
-index and git history for per-task detail. **Open now — the Kanban board feature:**
-#141 (markdown engine + file-write backend), #142 (board content type + read-only
-display), #143 (full editor). _(Tasks #139–#140 are reserved on another branch, so new
-work here begins at #141.)_ The
+index and git history for per-task detail. **The Kanban board feature:** #141 (markdown
+engine + file-write backend) is **done**; **open now:** #142 (board content type +
+read-only display) and #143 (full editor). _(Tasks #139–#140 are reserved on another
+branch, so this chain begins at #141.)_ The
 full entries for the recently completed #133–#138 remain below until the next
 `/update-docs` condenses them into the summary. New work goes here as a fresh `### N.`
 entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:`
@@ -1071,9 +1074,9 @@ sites isn't unit-testable, but the logic + the fail-open contract are covered.
 
 ---
 
-### 141. [ ] Markdown Kanban engine — Obsidian-format parser/serializer + a file-write backend
+### 141. [x] Markdown Kanban engine — Obsidian-format parser/serializer + a file-write backend
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none · _(builds on the read-only `files.rs` `read_text_file` (#44) + the
 `store.rs` JSON-persistence pattern — both shipped; foundation for #142, #143)_
 **Created:** 2026-06-24
@@ -1113,35 +1116,35 @@ wrapper. **No** rendering, content kind, or editor (those are #142/#143).
 
 **Subtasks**
 
-1. [ ] Define the board model in TS (e.g. `src/components/Kanban/kanban.ts`):
+1. [x] Define the board model in TS (e.g. `src/components/Kanban/kanban.ts`):
    `Board { frontmatter; columns: Column[]; settingsBlock? }`,
    `Column { name; complete: boolean; cards: Card[] }`, `Card { title; body; checked }`.
-2. [ ] Pure `parseBoard(md): Board` and `serializeBoard(board): string`, lenient/non-strict
+2. [x] Pure `parseBoard(md): Board` and `serializeBoard(board): string`, lenient/non-strict
    and **round-trip stable** — frontmatter, the `**Complete**` marker, and the
    `%% kanban:settings %%` block are preserved verbatim; multi-line card bodies and
    arbitrary inline markdown (tags/dates/links) survive untouched.
-3. [ ] Unit tests (`kanban.test.ts`): empty board, columns with no cards, multi-line card
+3. [x] Unit tests (`kanban.test.ts`): empty board, columns with no cards, multi-line card
    body, checked vs unchecked, frontmatter + settings block preserved, `parse∘serialize`
    idempotence on a realistic board.
-4. [ ] Backend `write_text_file(repo, file, contents)` in `src-tauri/src/files.rs` — same
+4. [x] Backend `write_text_file(repo, file, contents)` in `src-tauri/src/files.rs` — same
    path validation as `read_text_file` (canonicalize, confine to repo, reject escapes;
    reasonable size cap), creating/overwriting the file; register the Tauri command
    (`commands.rs` + `lib.rs`) and add the typed `writeTextFile` IPC wrapper (`ipc.ts`).
    A Rust unit test for the path validation (rejects `..` / outside-repo).
-5. [ ] Note the new write capability in CLAUDE.md (the "read-mostly" sections) and the
+5. [x] Note the new write capability in CLAUDE.md (the "read-mostly" sections) and the
    TASKS.md project-context.
 
 **Acceptance criteria**
 
-- [ ] `parseBoard`/`serializeBoard` round-trip a realistic Obsidian-format board with no
+- [x] `parseBoard`/`serializeBoard` round-trip a realistic Obsidian-format board with no
   data loss (frontmatter, columns incl. `**Complete**`, multi-line bodies, settings block)
   — unit-tested.
-- [ ] A card with only a title parses/serializes cleanly; arbitrary markdown in a card body
+- [x] A card with only a title parses/serializes cleanly; arbitrary markdown in a card body
   (tags, a date, links) is preserved verbatim (no structured-field parsing).
-- [ ] `write_text_file` writes a repo file, **rejects** paths that escape the repo
+- [x] `write_text_file` writes a repo file, **rejects** paths that escape the repo
   (canonicalized), and is exposed as a typed IPC wrapper.
-- [ ] CLAUDE.md / TASKS.md note the app's first arbitrary file write.
-- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+- [x] CLAUDE.md / TASKS.md note the app's first arbitrary file write.
+- [x] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
 
 **Notes**
 
@@ -1151,6 +1154,37 @@ wrapper. **No** rendering, content kind, or editor (those are #142/#143).
   AI-readable/-writable (the feature's stated long-term goal).
 - AI integration is **out of scope** here — the format only enables it later.
 - Independent of the unmerged #139–#140 (another branch); this chain starts at #141.
+
+**Implementation report**
+
+Engine + write backend only (no UI), exactly the recommended scope. **TS model +
+parse/serialize** (`src/components/Kanban/kanban.ts`): `Board { frontmatter: string|null;
+columns: Column[]; settingsBlock: string|null }`, `Column { name; complete; cards }`,
+`Card { title; body; checked }`. `parseBoard` normalizes CRLF→LF, then peels three regions —
+a leading `---…---` frontmatter block (captured verbatim), the trailing
+`%% kanban:settings … %%` block (from the marker to EOF, verbatim), and the middle, which it
+walks line-by-line: `## H` → a column, `**Complete**` (exact, unindented) → the done-lane
+flag, `- [ ]`/`- [x]` → a card, and tab- (or 4-space-) indented continuation lines → the
+card's `body` (dedented one level; the body check runs **before** the blank/`**Complete**`
+tests so a tab-only blank body line survives). `serializeBoard` is its deterministic inverse:
+frontmatter, then per column `## name` + optional `**Complete**` + each card
+(`- [ ]`/`- [x] title` with tab-indented body lines), then the settings block, sections
+joined by a blank line. Content before the first heading is ignored (lenient); a structure-less
+`.md` yields zero columns. **11 unit tests** (`kanban.test.ts`): empty board, no-card column,
+multi-line body w/ blank lines + tags/links, checked vs unchecked, frontmatter + settings
+preserved, lenient pre-heading content, CRLF, `serialize(parse(x))===x` idempotence on a
+realistic board, and `parse(serialize(board))` deep-equals (incl. an empty-title card). **Write
+backend** (`files.rs::write_text_file`): the app's **first arbitrary file write**, path-validated
+like `read_text_file` — an existing target is canonicalized whole (rejecting symlink escapes),
+a new target's parent dir is canonicalized + confined to the repo (so `..`/absolute/out-of-repo
+and a missing parent are rejected), capped at the same 5 MB; exposed as the `write_text_file`
+Tauri command (`commands.rs` + registered in `lib.rs`) + the typed `writeTextFile` IPC wrapper
+(`ipc.ts`). 2 Rust tests (writes new + overwrites in-repo; rejects traversal/absolute/missing-parent).
+Docs: `files.rs` module doc, CLAUDE.md (a new "File access is read-mostly, with one deliberate
+write" scope bullet + the `files.rs` layout line) and the TASKS.md project-context note the new
+write. All gates pass: `npm test` (163), `npm run build`, `npm run lint`, `cargo test` (71),
+`cargo clippy -D warnings`, `prettier --check`, `cargo fmt --check`. #142 (content kind +
+read-only render) and #143 (editor + write-back) build on this.
 
 ---
 

@@ -402,6 +402,14 @@ pub fn read_text_file(repo: String, file: String) -> Result<String, SessionError
     crate::files::read_text_file(&repo, &file).map_err(SessionError::Io)
 }
 
+/// Write a repo-relative text file (#141 — the app's first arbitrary file write,
+/// backing the Kanban editor); the path is validated to stay inside `repo`
+/// (rejects traversal / symlink escape / out-of-repo targets).
+#[tauri::command]
+pub fn write_text_file(repo: String, file: String, contents: String) -> Result<(), SessionError> {
+    crate::files::write_text_file(&repo, &file, &contents).map_err(SessionError::Io)
+}
+
 /// Best-effort slash-invokable skills/commands for a folder (#114) — the
 /// scheduled-prompt autocomplete. Reads project `<cwd>/.claude` + user `~/.claude`
 /// (project shadows user); a missing/unreadable dir simply yields fewer entries.
