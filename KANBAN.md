@@ -17,6 +17,3 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #164 — Clickable worktree badge → worktree-scoped "open view" menu
-	Plan: TASK-164.md
-	Depends on: none

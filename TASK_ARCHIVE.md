@@ -1472,3 +1472,80 @@ only — logic unchanged), `CLAUDE.md` (scope note).
 
 ---
 
+### 164. [x] Clickable worktree badge → worktree-scoped "open view" menu
+
+**Status:** Done
+**Depends on:** none · _(builds on shipped infra: #74 (worktree agents / `repoPath` = worktree
+folder), #82 (`addOverviewPanel` + Views set), #59/#152 (overview panels = left panel + Overview),
+#56/#151 (`FilePicker`), the `FileSwitcher` popover pattern. Extracts the shared `ViewsMenu` that
+#165/#166 then reuse.)_
+**Created:** 2026-06-24
+
+**Description**
+
+A worktree agent (#74) shows a small inert **"worktree"** text badge in its panel/card header. The
+card: "This badge should be clickable. Clicking this badge will show a few options. Options to open a
+diff view, or file inside this worktree. This opens a special panel in the left plane and inside the
+overview mode… Any option should be available." Goal: turn the badge into a quick menu for opening
+worktree-scoped views (diff / file / terminal / kanban) registered so they appear as a left-panel row
+**and** an Overview column associated with that worktree — the same addable-view set the repo **Views**
+menu (#82) offers, scoped to the worktree's folder (a worktree agent's `session.repoPath` **is** the
+worktree folder).
+
+**Subtasks**
+
+1. [x] **Extracted a reusable `ViewsMenu`** (`components/ViewsMenu/`): the #82 addable-view action set
+   (File viewer / Kanban board → inline `FilePicker`; Diff; Terminal) pulled into one self-contained
+   component (`{repoPath, onClose}`) calling `addOverviewPanel` / `createKanbanBoard`. The Sidebar repo
+   menu now renders `<ViewsMenu>` (its inline `menuMode:"files"` branch, `filePickKind`/`fileList`
+   state, and `viewTypes` removed — one source of truth).
+2. [x] **Clickable badge** (`components/WorktreeViewsBadge/`): the badge is now a button + popover
+   (`role="menu"`, `aria-haspopup`/`aria-expanded`, ChevronDown caret, hover/focus cue) hosting
+   `<ViewsMenu repoPath={session.repoPath}>`. `onPointerDown` stop-propagation so opening it never
+   starts a Canvas move-leaf / Overview card drag (mirrors `FileSwitcher`). Rendered in both
+   `CanvasSurface` and the Overview `SessionCard`.
+3. [x] **Popover behavior:** dismisses on outside-click + Escape.
+4. [x] **Worktree-keyed panel grouping:** Sidebar — extracted `renderPanelRows(repoKey)` called inside
+   each worktree sub-group so worktree panels render under that worktree. Overview — map each panel key
+   through `clusterRepoOf` (worktree path → parent via `worktreeParent`) so worktree panels cluster
+   under the **parent** repo (no stray group) while each `ExtraPanel` renders/removes against its own
+   `repoKey` (the `ColumnItem` panel variant now carries `repoKey`).
+5. [x] **Selection/jump:** inherited — rows register like any `overviewPanels` item and `selectItem`
+   carries the worktree `repoKey`.
+6. [x] **Verify:** `npm run build`, `npm run lint`, `npm run format:check`, `npm test` (212) pass.
+
+**Acceptance criteria**
+
+- [x] The per-agent "worktree" badge (Canvas panel header **and** Overview agent card header) is a
+      clickable button that opens a popover; clicking it never starts a drag.
+- [x] The popover offers the full addable-view set (diff / file via picker / terminal / kanban) scoped
+      to the agent's worktree folder.
+- [x] Selecting an action opens that view against the worktree path; it appears as a left-panel row +
+      an Overview column **associated with the worktree**.
+- [x] The #82 repo Views menu and the badge popover share one implementation (no duplicated action set).
+- [x] Popover dismisses on outside-click / Escape.
+- [x] `npm run build`, `npm run lint`, `npm test` pass.
+
+**Implementation report** (commit `ab285ee`, 2026-06-24)
+
+Shipped in three parts: a shared `ViewsMenu` (now the single source of truth for the addable-view set,
+reused by the Sidebar repo menu and the badge), the clickable `WorktreeViewsBadge` popover (both Canvas
++ Overview headers), and worktree-keyed panel grouping so opened views land under the worktree (sidebar
+sub-group) / its parent cluster (Overview) rather than a stray group.
+
+**Key files touched:** `src/components/ViewsMenu/*` (new shared menu), `src/components/
+WorktreeViewsBadge/*` (new badge popover), `src/components/Canvas/CanvasSurface.tsx` +
+`src/components/Overview/Overview.tsx` (render the badge + `clusterRepoOf` grouping),
+`src/components/Sidebar/Sidebar.tsx` (use `ViewsMenu`, `renderPanelRows(repoKey)`).
+
+**Notes**
+
+- **Deliberate refinement (recorded):** the Sidebar repo menu's File/Kanban picker now renders **inline
+  within the Views section** (surrounding New session / Reveal / destructive items stay visible) rather
+  than replacing the whole menu — a consequence of making `ViewsMenu` self-contained for reuse.
+  Functionally identical; the action set is now shared.
+- The sibling **"Worktree context menu"** (#166) and the **"Open view" button on normal agents** (#165)
+  reuse this `ViewsMenu` — hence both `Depend on: #164`.
+
+---
+
