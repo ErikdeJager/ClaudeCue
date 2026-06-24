@@ -363,15 +363,16 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#144 are complete** — see **Implemented (completed tasks)** above for the
+Tasks **#1–#146 are complete** — see **Implemented (completed tasks)** above for the
 index and git history for per-task detail. The Kanban board feature (#141 engine +
-file-write, #145 content type + read-only render, #143 full editor) and the Canvas
-panel header-drag affordance (#144) all shipped. **Open now:** #146 (Canvas panel
-title truncation). _(Tasks #139–#140 are reserved on another branch. The Kanban
-content-type task was renumbered #142 → #145 to avoid colliding with the separately
-merged template task #142.)_ The full entries for the recently completed #133–#145
-remain below until the next `/update-docs` condenses them into the summary. New work goes here as a fresh `### N.` entry in
-[TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:` prerequisites.
+file-write, #145 content type + read-only render, #143 full editor), the Canvas panel
+header-drag affordance (#144), and the Canvas panel title truncation (#146) all shipped.
+**There are no open tasks right now.** _(Tasks #139–#140 are reserved on another branch.
+The Kanban content-type task was renumbered #142 → #145 to avoid colliding with the
+separately merged template task #142.)_ The full entries for the recently completed
+#133–#146 remain below until the next `/update-docs` condenses them into the summary. New
+work goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format,
+with its `Depends on:` prerequisites.
 
 > **Implementing tasks — never skip one.** The agent implementing this backlog
 > (`/develop-tasks`, `/isolate-agent`, `/handoff`) MUST implement **every** open task
@@ -1570,9 +1571,9 @@ per the task's note).
 
 ---
 
-### 146. [ ] Canvas panel — truncate an overflowing title so the header buttons stay visible
+### 146. [x] Canvas panel — truncate an overflowing title so the header buttons stay visible
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #144 · _(builds on the #144-restructured Canvas `LeafPanel` header — both
 touch `CanvasSurface.tsx` + `Canvas.module.css`; #144 is shipped, so this is immediately
 runnable)_
@@ -1623,25 +1624,25 @@ buttons' behavior, the drag affordance (#135/#144), or other views.
 
 **Subtasks**
 
-1. [ ] `Canvas.module.css`: `.panelTitleBlock` → add `flex: 1; overflow: hidden;`;
+1. [x] `Canvas.module.css`: `.panelTitleBlock` → add `flex: 1; overflow: hidden;`;
    `.panelTitle` → remove `flex-shrink: 0`, add `min-width: 0`.
-2. [ ] `CanvasSurface.tsx`: add `title={titleText}` to the `.panelTitle` span (hover tooltip
+2. [x] `CanvasSurface.tsx`: add `title={titleText}` to the `.panelTitle` span (hover tooltip
    for the full title); confirm the file-panel `FileSwitcher` name truncates (its
    `nameClassName` is `.panelTitle`).
-3. [ ] Verify a very long agent auto-name truncates with `…` before the buttons, the
+3. [x] Verify a very long agent auto-name truncates with `…` before the buttons, the
    Fork/Copy/Close buttons are fully visible + clickable, and the meta/badges
    (worktree/fork) still render.
 
 **Acceptance criteria**
 
-- [ ] A long Canvas panel title truncates with an ellipsis and never renders behind the
+- [x] A long Canvas panel title truncates with an ellipsis and never renders behind the
   header buttons; the Fork (#126), Copy-resume (#86), and Close buttons are always fully
   visible and clickable.
-- [ ] Hovering the truncated title shows the full title (tooltip).
-- [ ] Truncation applies across agent / file / diff / terminal panels and in a detached
+- [x] Hovering the truncated title shows the full title (tooltip).
+- [x] Truncation applies across agent / file / diff / terminal panels and in a detached
   canvas window (#84). _(Runtime detached-window check best-effort per the #84/#105
   precedent.)_
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
+- [x] `npm run build`, `npm run lint`, and `npm test` pass.
 
 **Notes**
 
@@ -1649,6 +1650,25 @@ buttons' behavior, the drag affordance (#135/#144), or other views.
   declared on the same rule.
 - Builds directly on the #144 header restructure (whole-bar drag); independent of the Kanban
   work (#141 / #143 / #145) and the unmerged #139–#140.
+
+**Implementation report**
+
+Exactly the recommended fix (CSS + a tooltip, no logic change). `Canvas.module.css`:
+`.panelTitleBlock` gained `flex: 1` + `overflow: hidden` (keeping `min-width: 0`) so it
+takes the free space and clips instead of pushing the actions; `.panelTitle` **dropped
+`flex-shrink: 0`** and gained `min-width: 0` so the already-declared
+`overflow/text-overflow:ellipsis/white-space:nowrap` finally engages. `.panelActions` keeps
+`flex-shrink: 0` (unchanged), so the Fork/Copy-resume/Close buttons are always fully
+visible. `CanvasSurface.tsx`: the plain `.panelTitle` span gained `title={titleText}` (hover
+tooltip for the full title). The file-panel **FileSwitcher** name truncates too **with no
+FileSwitcher change** — its `nameClassName` is `.panelTitle` and its `.root`/`.trigger`
+already carry `min-width: 0`, so the new `.panelTitle min-width:0` lets the name ellipsis
+(its trigger already has a `title` tooltip). Applies to all panel kinds and to a detached
+window (#84, same component) — **runtime-unverified** in a real detached window (no GUI, per
+#84/#105); the #144 whole-bar drag hit-area is unaffected (the rules only govern the title
+child's width). All gates pass: `npm run build`, `npm run lint`, `npm test` (179),
+`prettier --check`. _(Visual truncation isn't unit-testable; the fix is the proven sidebar
+#111 / Overview ellipsis pattern.)_
 
 ---
 

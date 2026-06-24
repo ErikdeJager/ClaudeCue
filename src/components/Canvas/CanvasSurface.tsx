@@ -239,7 +239,10 @@ function LeafPanel({
               />
             </span>
           ) : (
-            <span className={styles.panelTitle}>{titleText}</span>
+            // Tooltip shows the full title when truncated (#146).
+            <span className={styles.panelTitle} title={titleText}>
+              {titleText}
+            </span>
           )}
           {metaText && <span className={styles.panelMeta}>{metaText}</span>}
           {/* Worktree agent (#74/#96): it inherits the parent repo's color, so a

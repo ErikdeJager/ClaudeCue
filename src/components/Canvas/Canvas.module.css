@@ -241,12 +241,17 @@
   cursor: grabbing;
 }
 
-/* Title + repo badge (#35/#47): color dot, content title, repo · branch meta. */
+/* Title + repo badge (#35/#47): color dot, content title, repo · branch meta.
+   `flex: 1` + `overflow: hidden` (with `min-width: 0`) let it take the free space
+   and clip rather than pushing the actions, so a long title truncates instead of
+   rendering behind the header buttons (#146). */
 .panelTitleBlock {
   display: flex;
+  flex: 1;
   min-width: 0;
   align-items: center;
   gap: var(--space-6);
+  overflow: hidden;
 }
 
 /* A non-interactive "this bar is draggable" hint (#135/#144): the whole header
@@ -280,9 +285,11 @@
   border-radius: var(--radius-dot);
 }
 
+/* `min-width: 0` (and dropping the old `flex-shrink: 0`) lets the title shrink so
+   its ellipsis actually engages instead of overflowing the header (#146). */
 .panelTitle {
+  min-width: 0;
   overflow: hidden;
-  flex-shrink: 0;
   color: var(--text-primary);
   font-size: var(--fs-meta-sm);
   font-weight: 500;
