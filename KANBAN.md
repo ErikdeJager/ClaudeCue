@@ -29,9 +29,6 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #159 — Remove Kanban column move-left/right buttons (move per task)
-	Plan: TASK-159.md
-	Depends on: none
 - [ ] #160 — Kanban: commit card edits on confirm, not per-keystroke
 	Plan: TASK-160.md
 	Depends on: none
