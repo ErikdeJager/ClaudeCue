@@ -1,6 +1,6 @@
-### 156. [ ] Kanban board horizontal scroll in Overview mode
+### 156. [x] Kanban board horizontal scroll in Overview mode
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-24
 
@@ -106,3 +106,22 @@ the proven Canvas `.panelBody` pattern.
   (`.panelBody`, `.panelBody > *`), `Overview.tsx` (`PanelColumn` → `.body` wraps
   children, kanban render ≈ line 330), `CanvasSurface.tsx:311` (`.panelBody` wraps
   `renderContent()`).
+
+**Implementation note (done 2026-06-24)**
+
+One-file CSS fix in `src/components/Overview/Overview.module.css`, exactly as
+diagnosed (subtasks 1–3):
+- Added `min-width: 0;` to the shared PanelColumn `.body` rule.
+- Added a `.body > * { flex: 1; min-width: 0; min-height: 0; }` child-fill rule
+  mirroring Canvas's `.panelBody > *`.
+This bounds the kanban `.panel`/`.board` width so its existing `overflow-x: auto`
+engages (the columns scroll instead of being clipped by `.card`'s `overflow:
+hidden`). `KanbanPanel.module.css` and the Canvas path are untouched; `.body`
+wraps a single content child per panel (verified in `Overview.tsx:117`), so the
+child-fill rule is safe for every panel type (the same flex sizing Canvas already
+applies to them). `npm run build`, `npm run lint`, `npm run format:check`, and
+`npm test` (196) all pass. Subtasks 4/5 are interactive/manual checks (can't be
+run headlessly here) but the fix replicates the proven Canvas pattern verbatim.
+The related **"markdown render cutoff"** Refine card (FileViewer in Overview)
+likely shares this root cause and may now be partly resolved — left to verify when
+that card is refined, as scoped.

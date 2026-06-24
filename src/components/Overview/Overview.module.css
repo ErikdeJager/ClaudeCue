@@ -256,6 +256,20 @@
   display: flex;
   flex: 1;
   min-height: 0;
+  /* `min-width: 0` lets the content child shrink below its intrinsic width (the
+     classic flexbox `min-width: auto` gotcha), so a wide kanban board's
+     `overflow-x: auto` engages and it scrolls instead of being clipped by the
+     card (#156) — matching the Canvas `.panelBody` the same panels render into. */
+  min-width: 0;
+}
+
+/* Real content (kanban board / terminal / file viewer / diff / scheduled) fills
+   the column body and can shrink below its content width — mirrors Canvas's
+   `.panelBody > *` so a panel behaves identically in both views (#156). */
+.body > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* Placeholder body for extra panels until #39 (diff) / #41 (markdown) fill them. */
