@@ -37,6 +37,3 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #157 — "Big mode": maximize any item into a full-window modal overlay
-	Plan: TASK-157.md
-	Depends on: none

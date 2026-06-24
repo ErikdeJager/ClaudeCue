@@ -943,3 +943,98 @@ wraps a single content child per panel, so the child-fill rule is safe for every
 
 ---
 
+### 157. [x] "Big mode" — maximize any item into a full-window modal overlay
+
+**Status:** Done
+**Depends on:** none · _(builds on shipped infra: the #18 terminal pool, the #84 ownership/
+`DetachedNote` model, the app modal pattern (Settings/CanvasCloseModal), and the existing content
+kinds. Independent of #155 (canvas drag) and #156 (kanban scroll), though it shares
+`CanvasSurface` edits with #155.)_
+**Created:** 2026-06-24
+
+**Description**
+
+Add a **maximize ("big mode")** affordance to every item's top bar (Canvas panel header + Overview
+column header): a one-click icon that opens that single item — agent, terminal, file, kanban, diff,
+or scheduled — in a near-fullscreen modal overlay over a dimmed scrim, then restores it on close. A
+small terminal/file/diff/kanban column is often too cramped to read or work in; big mode gives a
+full-size view without rearranging panels or popping out a native window (#84).
+
+**Hard constraints respected:** (1) **One pooled terminal in one DOM slot at a time (#18/#84)** — a
+`<Terminal>` is a reparented pool node, so the modal and the source panel can't both mount it; (2)
+**single auto-save instance (#148)** — `FileViewer`(raw)/`KanbanPanel` use `useAutoSaveFile`, so two
+mounts would double-poll and race writes. Both are solved by the **one-live-render-site rule**: while
+an item is maximized, its source panel/column renders a `MaximizedNote` placeholder and the modal is
+the sole live render (the same principle as #84 ownership). The pool reparents source→modal→source
+reload-free.
+
+**Subtasks** (all shipped as one cohesive feature)
+
+1. [x] **Pure helpers** (`canvasDrop.ts`): `sameItem(a,b)` (agent/terminal→sessionId; file/kanban→
+   repoPath+file; diff→repoPath; scheduled→scheduleId), `overviewPanelToContent`, `itemStillPresent`
+   — unit-tested.
+2. [x] **Store** (`store.ts`): transient, never-persisted `maximizedItem: CanvasContent | null` +
+   `maximizeItem` / `closeMaximized`.
+3. [x] **Shared renderer** `components/ItemContent/ItemContent.tsx`: the single source of truth for
+   content-descriptor → live child, carrying the #84 ownership guard **and** the big-mode placeholder;
+   it replaced the duplicated inline render logic in `CanvasSurface.renderContent` and Overview's
+   three card bodies. Title helpers extracted to `itemTitle.ts` (no React) to avoid an import cycle.
+4. [x] **Affordance:** a Lucide `Maximize2` button on the Canvas panel header (all kinds but
+   `pending`) and on all three Overview card action groups.
+5. [x] **Modal** `components/BigMode/BigModeModal.tsx`: near-fullscreen (`inset: var(--space-16)`)
+   over `--scrim`, `role="dialog"` `aria-modal`, header (title + close), body = `<ItemContent inModal
+   active>`. Closes on close-button, scrim mousedown, and Esc **gated to non-terminal focus** (skips
+   when the target is inside `.xterm`). Mounted in `App.tsx` **and** `CanvasWindow.tsx` (per-window).
+6. [x] **One live render site:** `ItemContent` renders `MaximizedNote` when this exact item is
+   maximized and it's not the modal's `inModal` instance.
+7. [x] **Lifecycle guard:** an `itemStillPresent` effect auto-closes the modal when the maximized
+   item disappears (agent exits/removed, panel closed, schedule cancelled).
+8. [x] **Detached windows (#84):** per-window modal; maximize icon shown even when `!ownedHere` (the
+   modal then shows `DetachedNote`).
+9. [x] **Styling:** `BigModeModal.module.css` + `MaximizedNote.module.css`, on-system tokens,
+   reduced-motion honored.
+10. [x] **Tests:** `sameItem` + store `maximizeItem`/`closeMaximized`.
+11. [x] **Verify:** `npm run build`, `npm run lint`, `npm run format:check`, `npm test` (205) pass.
+
+**Acceptance criteria**
+
+- [x] Every item top bar (Canvas panel + Overview column) for agent/terminal/file/kanban/diff/
+      scheduled shows a maximize icon (not on `pending` panels).
+- [x] Clicking it opens that one item in a modal filling (nearly) all width and height over a scrim.
+- [x] The modal renders the **live** item while the source shows a "shown in big mode" placeholder —
+      the pooled terminal and any auto-save hook run in exactly one place.
+- [x] Close (button / scrim / gated-Esc) restores the item with **no** terminal reload.
+- [x] Works from both Overview and Canvas, main window and detached canvas window.
+- [x] Removing/closing/exiting the underlying item while maximized auto-closes the modal.
+- [x] `npm run build`, `npm run lint`, `npm test` pass; `sameItem` + store-action tests included.
+
+**Implementation report** (commit `0e0e252`, 2026-06-24)
+
+Shipped as one feature. The shared `ItemContent` renderer became the single source of truth (with
+both the #84 ownership guard and the new big-mode placeholder), removing the prior Overview /
+CanvasSurface render duplication; the #155 drag ghost now reuses the extracted `itemTitle`. Terminal
+preservation: the leaf/panel stays in `canvases`/`overviewPanels` while maximized so the reconcile
+keeps the PTY, and the pool's slot-equality guard makes the source→modal→source reparent reload-free.
+
+**Key files touched:** `src/components/ItemContent/{ItemContent.tsx,itemTitle.ts,*.module.css}`
+(new shared renderer + title helpers), `src/components/BigMode/{BigModeModal.tsx,*.module.css}` (new
+modal), `src/components/MaximizedNote/*` (new placeholder), `src/components/Canvas/canvasDrop.ts`
+(+`.test.ts`: `sameItem`/`overviewPanelToContent`/`itemStillPresent`), `src/store.ts` (+`.test.ts`:
+`maximizedItem` + actions), `src/components/Canvas/CanvasSurface.tsx` + `src/components/Overview/
+Overview.tsx` (use the shared renderer + maximize icon), `src/App.tsx` + `src/components/CanvasWindow/
+CanvasWindow.tsx` (mount the modal per-window).
+
+**Notes / deviations (recorded)**
+
+- **"All width and height"** = a near-fullscreen modal (small inset + thin header), reusing the app
+  modal pattern, rather than literally edge-to-edge — keeps the scrim/close affordance visible.
+- **No rigid Tab focus-trap** in the modal: the body hosts interactive content (terminal/editor) that
+  manages its own focus; a Tab-cycling trap would fight the terminal. Kept `aria-modal` + the three
+  closers.
+- **Esc-to-close is gated to non-terminal focus** because a focused terminal swallows keystrokes;
+  the close button + scrim are the primary closers.
+- **Subtask 11 (manual UI verification)** can't run headlessly; the behavior reuses proven infra (the
+  #18 pool reparent, #84 ownership/`DetachedNote`, the app modal pattern).
+
+---
+
