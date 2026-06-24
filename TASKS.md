@@ -361,7 +361,10 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 ## Tasks
 
 Tasks **#1–#138 are complete** — see **Implemented (completed tasks)** above for the
-index and git history for per-task detail. There are **no open tasks** right now. The
+index and git history for per-task detail. **Open now — the Kanban board feature:**
+#141 (markdown engine + file-write backend), #142 (board content type + read-only
+display), #143 (full editor). _(Tasks #139–#140 are reserved on another branch, so new
+work here begins at #141.)_ The
 full entries for the recently completed #133–#138 remain below until the next
 `/update-docs` condenses them into the summary. New work goes here as a fresh `### N.`
 entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:`
@@ -1065,6 +1068,250 @@ sites isn't unit-testable, but the logic + the fail-open contract are covered.
   `NothingToFork` guard is unchanged.
 - This surfaces, **up front**, the two un-materialized cases #134 documented: a
   never-prompted session, and a just-created-never-used fork.
+
+---
+
+### 141. [ ] Markdown Kanban engine — Obsidian-format parser/serializer + a file-write backend
+
+**Status:** Not started
+**Depends on:** none · _(builds on the read-only `files.rs` `read_text_file` (#44) + the
+`store.rs` JSON-persistence pattern — both shipped; foundation for #142, #143)_
+**Created:** 2026-06-24
+
+**Description**
+
+First task of the **Kanban board** feature: a markdown-backed Kanban board the user can
+load from a repo (like the file viewer) and edit without ever touching the markdown. This
+task builds the **engine only** — the file format, a pure parse/serialize round-trip, and
+the backend **write** path the editor (#143) will use. No UI yet.
+
+**Format — Obsidian-Kanban compatible (the researched de-facto standard).** A board is a
+normal `.md` file living in a repo:
+
+- YAML frontmatter `kanban-plugin: board` marks the file as a board.
+- Each `## Heading` is a **column** (status lane), in document order.
+- Each `- [ ] Card title` / `- [x] Card title` checklist item under a column is a **card**
+  (checked = done); indented continuation lines under a card are its **markdown body**.
+- A column may carry the Obsidian `**Complete**` marker (the "done" lane) — **preserve** it.
+- A trailing `%% kanban:settings … %%` block (board options) is **preserved verbatim**.
+- **Non-strict:** a card is minimally just a title; everything else (body text, `#tags`, a
+  `@{date}`, `[[links]]`, any markdown) is **optional freeform content the user writes**.
+  The engine does **not** model dates/tags as structured fields — it preserves the card's
+  title + raw markdown body untouched.
+
+**Card model (deliberately minimal):** `{ title: string; body: string; checked: boolean }`
+— `body` is the raw markdown under the card. No `dueDate` / `tags` fields (the user
+reframed cards as freeform markdown; display is #142).
+
+**This adds the app's first arbitrary file-write command** — expanding the documented
+"git/files are read-mostly; no arbitrary file writes" rule the way #74/#124 expanded the
+git rule. The write is path-validated identically to `read_text_file` (canonicalize,
+reject `..`/symlink escape, confine to the repo).
+
+Scope: the pure TS model + `parse`/`serialize` and the Rust write command + its IPC
+wrapper. **No** rendering, content kind, or editor (those are #142/#143).
+
+**Subtasks**
+
+1. [ ] Define the board model in TS (e.g. `src/components/Kanban/kanban.ts`):
+   `Board { frontmatter; columns: Column[]; settingsBlock? }`,
+   `Column { name; complete: boolean; cards: Card[] }`, `Card { title; body; checked }`.
+2. [ ] Pure `parseBoard(md): Board` and `serializeBoard(board): string`, lenient/non-strict
+   and **round-trip stable** — frontmatter, the `**Complete**` marker, and the
+   `%% kanban:settings %%` block are preserved verbatim; multi-line card bodies and
+   arbitrary inline markdown (tags/dates/links) survive untouched.
+3. [ ] Unit tests (`kanban.test.ts`): empty board, columns with no cards, multi-line card
+   body, checked vs unchecked, frontmatter + settings block preserved, `parse∘serialize`
+   idempotence on a realistic board.
+4. [ ] Backend `write_text_file(repo, file, contents)` in `src-tauri/src/files.rs` — same
+   path validation as `read_text_file` (canonicalize, confine to repo, reject escapes;
+   reasonable size cap), creating/overwriting the file; register the Tauri command
+   (`commands.rs` + `lib.rs`) and add the typed `writeTextFile` IPC wrapper (`ipc.ts`).
+   A Rust unit test for the path validation (rejects `..` / outside-repo).
+5. [ ] Note the new write capability in CLAUDE.md (the "read-mostly" sections) and the
+   TASKS.md project-context.
+
+**Acceptance criteria**
+
+- [ ] `parseBoard`/`serializeBoard` round-trip a realistic Obsidian-format board with no
+  data loss (frontmatter, columns incl. `**Complete**`, multi-line bodies, settings block)
+  — unit-tested.
+- [ ] A card with only a title parses/serializes cleanly; arbitrary markdown in a card body
+  (tags, a date, links) is preserved verbatim (no structured-field parsing).
+- [ ] `write_text_file` writes a repo file, **rejects** paths that escape the repo
+  (canonicalized), and is exposed as a typed IPC wrapper.
+- [ ] CLAUDE.md / TASKS.md note the app's first arbitrary file write.
+- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+
+**Notes**
+
+- Format research: the Obsidian Kanban plugin is the established markdown-board standard —
+  `## column` + `- [ ] card` + `kanban-plugin` frontmatter + a `%% kanban:settings %%`
+  block. Chosen for interoperability and because plain markdown is trivially
+  AI-readable/-writable (the feature's stated long-term goal).
+- AI integration is **out of scope** here — the format only enables it later.
+- Independent of the unmerged #139–#140 (another branch); this chain starts at #141.
+
+---
+
+### 142. [ ] Kanban board content type — load like the file viewer + read-only board rendering
+
+**Status:** Not started
+**Depends on:** #141 · _(builds on the content-kind system + the #82 repo "Views"
+registry, the #56/#90 `FilePicker`, the #44 FileViewer markdown stack, and
+`overview_panels` persistence — all shipped)_
+**Created:** 2026-06-24
+
+**Description**
+
+Second task of the **Kanban board** feature: make a board a first-class **content kind**
+(like `file` / `diff` / `terminal`), **loaded from a repo through the same file-picker flow
+as the file viewer**, and **rendered read-only** as columns + cards. Editing is #143.
+
+**Loading (the same method as the file viewer).** The repo context-menu **Views** section
+(#82) gains a **"Kanban board"** entry that opens the searchable `FilePicker` (#56) —
+exactly the "Open file viewer" path (`menuMode("files")`) but scoped to `.md` files — and
+the chosen file becomes a `kanban` panel `{ kind:"kanban", repoPath, file }` (the **same
+refs as a `file` panel**), persisted in `overview_panels` like every other view. The board
+is also a draggable **sidebar row** (`KanbanRow`, mirroring `FileRow`) that drops into
+Canvas, an **Overview column**, and a **Canvas panel** — the full standard-content-kind
+treatment.
+
+**Rendering (read-only, text-formatting-focused).** A `KanbanPanel` reads the `.md` via
+`readTextFile`, parses it with #141's `parseBoard`, and lays out the columns left-to-right,
+each with its cards. **A card shows its title and renders its markdown body** via the
+FileViewer markdown stack (react-markdown + remark-gfm, #44) — display **focuses on text
+formatting**, so a card with no extra metadata shows nothing extra (no empty "due date"
+chrome). The columns strip **scrolls horizontally** when there are many columns / the panel
+is narrow (the user explicitly wants x-axis scroll on small panels). Hot-reload from disk
+by polling like the FileViewer (bail-if-unchanged), so an external edit (the user, or later
+an AI/claude editing the same file) updates the board. A `.md` with no kanban structure
+renders as an empty board (no columns) — authoring it is #143.
+
+Scope: wiring the content kind end-to-end + read-only rendering + horizontal scroll +
+hot-reload. **No** add/edit/move/delete and **no** writes (all #143).
+
+**Subtasks**
+
+1. [ ] Add `"kanban"` to the `CanvasContent` kind union (`src/types/index.ts`), carrying
+   `repoPath` + `file`.
+2. [ ] `payloadToContent` + `isDuplicate` cases (`Canvas/canvasDrop.ts`) for `kind:"kanban"`
+   (dedupe by `repoPath`+`file`, like `file`).
+3. [ ] Repo Views registry entry "Kanban board" (`Sidebar.tsx` `viewTypes`) → the
+   `.md`-scoped `FilePicker` flow (the file-viewer method) → add a `kanban` panel to
+   `overview_panels`.
+4. [ ] `KanbanRow` sidebar row (mirror `FileRow`: dnd-kit draggable
+   `data:{kind:"kanban",repoPath,file}`, click selects/jumps #79, `RowContextMenu` Remove
+   #132).
+5. [ ] `KanbanPanel` component: `readTextFile` → `parseBoard` → columns/cards; card title +
+   markdown body via the #44 markdown renderer; horizontal-scroll column strip;
+   FileViewer-style polling hot-reload.
+6. [ ] `CanvasSurface` `renderContent` case + the Overview column case → mount `KanbanPanel`.
+
+**Acceptance criteria**
+
+- [ ] A `.md` board can be opened from the repo **Views** menu via the same searchable
+  picker as the file viewer, and appears as a sidebar row, an Overview column, and a Canvas
+  panel (draggable into Canvas), persisted across restarts.
+- [ ] The board renders its columns and cards read-only; a card renders its markdown body
+  (text formatting), with nothing extra shown for unused metadata.
+- [ ] Many columns / a narrow panel scroll **horizontally** without breaking the layout.
+- [ ] Editing the `.md` on disk updates the board (hot-reload), without flicker when
+  unchanged.
+- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
+
+**Notes**
+
+- A `kanban` panel reuses the `file` panel's refs (`repoPath`+`file`) and persistence
+  (`overview_panels`) — no new store blob.
+- Read-only here keeps the milestone shippable/verifiable; all mutation + file writes are
+  #143.
+
+---
+
+### 143. [ ] Kanban editor — full card & column editing with drag-and-drop, written back to the .md
+
+**Status:** Not started
+**Depends on:** #142 · _(needs #141's `serializeBoard` + `writeTextFile` and #142's
+`KanbanPanel`; uses dnd-kit #43/#47 and the #94 debounced-auto-save pattern — all
+shipped/prior in this chain)_
+**Created:** 2026-06-24
+
+**Description**
+
+Final task of the **Kanban board** feature: make the board fully **editable in-app so the
+user never touches the markdown**, persisting every change back to the `.md` via #141's
+`writeTextFile`.
+
+**Card editing (freeform, not field-locked).** Per the user, a card is a **title + an
+optional markdown body** — no structured field UI. Add a card (a per-column "+ Add card"),
+edit a card's **title and body** (the body is a plain markdown textarea — the user types
+whatever tags / date / links / formatting they want, and #142 renders it), delete a card,
+reorder cards within a column, and **drag a card between columns** (dnd-kit) = change its
+status. (Optionally toggle a card's checked state.)
+
+**Column editing.** Add a column, rename a column, reorder columns, delete a column (with
+its cards) — confirm-gated per the #103 setting where destructive.
+
+**Write-back.** Every mutation updates the in-memory `Board` and writes
+`serializeBoard(board)` to the file via `writeTextFile`, **debounced** (the #94
+`ScheduledPanel` auto-save pattern). Reconcile with #142's hot-reload poll so the panel's
+own writes don't fight the reader (compare against the last content we wrote; reload only
+when the on-disk content diverges — a genuine external edit), preserving the frontmatter +
+`%% kanban:settings %%` block #141 round-trips. Card dragging runs in a **nested** dnd-kit
+sortable context within the panel, coexisting with the app-level Canvas DnD (the
+#43/#47/#58 nested-context precedent — only one view mounts at a time). Works in both the
+main Canvas view and a detached canvas window (#84).
+
+**Authoring a new board.** Since editing implies creation, include a lightweight **"New
+Kanban board"** affordance — create `<name>.md` with the `kanban-plugin` frontmatter +
+default columns (e.g. **To Do / Doing / Done**) via `writeTextFile`, then open it as a
+`kanban` panel — so a user can start a board from nothing rather than only opening an
+externally-created file. _(A plain `.md` opened in #142 also becomes a board on its first
+edit — the first write adds the structure.)_
+
+Out of scope: cross-tab / cross-panel card moves; any AI tie-in (the markdown file already
+makes that possible externally).
+
+**Subtasks**
+
+1. [ ] Card mutations on the parsed `Board`: add / edit title+body / delete / reorder within
+   a column / toggle checked, then re-`serializeBoard` and `writeTextFile` (debounced).
+2. [ ] Card drag-and-drop **between** columns (nested dnd-kit sortable context) = move
+   status; reorder within a column by drag too.
+3. [ ] Column mutations: add / rename / reorder / delete (delete confirm-gated per #103).
+4. [ ] Debounced write-back (the #94 pattern) + reconcile with the #142 hot-reload poll
+   (don't reload our own write; do reload genuine external edits); preserve frontmatter +
+   settings block.
+5. [ ] Card body editor = a markdown textarea (no structured field controls); the live
+   render (#142) shows the formatting.
+6. [ ] "New Kanban board" creation affordance (frontmatter + default To Do/Doing/Done)
+   writing a fresh `.md` and opening it.
+7. [ ] Verify editing + DnD in the main Canvas view and a detached canvas window (#84).
+
+**Acceptance criteria**
+
+- [ ] The user can add/edit/delete/reorder cards and add/rename/reorder/delete columns
+  entirely in the UI, and can drag a card between columns to change its status — never
+  editing markdown by hand.
+- [ ] A card's content is edited as freeform markdown (title + body); there are **no**
+  structured field controls (no due-date picker).
+- [ ] Every change is written back to the `.md` (debounced) preserving the frontmatter +
+  `%% kanban:settings %%` block; an external edit to the file still hot-reloads, and the
+  panel's own writes don't cause a flicker / echo-reload.
+- [ ] A new board can be created from nothing (default columns) and immediately edited.
+- [ ] Editing + drag-and-drop work in the main Canvas view and a detached canvas window
+  (#84). _(Detached-window runtime behavior is best-effort per the #84/#105 precedent — no
+  GUI in the dev env.)_
+- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo test` pass.
+
+**Notes**
+
+- Card DnD is a nested dnd-kit context inside the panel (the #43/#47/#58 nested-context
+  precedent); only one view mounts at a time, so it won't clash with the app-level Canvas
+  drag.
+- The write loop reuses #141's `writeTextFile`; the only new persistence is the `.md`
+  itself (the panel ref lives in `overview_panels` from #142).
 
 ---
 
