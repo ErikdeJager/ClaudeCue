@@ -1068,9 +1068,9 @@ sites isn't unit-testable, but the logic + the fail-open contract are covered.
 
 ---
 
-### 142. [ ] Opening a Canvas template into a sole empty canvas replaces it instead of leaving an empty tab behind
+### 142. [x] Opening a Canvas template into a sole empty canvas replaces it instead of leaving an empty tab behind
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none · _(builds on #117 templates + #118 `useTemplate`/`instantiateTemplate` — both shipped)_
 **Created:** 2026-06-24
 
@@ -1089,20 +1089,40 @@ Definitions / decisions (confirmed with the user):
 
 **Subtasks**
 
-1. [ ] In `store.ts` `useTemplate`, compute whether the sole canvas is empty (`canvases.length === 1 && collectLeaves(canvases[0].layout).length === 0`) and build `next` as `[tab]` (replace) in that case, else `[...canvases, tab]` (append). Keep the existing `activeCanvasId`/`view`/persist/toast/recents/resolve logic intact.
-2. [ ] Update the existing `useTemplate` unit test (`store.test.ts:596`) — its `beforeEach` starts with a single empty `canvas-1`, so it now expects a **replacement** (`canvases.length === 1`, the lone tab named after the template), not `before + 1`.
-3. [ ] Add unit tests for the append-unchanged cases: (a) 2+ canvases present → template appends, nothing removed; (b) one canvas that **has** panels → template appends, the existing tab survives.
+1. [x] In `store.ts` `useTemplate`, compute whether the sole canvas is empty (`canvases.length === 1 && collectLeaves(canvases[0].layout).length === 0`) and build `next` as `[tab]` (replace) in that case, else `[...canvases, tab]` (append). Keep the existing `activeCanvasId`/`view`/persist/toast/recents/resolve logic intact.
+2. [x] Update the existing `useTemplate` unit test (`store.test.ts:596`) — its `beforeEach` starts with a single empty `canvas-1`, so it now expects a **replacement** (`canvases.length === 1`, the lone tab named after the template), not `before + 1`.
+3. [x] Add unit tests for the append-unchanged cases: (a) 2+ canvases present → template appends, nothing removed; (b) one canvas that **has** panels → template appends, the existing tab survives.
 
 **Acceptance criteria**
 
-- [ ] Fresh app (one empty `Canvas 1`): opening a template shows exactly **one** tab, named after the template, active, in Canvas view — no leftover empty tab.
-- [ ] With 2+ canvases (even when the active one is empty), opening a template **adds** a tab and removes none.
-- [ ] With a single canvas that has panels, opening a template **adds** a tab and the existing one survives.
-- [ ] The replacing tab carries the **template's** name; pending blocks still resolve exactly as before.
-- [ ] `npm test`, `npm run build` (type-check), and `npm run lint` pass.
+- [x] Fresh app (one empty `Canvas 1`): opening a template shows exactly **one** tab, named after the template, active, in Canvas view — no leftover empty tab.
+- [x] With 2+ canvases (even when the active one is empty), opening a template **adds** a tab and removes none.
+- [x] With a single canvas that has panels, opening a template **adds** a tab and the existing one survives.
+- [x] The replacing tab carries the **template's** name; pending blocks still resolve exactly as before.
+- [x] `npm test`, `npm run build` (type-check), and `npm run lint` pass.
 
 **Notes**
 
 - Scope is **template instantiation only** (`useTemplate`); the plain "+" new-blank-canvas button (`addCanvas`) is untouched — it intentionally creates an empty tab.
 - Detached-window edge (#84): a sole empty canvas being detached is implausible (you'd have torn off a blank canvas as your only tab); not specially handled — just follow the existing `setCanvases` persist/broadcast path.
+
+**Implementation report**
+
+Frontend-only, exactly the recommended approach. In `store.ts` `useTemplate`, after
+instantiating the tab, compute `soleEmpty = canvases.length === 1 &&
+collectLeaves(canvases[0]?.layout ?? null).length === 0` (reusing the existing
+`collectLeaves` import + the #137 "empty = zero leaves" notion; `collectLeaves(null)`
+returns `[]`, so a fresh app's default `layout: null` "Canvas 1" reads as empty) and build
+`next = soleEmpty ? [tab] : [...canvases, tab]`. The `?.layout ?? null` guards
+`noUncheckedIndexedAccess` (TS doesn't narrow `canvases[0]` from the length check). Every
+other branch of `useTemplate` is untouched — it still sets `activeCanvasId` to the new tab,
+`view: "canvas"`, persists via `ipc.setCanvases`, pushes the recents entry + "Opened
+template" toast, and kicks off `resolveTemplateBlock` for each pending leaf. Tests
+(`store.test.ts`): rewrote the existing case to expect a **replacement** (1 canvas, named
+after the template, active — the `beforeEach` seeds a sole empty `canvas-1`) and added two
+append-unchanged cases — (a) 2+ canvases (both empty) → 3 tabs, `c1`/`c2` survive; (b) a
+sole canvas **with** panels (a `pendingTab` layout) → 2 tabs, `c1` survives. All gates
+pass: `npm test` (152), `npm run build` (type-check), `npm run lint`, `prettier --check`.
+No backend change (the `+`/`addCanvas` path is untouched; detached-window edge unhandled
+per the task's note).
 

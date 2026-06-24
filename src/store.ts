@@ -1687,7 +1687,15 @@ export const useStore = create<AppState>()((set, get) => ({
     const template = get().canvasTemplates.find((t) => t.id === templateId);
     if (!template) return;
     const tab = instantiateTemplate(template, cwd, () => crypto.randomUUID());
-    const next = [...get().canvases, tab];
+    // When the only canvas is empty (a fresh app's default "Canvas 1", no panels),
+    // the template replaces it in place rather than leaving an empty tab dangling
+    // beside the new one (#142). With 2+ canvases, or a single canvas that has
+    // panels, append as before and remove nothing.
+    const canvases = get().canvases;
+    const soleEmpty =
+      canvases.length === 1 &&
+      collectLeaves(canvases[0]?.layout ?? null).length === 0;
+    const next = soleEmpty ? [tab] : [...canvases, tab];
     // Open the new tab as the active Canvas (switch to Canvas if needed).
     set({
       canvases: next,

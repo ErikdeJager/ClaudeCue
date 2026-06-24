@@ -593,19 +593,20 @@ describe("canvas template instantiation (#118)", () => {
     content: { kind: "pending", repoPath: "/repo/x", block },
   });
 
-  it("useTemplate opens a new Canvas tab (pending panels) and switches to Canvas", () => {
+  it("useTemplate replaces a sole empty canvas in place (pending panels), switches to Canvas (#142)", () => {
     const layout: CanvasNode = {
       type: "leaf",
       id: "lt",
       content: { kind: "new-terminal" },
     };
     const id = useStore.getState().saveTemplate("Term", layout, null);
-    const before = useStore.getState().canvases.length;
+    // beforeEach seeds a single empty "Canvas 1" → the template replaces it in
+    // place (no leftover empty tab) rather than appending (#142).
     useStore.getState().useTemplate(id, "/repo/x");
     const s = useStore.getState();
-    expect(s.canvases.length).toBe(before + 1);
+    expect(s.canvases.length).toBe(1);
     expect(s.view).toBe("canvas");
-    const tab = s.canvases[s.canvases.length - 1];
+    const tab = s.canvases[0];
     expect(tab?.name).toBe("Term");
     expect(s.activeCanvasId).toBe(tab?.id);
     // The leaf opens as a pending panel bound to the chosen folder (resolution is
@@ -614,6 +615,61 @@ describe("canvas template instantiation (#118)", () => {
     expect(leaf?.content.kind).toBe("pending");
     expect(leaf?.content.block).toEqual({ kind: "new-terminal" });
     expect(leaf?.content.repoPath).toBe("/repo/x");
+  });
+
+  it("useTemplate appends (removes nothing) when 2+ canvases exist (#142)", () => {
+    const layout: CanvasNode = {
+      type: "leaf",
+      id: "lt",
+      content: { kind: "new-terminal" },
+    };
+    const id = useStore.getState().saveTemplate("Term", layout, null);
+    // 2+ canvases — even though both are empty, always append and remove none.
+    useStore.setState({
+      canvases: [
+        { id: "c1", name: "Canvas 1", layout: null },
+        { id: "c2", name: "Canvas 2", layout: null },
+      ],
+      activeCanvasId: "c1",
+    });
+    useStore.getState().useTemplate(id, "/repo/x");
+    const s = useStore.getState();
+    expect(s.canvases.length).toBe(3);
+    expect(s.canvases.map((c) => c.id)).toEqual([
+      "c1",
+      "c2",
+      expect.any(String),
+    ]);
+    const tab = s.canvases[2];
+    expect(tab?.name).toBe("Term");
+    expect(s.activeCanvasId).toBe(tab?.id);
+  });
+
+  it("useTemplate appends when the sole canvas has panels (#142)", () => {
+    const layout: CanvasNode = {
+      type: "leaf",
+      id: "lt",
+      content: { kind: "new-terminal" },
+    };
+    const id = useStore.getState().saveTemplate("Term", layout, null);
+    // A single canvas that HAS panels survives — append beside it.
+    useStore.setState({
+      canvases: [
+        {
+          id: "c1",
+          name: "Canvas 1",
+          layout: pendingTab({ kind: "new-terminal" }),
+        },
+      ],
+      activeCanvasId: "c1",
+    });
+    useStore.getState().useTemplate(id, "/repo/x");
+    const s = useStore.getState();
+    expect(s.canvases.length).toBe(2);
+    expect(s.canvases[0]?.id).toBe("c1");
+    const tab = s.canvases[1];
+    expect(tab?.name).toBe("Term");
+    expect(s.activeCanvasId).toBe(tab?.id);
   });
 
   it("resolveTemplateBlock sets an inline error when a block can't resolve", async () => {
