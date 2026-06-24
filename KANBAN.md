@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Kanban save issue
-	I want, for the kanban board specifically, it to only save one I click the little checkmark for an individual card. Instead of the contant auto saving
 - [ ] Kanban UI iteration
 	I dont like the UI of the kanban items. Iterate over the entire Kanban screen UI and ensure it is optimized for UX
 - [ ] Auto save settings
@@ -25,6 +23,9 @@ kanban-plugin: board
 	Depends on: none
 - [ ] #159 — Remove Kanban column move-left/right buttons (move per task)
 	Plan: TASK-159.md
+	Depends on: none
+- [ ] #160 — Kanban: commit card edits on confirm, not per-keystroke
+	Plan: TASK-160.md
 	Depends on: none
 
 ## DONE
