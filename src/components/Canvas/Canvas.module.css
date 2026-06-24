@@ -219,6 +219,10 @@
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+/* The whole header bar is the drag handle (#144, mirroring Overview #70):
+   grab/grabbing cursors signal it; touch-action:none lets dnd-kit's pointer
+   sensor drag on touch. The .panelActions group + the .panelSwitcher stop
+   pointerdown, and carry a default cursor, so they stay clickable. */
 .panelHeader {
   display: flex;
   height: 28px;
@@ -229,6 +233,12 @@
   padding: 0 var(--space-4) 0 var(--space-8);
   border-bottom: 1px solid var(--border-hairline);
   background: var(--bg-panel);
+  cursor: grab;
+  touch-action: none;
+}
+
+.panelHeader:active {
+  cursor: grabbing;
 }
 
 /* Title + repo badge (#35/#47): color dot, content title, repo · branch meta. */
@@ -239,29 +249,28 @@
   gap: var(--space-6);
 }
 
-/* Drag handle to move a panel (#135): a grip glyph that reads as draggable. Sized
-   like the title text, muted until hover; `grab`/`grabbing` cursors signal the
-   drag affordance. Only this element carries the dnd-kit listeners. */
+/* A non-interactive "this bar is draggable" hint (#135/#144): the whole header
+   carries the dnd-kit listeners (#144), so the grip is a muted glyph that
+   brightens when the header is hovered. */
 .panelGrip {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--text-muted);
-  cursor: grab;
-  touch-action: none;
   transition: color var(--dur-fast) var(--ease-out);
 }
 
-.panelGrip:hover {
-  color: var(--text-primary);
+.panelHeader:hover .panelGrip {
+  color: var(--text-secondary);
 }
 
-.panelGrip:active {
-  cursor: grabbing;
+/* The file-panel filename switcher (#90): clickable, never starts a drag (#144). */
+.panelSwitcher {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  cursor: default;
 }
 
 .panelDot {
@@ -338,6 +347,7 @@
   flex-shrink: 0;
   align-items: center;
   gap: var(--space-4);
+  cursor: default;
 }
 
 .panelBody {

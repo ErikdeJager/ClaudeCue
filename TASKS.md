@@ -363,15 +363,14 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#138 are complete** — see **Implemented (completed tasks)** above for the
-index and git history for per-task detail. **The Kanban board feature (#141 engine +
-file-write, #142 content type + read-only render, #143 full editor) is complete.**
-**Open now:** #144 (Canvas panel header drag). _(Tasks #139–#140 are reserved on another
-branch, so the Kanban chain began at #141.)_ The
-full entries for the recently completed #133–#138 remain below until the next
-`/update-docs` condenses them into the summary. New work goes here as a fresh `### N.`
-entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:`
-prerequisites.
+Tasks **#1–#144 are complete** — see **Implemented (completed tasks)** above for the
+index and git history for per-task detail. The Kanban board feature (#141 engine +
+file-write, #142 content type + read-only render, #143 full editor) and the Canvas
+panel header-drag affordance (#144) all shipped. **There are no open tasks right now.**
+_(Tasks #139–#140 are reserved on another branch.)_ The full entries for the recently
+completed #133–#144 remain below until the next `/update-docs` condenses them into the
+summary. New work goes here as a fresh `### N.` entry in
+[TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:` prerequisites.
 
 > **Implementing tasks — never skip one.** The agent implementing this backlog
 > (`/develop-tasks`, `/isolate-agent`, `/handoff`) MUST implement **every** open task
@@ -1407,9 +1406,9 @@ unit-testable; the pure ops + parse/serialize + wiring are covered.)_
 
 ---
 
-### 144. [ ] Canvas panel — make the whole header bar a drag handle (not just the grip)
+### 144. [x] Canvas panel — make the whole header bar a drag handle (not just the grip)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none · _(adjusts the #135 Canvas panel-move drag source; mirrors the #70
 Overview whole-titlebar pattern; the #90 `FileSwitcher` + the #126/#86 header buttons are
 the click-not-drag exceptions — all shipped)_
@@ -1456,26 +1455,26 @@ Scope: the Canvas `LeafPanel` header drag affordance only. No change to the move
 
 **Subtasks**
 
-1. [ ] Move the `useDraggable` ref + attributes + listeners from the grip button onto the
+1. [x] Move the `useDraggable` ref + attributes + listeners from the grip button onto the
    `panelHeader` `<header>`; demote the `GripVertical` grip to an `aria-hidden` visual-hint
    span.
-2. [ ] Add `onPointerDown` `stopPropagation` to the `panelActions` group and to the
+2. [x] Add `onPointerDown` `stopPropagation` to the `panelActions` group and to the
    `FileSwitcher` so fork / copy-resume / close / filename-switch all stay clickable.
-3. [ ] Add a grab/move cursor on the draggable header area (default on the excepted
+3. [x] Add a grab/move cursor on the draggable header area (default on the excepted
    controls) in `Canvas.module.css`.
-4. [ ] Confirm a plain header click still just selects the panel (4px constraint) and
+4. [x] Confirm a plain header click still just selects the panel (4px constraint) and
    dropping on another panel's edge still moves it (#135 unchanged).
 
 **Acceptance criteria**
 
-- [ ] In Canvas, grabbing **anywhere on a panel's header bar** (not just the grip dots) and
+- [x] In Canvas, grabbing **anywhere on a panel's header bar** (not just the grip dots) and
   dragging starts a panel move/reorder, in both the main view and a detached canvas window
   (#84). _(Detached-window runtime behavior best-effort per the #84/#105 precedent.)_
-- [ ] The Fork (#126), Copy-resume (#86), and Close buttons, and the file-panel filename
+- [x] The Fork (#126), Copy-resume (#86), and Close buttons, and the file-panel filename
   switcher (#90), all still respond to clicks and never start a drag.
-- [ ] The grip icon remains as a non-interactive visual hint; a plain header click still
+- [x] The grip icon remains as a non-interactive visual hint; a plain header click still
   selects the panel; the #135 move-on-drop behavior (no terminal churn) is unchanged.
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
+- [x] `npm run build`, `npm run lint`, and `npm test` pass.
 
 **Notes**
 
@@ -1483,6 +1482,30 @@ Scope: the Canvas `LeafPanel` header drag affordance only. No change to the move
   `stopPropagation`; grip is a visual hint) to the Canvas `LeafPanel` header — bringing the
   two views to drag parity.
 - Independent of the unmerged #139–#140 and of the Kanban chain (#141–#143).
+
+**Implementation report**
+
+Direct port of the Overview #70 whole-header-drag pattern to the Canvas `LeafPanel`
+(`CanvasSurface.tsx`), as specified. The existing #135 `useDraggable` (`move:<leaf.id>`,
+`{kind:"move-leaf"}`) wiring (`setDragRef` ref + `dragAttributes`/`dragListeners`) moved
+**from the grip `<button>` onto the `<header className={styles.panelHeader}>`** — so
+grabbing anywhere on the bar starts the move. The grip became a **non-interactive**
+`aria-hidden` `<span>` (the `GripVertical` icon kept purely as a "draggable" hint; no longer
+a button/drag-source). The exceptions stay clickable + never drag: the right-side
+`panelActions` group (Fork #126 / Copy-resume #86 / Close) and the mid-bar `FileSwitcher`
+(#90, wrapped in a `panelSwitcher` span) both get `onPointerDown={(e) =>
+e.stopPropagation()}`. CSS (`Canvas.module.css`): `.panelHeader` gains `cursor: grab` +
+`touch-action: none` (+ `:active` → grabbing) and brightens the grip on hover
+(`.panelHeader:hover .panelGrip`); the grip lost its own button/cursor styling; the
+excepted `.panelActions` + new `.panelSwitcher` carry `cursor: default`. The move/drop
+mechanics are unchanged (#135): the 4px `PointerSensor` keeps a plain click selecting the
+panel (root `onPointerDown` → `setActiveLeaf`), and the move is still computed atomically on
+drop (`onDragEnd` → `moveCanvasLeaf`), so no terminal churn. Applies to the main Canvas view
+**and** a detached window (#84) automatically — same `LeafPanel`; **runtime-unverified** in
+a real detached window (no GUI here, per #84/#105). Scope held to the header affordance — no
+change to #135 move/drop logic, the edge drop-zones, or Overview. All gates pass: `npm run
+build`, `npm run lint`, `npm test` (179). _(Runtime drag/hit-testing isn't unit-testable;
+the wiring mirrors the proven Overview #70 pattern.)_
 
 ---
 

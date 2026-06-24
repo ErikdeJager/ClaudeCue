@@ -91,11 +91,12 @@ function LeafPanel({
   const owners = useSessionOwners();
   const isActive = leaf.id === activeLeafId;
 
-  // Drag source for reorder/reposition (#135): the grip handle only (not the whole
-  // header), so the FileSwitcher (#90) + fork/copy/close buttons keep working. The
-  // 4px PointerSensor activation constraint keeps a click (select) from dragging.
-  // We don't apply the transform — the layout stays put during the drag; the move
-  // is computed atomically on drop (App/CanvasWindow `onDragEnd` → moveCanvasLeaf).
+  // Drag source for reorder/reposition (#135): the **whole header bar** carries the
+  // listeners (#144, mirroring Overview #70) — the FileSwitcher (#90) + fork/copy/
+  // close buttons stop pointerdown so they stay clickable. The 4px PointerSensor
+  // activation constraint keeps a click (select) from dragging. We don't apply the
+  // transform — the layout stays put during the drag; the move is computed
+  // atomically on drop (App/CanvasWindow `onDragEnd` → moveCanvasLeaf).
   const {
     attributes: dragAttributes,
     listeners: dragListeners,
@@ -194,21 +195,26 @@ function LeafPanel({
       className={`${styles.panel} ${isActive ? styles.panelActive : ""}`}
       onPointerDown={() => setActiveLeaf(leaf.id)}
     >
-      <header className={styles.panelHeader}>
+      {/* The whole header bar is the drag handle (#144, mirroring Overview #70):
+          the dnd-kit move listeners live on the <header>, so grabbing anywhere on
+          the bar reorders/repositions the panel (#135). The grip is just a visual
+          hint; the panelActions group + the FileSwitcher stop pointerdown so they
+          stay clickable and never start a drag. */}
+      <header
+        className={styles.panelHeader}
+        ref={setDragRef}
+        {...dragAttributes}
+        {...dragListeners}
+      >
         <span className={styles.panelTitleBlock}>
-          {/* Drag handle to reorder/reposition this panel (#135). Listeners live on
-              the grip only; dropping on another panel's edge moves it there. */}
-          <button
-            type="button"
-            ref={setDragRef}
+          {/* Non-interactive "this bar is draggable" hint (#144). */}
+          <span
             className={styles.panelGrip}
-            title="Drag to move this panel"
-            aria-label="Move panel"
-            {...dragAttributes}
-            {...dragListeners}
+            aria-hidden
+            title="Drag to move panel"
           >
             <GripVertical size={14} strokeWidth={1.5} />
-          </button>
+          </span>
           {/* Agent panels drop the repo dot (#95); non-agent panels keep it. */}
           {repoPath && content.kind !== "agent" && (
             <span
@@ -219,12 +225,19 @@ function LeafPanel({
           {/* File panels: the filename is a switcher (#90) — pick another file in
               this repo to swap the viewer in place. Other kinds keep a plain title. */}
           {content.kind === "file" && content.repoPath && content.file ? (
-            <FileSwitcher
-              repoPath={content.repoPath}
-              file={content.file}
-              onPick={(f) => setLeafFile(leaf.id, f)}
-              nameClassName={styles.panelTitle}
-            />
+            // The filename switcher (#90) stays clickable — stop pointerdown so it
+            // opens the picker instead of starting a header drag (#144).
+            <span
+              className={styles.panelSwitcher}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <FileSwitcher
+                repoPath={content.repoPath}
+                file={content.file}
+                onPick={(f) => setLeafFile(leaf.id, f)}
+                nameClassName={styles.panelTitle}
+              />
+            </span>
           ) : (
             <span className={styles.panelTitle}>{titleText}</span>
           )}
@@ -239,7 +252,10 @@ function LeafPanel({
             <span className={styles.worktreeBadge}>fork</span>
           )}
         </span>
-        <span className={styles.panelActions}>
+        <span
+          className={styles.panelActions}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
           {/* Fork the conversation into a new parallel session (#126) — agents only.
               Gated (#138): unavailable until the source has a real turn to fork. */}
           {content.kind === "agent" && session && (
