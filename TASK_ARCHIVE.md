@@ -777,3 +777,100 @@ freshly-chosen folder), consistent with `open-file`/`open-diff`.
 
 ---
 
+### 155. [x] Canvas panel drag: lift on drag-start, restore on cancel
+
+**Status:** Done
+**Depends on:** none · _(builds on shipped systems: the #135 move-leaf grip + #144 whole-header
+grip, the #18 persistent terminal pool, the #84 dual main+detached DndContext, and the pure
+`canvasTree` ops. Independent of #154.)_
+**Created:** 2026-06-24
+
+**Description**
+
+Inside a Canvas tab you can drag an **existing** panel by its header to reorder/reposition it (#135
+`moveLeaf` / #144 whole-header grip), but the panel **stayed in the layout for the entire drag** —
+its space remained occupied, so the user couldn't freely see or choose where to drop it (the move
+was computed atomically on drop). This task makes the drag direct: at **drag start** the panel is
+**lifted out** of the layout, the remaining panels immediately reflow to fill the gap (exposing drop
+targets across the whole canvas), a drag **ghost** follows the cursor, and on **drop** the panel
+lands in the chosen spot. Cancelling (Esc) or releasing outside any drop zone restores the panel to
+its **exact** previous position — the literal complaint on the source card.
+
+**Design decision (chosen approach): non-destructive lift.** The lift is kept **out of persisted
+state** — a transient `liftedLeaf` ref drives a *derived* display layout (active layout minus the
+lifted leaf), and the persisted `canvases` blob is written **only on a committed drop**. So a
+cancel is an exact restore, and an interrupted drag (Esc, window close, crash) can never strand or
+lose a panel. This deliberately supersedes #135's atomic-on-drop computation; `moveLeaf`'s
+id-preservation guarantee is retained in the commit path so the #18 pooled terminal **reparents**
+instead of being disposed/recreated.
+
+**Subtasks**
+
+1. [x] **Transient lift state** (`store.ts`): non-persisted `liftedLeaf: { canvasId, leafId } | null`
+   + `beginCanvasLift` / `commitCanvasLift` / `cancelCanvasLift`; excluded from anything serializing
+   `canvases`.
+2. [x] **Derived display layout** (`canvasTree.ts`): pure `displayedLayout(layout, liftedLeafId)` —
+   the layout with the lifted leaf removed (identity when none) — drives the reflow without touching
+   persisted state.
+3. [x] **Commit/cancel logic:** edge drop → `moveLeaf` (prune + re-split reusing original id +
+   content); sole-panel center drop → already the whole tree, clear the lift; cancel / drop-on-nothing
+   → clear the lift (no layout write = exact restore). Retired the atomic `moveCanvasLeaf` action +
+   `applyCanvasMove` helper.
+4. [x] **Main-window handlers** (`App.tsx`): `onDragStart` → `beginCanvasLift`, `onDragEnd` → shared
+   `applyCanvasLiftEnd(over)` (commit or restore — no early `!over` return that would strand the
+   panel), `onDragCancel` → `cancelCanvasLift`; sidebar-drop branch left intact.
+5. [x] **Detached-window handlers** (`CanvasWindow.tsx`, #84): mirror the main window via the shared
+   `canvasDrop.ts` helpers (no drift between windows).
+6. [x] **DragOverlay ghost:** `<CanvasDragOverlay>` + `PanelDragGhost` (exported from
+   `CanvasSurface`) render a header-like chip (grip + title via a new `leafTitleText` helper), needed
+   because the lifted panel's DOM node leaves the tree.
+7. [x] **CanvasSurface source:** lifted panel no longer rendered during its own drag; stale
+   atomic-on-drop comment updated; edge zones cover the reflowed space.
+8. [x] **Tests:** `displayedLayout` remove/identity (`canvasTree.test.ts`); lift
+   begin/commit/center/cancel (`store.test.ts`).
+9. [x] **Verify:** `npm run build`, `npm run lint`, `npm test` (196), `prettier --check` all pass.
+
+**Acceptance criteria**
+
+- [x] Starting to drag an existing panel's header immediately removes it from the visible layout;
+      the remaining panels reflow and a drag ghost follows the cursor.
+- [x] Drop zones cover the reflowed layout, so the panel can be dropped in regions the source
+      previously occupied (the original complaint).
+- [x] Dropping on a valid target places the panel there while preserving its content and its #18
+      pooled terminal (no reload / dispose-recreate).
+- [x] Cancelling (Esc) or releasing outside any drop zone restores the panel to its exact previous
+      position.
+- [x] Lifting the only panel exposes the empty-canvas center target; dropping re-places it and
+      cancel restores it.
+- [x] Behavior is identical in the main window and a detached canvas window (#84).
+- [x] The persisted `canvases` layout is written only on a committed drop.
+- [x] `npm run build`, `npm run lint`, `npm test` pass; pure-logic tests cover lift/commit/cancel.
+
+**Implementation report** (commit `0bc2a8d`, 2026-06-24)
+
+Implemented the lift/restore flow for existing-panel (`move-leaf`) drags in both the main and
+detached Canvas windows, with a DragOverlay ghost and a derived reflow. The persisted `canvases`
+blob is written only on a committed drop, so an interrupted drag can never strand a panel; the
+terminal-reconcile effect keys on the *persisted* layout (unchanged during a lift) so a lifted
+agent/terminal PTY is never disposed — its pooled xterm parks on unmount and reparents on
+commit/cancel.
+
+**Key files touched:** `src/store.ts` (transient lift state + actions; retired `moveCanvasLeaf`),
+`src/components/Canvas/canvasTree.ts` (`displayedLayout`) + `.test.ts`,
+`src/components/Canvas/CanvasSurface.tsx` (reflow source, `PanelDragGhost`, `leafTitleText`) +
+`Canvas.module.css`, `src/components/Canvas/canvasDrop.ts` (shared `applyCanvasLiftEnd`),
+`src/App.tsx` + `src/components/CanvasWindow/CanvasWindow.tsx` (both DndContexts), `src/store.test.ts`.
+
+**Notes**
+
+- **Non-destructive lift** (transient state, persist only on commit) was chosen over
+  mutating-then-restoring so a cancel is an exact restore and an interrupted drag can never strand a
+  panel; the `moveLeaf` id-preservation guarantee is retained in the commit path so pooled terminals
+  reparent rather than being recreated.
+- **DragOverlay is required** because the active draggable leaves the DOM during the lift — without
+  it dnd-kit has nothing to render as the drag preview.
+- **Out of scope, left untouched:** sidebar→Canvas new-content drops, cross-window drag, and the
+  Overview/sidebar dnd contexts.
+
+---
+

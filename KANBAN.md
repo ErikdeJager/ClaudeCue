@@ -29,6 +29,3 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #155 — Canvas panel drag: lift on drag-start, restore on cancel
-	Plan: TASK-155.md
-	Depends on: none
