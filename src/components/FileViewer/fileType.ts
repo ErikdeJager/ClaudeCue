@@ -19,6 +19,7 @@ const LANG_BY_EXT: Record<string, string> = {
   jsx: "jsx",
   rs: "rust",
   py: "python",
+  java: "java",
   json: "json",
   jsonc: "json",
   css: "css",
@@ -32,6 +33,10 @@ const LANG_BY_EXT: Record<string, string> = {
   bash: "bash",
   zsh: "bash",
   toml: "toml",
+  ini: "ini",
+  cfg: "ini",
+  conf: "ini",
+  properties: "properties",
   yaml: "yaml",
   yml: "yaml",
 };
@@ -43,14 +48,22 @@ export function fileExt(file: string): string {
   return dot > 0 ? base.slice(dot + 1).toLowerCase() : "";
 }
 
-/** How the viewer should render a file: rendered markdown, highlighted code, or raw text. */
-export function detectMode(file: string): ViewerMode {
-  const ext = fileExt(file);
-  if (ext === "md" || ext === "markdown") return "markdown";
-  return ext in LANG_BY_EXT ? "code" : "text";
+/** Prism language for an extension-less config dotfile detected by **filename**
+ * (#150): `.env` / `.env.local` / `.env.*` are KEY=value files with no extension
+ * (`fileExt` returns ""), highlighted with the `properties` grammar. */
+function langByFilename(file: string): string | undefined {
+  const base = file.split("/").pop() ?? file;
+  return base === ".env" || base.startsWith(".env.") ? "properties" : undefined;
 }
 
 /** The Prism language for a code file, or undefined when it isn't curated code. */
 export function prismLang(file: string): string | undefined {
-  return LANG_BY_EXT[fileExt(file)];
+  return LANG_BY_EXT[fileExt(file)] ?? langByFilename(file);
+}
+
+/** How the viewer should render a file: rendered markdown, highlighted code, or raw text. */
+export function detectMode(file: string): ViewerMode {
+  const ext = fileExt(file);
+  if (ext === "md" || ext === "markdown") return "markdown";
+  return prismLang(file) !== undefined ? "code" : "text";
 }

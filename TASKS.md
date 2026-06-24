@@ -363,16 +363,17 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#149 are complete** — see **Implemented (completed tasks)** above for the
+Tasks **#1–#150 are complete** — see **Implemented (completed tasks)** above for the
 index and git history for per-task detail. The Kanban board feature (#141–#143, #145,
 #147, #149), the Canvas panel header-drag affordance (#144), the Canvas panel title
-truncation (#146), and the shared editable auto-saving raw text editor (#148) all shipped.
-**Open now:** #150 (file-viewer syntax highlighting — Java + INI/.env/.properties). _(Tasks
-#139–#140 are reserved on another branch. The Kanban content-type task was renumbered #142
-→ #145 to avoid colliding with the separately merged template task #142.)_ The full entries
-for the recently completed #133–#149 remain below until the next `/update-docs` condenses
-them into the summary. New work goes here as a fresh `### N.` entry in
-[TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:` prerequisites.
+truncation (#146), the shared editable auto-saving raw text editor (#148), and the
+extended file-viewer syntax highlighting (#150 — Java + INI/.env/.properties) all shipped.
+**There are no open tasks right now.** _(Tasks #139–#140 are reserved on another branch. The
+Kanban content-type task was renumbered #142 → #145 to avoid colliding with the separately
+merged template task #142.)_ The full entries for the recently completed #133–#150 remain
+below until the next `/update-docs` condenses them into the summary. New work goes here as a
+fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:`
+prerequisites.
 
 > **Implementing tasks — never skip one.** The agent implementing this backlog
 > (`/develop-tasks`, `/isolate-agent`, `/handoff`) MUST implement **every** open task
@@ -1972,9 +1973,9 @@ the shipped #148 hook it now reuses.)_
 
 ---
 
-### 150. [ ] File viewer syntax highlighting — add Java + config formats (INI / .env / .properties), verify existing
+### 150. [x] File viewer syntax highlighting — add Java + config formats (INI / .env / .properties), verify existing
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none · _(extends the shipped #44 Prism setup — `prism.ts` / `fileType.ts` / the
 #33 `--syn-*` token theme; touches different files than the open #148/#149 FileViewer-editor
 tasks, so no conflict)_
@@ -2024,27 +2025,27 @@ raw render paths.
 
 **Subtasks**
 
-1. [ ] Verify the existing Prism highlighting renders (JSON / YAML / JS); only fix if genuinely
+1. [x] Verify the existing Prism highlighting renders (JSON / YAML / JS); only fix if genuinely
    broken.
-2. [ ] Add `prism-java`, `prism-ini`, `prism-properties` imports to `prism.ts` (mind Prism
+2. [x] Add `prism-java`, `prism-ini`, `prism-properties` imports to `prism.ts` (mind Prism
    grammar dependency order).
-3. [ ] Extend `LANG_BY_EXT` in `fileType.ts`: `java→java`; `ini`/`cfg`/`conf→ini`;
+3. [x] Extend `LANG_BY_EXT` in `fileType.ts`: `java→java`; `ini`/`cfg`/`conf→ini`;
    `properties→properties`. Add a filename rule so `.env` / `.env.*` map to a KEY=value grammar
    and route to `"code"`.
-4. [ ] Add `.code` token-color rules for the new token types (INI/properties `key` / `section` /
+4. [x] Add `.code` token-color rules for the new token types (INI/properties `key` / `section` /
    `value`, Java `annotation`) using the existing `--syn-*` tokens.
-5. [ ] Update `fileType.test.ts`: `detectMode` / `prismLang` for `.java`, `.ini`, `.cfg`,
+5. [x] Update `fileType.test.ts`: `detectMode` / `prismLang` for `.java`, `.ini`, `.cfg`,
    `.properties`, `.env`.
 
 **Acceptance criteria**
 
-- [ ] `.java`, `.ini` / `.cfg` / `.conf`, `.properties`, and `.env` / `.env.*` files render with
+- [x] `.java`, `.ini` / `.cfg` / `.conf`, `.properties`, and `.env` / `.env.*` files render with
   visible syntax highlighting in the FileViewer code view.
-- [ ] The already-supported languages (JSON, YAML, JS, TS, Rust, Python, CSS, XML, TOML, Bash)
+- [x] The already-supported languages (JSON, YAML, JS, TS, Rust, Python, CSS, XML, TOML, Bash)
   still highlight (verified, unbroken).
-- [ ] The new grammars are added as individual Prism imports only (no new dependency, no
+- [x] The new grammars are added as individual Prism imports only (no new dependency, no
   autoloader); the bundle stays minimal.
-- [ ] `npm run build`, `npm run lint`, and `npm test` (incl. the `fileType.test.ts` additions)
+- [x] `npm run build`, `npm run lint`, and `npm test` (incl. the `fileType.test.ts` additions)
   pass.
 
 **Notes**
@@ -2057,6 +2058,29 @@ raw render paths.
 - Contained to `prism.ts` / `fileType.ts` / `FileViewer.module.css` / `fileType.test.ts` — does
   **not** touch `FileViewer.tsx`, so no conflict with the open #148/#149 FileViewer-editor tasks.
 - Independent of the unmerged #139–#140.
+
+**Implementation report**
+
+Extended the shipped #44 Prism setup (no new dependency, per-language imports only). **Grammars**
+(`prism.ts`): added `prism-java` (extends `clike`, in Prism core), `prism-ini`, and
+`prism-properties` (both standalone — no dep-order concern). **Mapping** (`fileType.ts`):
+`LANG_BY_EXT` gained `java→java`, `ini`/`cfg`/`conf→ini`, `properties→properties`; a new
+`langByFilename` rule maps the extension-less `.env` / `.env.*` dotfiles (where `fileExt` returns
+"") to the `properties` KEY=value grammar, and `prismLang` now falls back to it, so `detectMode`
+routes them to `"code"`. **Theming** (`FileViewer.module.css`): added `.code` rules for the new
+token types — `.token.key` → `--syn-function`, `.token.section`/`.token.section-name` →
+`--syn-keyword`, `.token.value` → `--syn-string`, `.token.annotation` → `--syn-accent` — placed
+**after** the existing rules so a token also carrying its base alias (attr-name / attr-value /
+selector / punctuation) takes the intended config/annotation color (verified against the installed
+grammars: ini/properties `key`/`value`/`section-name` alias to attr-name/attr-value/selector;
+java `annotation` aliases to punctuation, so the explicit rule makes annotations visibly pop vs.
+the muted punctuation color). **Verify existing (subtask 1):** the JSON/YAML/JS path is sound —
+json/yaml are imported and javascript/clike are in Prism core, and `highlightToHtml` looks up
+`Prism.languages[lang]`, so they highlight; left unchanged (runtime visual check best-effort, no
+GUI). Tests (`fileType.test.ts`): `.java`/`.ini`/`.cfg`/`.conf`/`.properties` extensions +
+`.env`/`.env.local`/`.env.production` filename detection (and `.gitignore` stays plain). All
+gates pass: `npm run build`, `npm run lint`, `npm test` (181), `prettier --check`. Frontend-only;
+does not touch `FileViewer.tsx`.
 
 ---
 

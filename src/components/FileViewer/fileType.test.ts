@@ -16,6 +16,24 @@ describe("file type detection (#44)", () => {
     expect(prismLang("Cargo.toml")).toBe("toml");
   });
 
+  it("highlights Java + config formats (#150)", () => {
+    expect(detectMode("src/Main.java")).toBe("code");
+    expect(prismLang("src/Main.java")).toBe("java");
+    expect(prismLang("settings.ini")).toBe("ini");
+    expect(prismLang("app.cfg")).toBe("ini");
+    expect(prismLang("nginx.conf")).toBe("ini");
+    expect(prismLang("gradle.properties")).toBe("properties");
+  });
+
+  it("highlights .env dotfiles by filename (no extension) (#150)", () => {
+    expect(detectMode(".env")).toBe("code");
+    expect(prismLang(".env")).toBe("properties");
+    expect(prismLang("project/.env.local")).toBe("properties");
+    expect(prismLang(".env.production")).toBe("properties");
+    // A normal dotfile is still plain text, not a config grammar.
+    expect(prismLang(".gitignore")).toBeUndefined();
+  });
+
   it("treats unknown / plain files as raw text", () => {
     expect(detectMode("notes.txt")).toBe("text");
     expect(detectMode("LICENSE")).toBe("text");

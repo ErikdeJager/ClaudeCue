@@ -188,6 +188,24 @@
   color: var(--status-error);
 }
 
+/* Config (INI / .env / .properties) + Java token types (#150). Placed after the
+   rules above so a token carrying both its base alias (attr-name / attr-value /
+   selector / punctuation) and one of these classes takes the intended color.
+   Reuses the existing --syn-* palette — no new colors. */
+.code :global(.token.key) {
+  color: var(--syn-function);
+}
+.code :global(.token.section),
+.code :global(.token.section-name) {
+  color: var(--syn-keyword);
+}
+.code :global(.token.value) {
+  color: var(--syn-string);
+}
+.code :global(.token.annotation) {
+  color: var(--syn-accent);
+}
+
 /* --- Rendered markdown (ported from #40) --- */
 .markdown {
   flex: 1;
