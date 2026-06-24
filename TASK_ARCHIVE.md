@@ -1233,3 +1233,76 @@ commit/exit.
 
 ---
 
+### 161. [x] Kanban board UI/UX polish pass
+
+**Status:** Done
+**Depends on:** #159, #160 · _(the **last** kanban pass — iterates on the cleaned-up code: #159 left
+the column header with Delete as its only action, #160 made card editing commit-on-confirm; this pass
+polishes around those final shapes. #156 (Overview scroll) already done.)_
+**Created:** 2026-06-24
+
+**Description**
+
+A visual + interaction **polish pass** over the existing Kanban board (no data-model or format
+change). The user: "I don't like the UI of the kanban items. Iterate over the entire Kanban screen UI
+and ensure it is optimized for UX." Goal: tidy visual hierarchy, uncluttered cards, clearer drag/drop
+affordances, sensible empty states, and a toolbar that survives narrow widths — while keeping every
+capability and the Obsidian-Kanban `.md` round-trip lossless.
+
+**Subtasks**
+
+1. [x] **Card clutter → hover/focus-revealed actions:** the card grip + Edit/Delete (and column
+   Delete) are `opacity: 0` by default and reveal on `:hover` / `:focus-within`; editing keeps actions
+   visible and the confirm-delete state stays shown. Title/checkbox/body stay always interactive.
+2. [x] **Card visual hierarchy:** hover (`--border-strong`) / focus-within (`--accent`) border
+   transition, title-first layout, done-state strike preserved.
+3. [x] **Clearer drop affordance:** added a `<DragOverlay>` floating `CardPreview` (no action buttons,
+   elevated shadow) under the cursor while the origin slot becomes a dashed `--accent` insertion
+   placeholder (`.cardPlaceholder`) — replacing the old in-place `opacity: 0.4`. Cross-column drag
+   still = status change (`moveCard` unchanged).
+4. [x] **Column header polish:** rename button hover cue; Delete reveals on hover/focus.
+5. [x] **Empty states:** an empty column shows a "No cards yet" hint above Add card.
+6. [x] **Toolbar responsiveness (folded in from #158):** `.toolbar { min-width: 0 }` + gap, `.status`
+   truncates (ellipsis), `.segmented { flex-shrink: 0 }` so the Board/Raw toggle never clips.
+7. [x] **a11y/motion:** on-system tokens only; global `:focus-visible` ring + global
+   `prefers-reduced-motion` killswitch cover the new transitions automatically.
+8–9. [x] **No regressions / verify:** `npm run build`, `npm run lint`, `npm run format:check`,
+   `npm test` (205, incl. unchanged `kanban.test`/`kanbanOps.test`) pass.
+
+**Acceptance criteria**
+
+- [x] Cards look less cluttered (Edit/Delete/grip on hover/focus); clear hover/active state and a
+      legible title-first hierarchy.
+- [x] Dragging a card shows a clear destination cue (insertion placeholder + drag-overlay ghost);
+      cross-column drag still changes status.
+- [x] The column header (rename, count, Delete) reads as intentional and uncluttered after #159.
+- [x] Empty columns show a subtle hint rather than a bare gap.
+- [x] The Board/Raw toggle stays visible/usable at narrow widths (kanban toolbar responsive,
+      mirroring #158).
+- [x] All on-system tokens, `:focus-visible` outlines, reduced-motion honored; `.md` round-trip
+      lossless.
+- [x] `npm run build`, `npm run lint`, `npm run format:check`, `npm test` pass.
+
+**Implementation report** (commit `fb1e7d3`, 2026-06-24)
+
+Style + an additive drag overlay over `KanbanPanel.tsx` + `KanbanPanel.module.css` — all behavior
+preserved, `.md` round-trip untouched. New JS: `activeCardId` state + `DragOverlay` wiring
+(`onDragStart`/`onDragEnd`/`onDragCancel`), a `CardPreview` component, and the empty-column hint.
+This pass also **owned the kanban toolbar fix** that #158 explicitly deferred here (the kanban
+`.toolbar` shares the FileViewer's structure).
+
+**Key files touched:** `src/components/Kanban/KanbanPanel.tsx` + `src/components/Kanban/
+KanbanPanel.module.css` (only).
+
+**Notes**
+
+- **Vague-request handling:** "optimize the UX" is subjective, so the pass fixed *concrete* current
+  shortcomings (always-visible clutter, weak drop cue, no empty state, fragile toolbar, minimal
+  hover/focus states) within the existing structure rather than an open-ended redesign — no new
+  features (labels/dates/swimlanes/WIP limits were explicitly out of scope).
+- `.columnActions:has(.colBtnDanger)` uses `:has()` (supported in the app's WKWebView) as progressive
+  enhancement — if unsupported the rule is ignored and column hover still reveals the confirm-delete
+  state.
+
+---
+
