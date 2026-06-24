@@ -6,9 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Worktree context menu
-	The context menu of a worktree inside the left panel should also include options to inspect a file, create agent, etc. currently only shows absolute path and reveal in finder. But should include options to start anything within this worktree, from new sessions, to files. Also option to close the worktree entirely, killing its contents
-
 ## READY
 
 - [ ] #159 — Remove Kanban column move-left/right buttons (move per task)
@@ -31,6 +28,9 @@ kanban-plugin: board
 	Depends on: none
 - [ ] #165 — "Open view" button on normal (non-worktree) agents
 	Plan: TASK-165.md
+	Depends on: #164
+- [ ] #166 — Worktree context menu: new session, open views, close worktree
+	Plan: TASK-166.md
 	Depends on: #164
 
 ## DONE
