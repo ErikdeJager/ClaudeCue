@@ -363,14 +363,15 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#150 are complete** — see **Implemented (completed tasks)** above for the
+Tasks **#1–#151 are complete** — see **Implemented (completed tasks)** above for the
 index and git history for per-task detail. The Kanban board feature (#141–#143, #145,
-#147, #149), the Canvas panel header-drag affordance (#144), the Canvas panel title
-truncation (#146), the shared editable auto-saving raw text editor (#148), and the
-extended file-viewer syntax highlighting (#150 — Java + INI/.env/.properties) all shipped.
+#147, #149) — including the merged single "Kanban board" Views entry with an in-picker
+create-or-open flow (#151) — the Canvas panel header-drag affordance (#144), the Canvas
+panel title truncation (#146), the shared editable auto-saving raw text editor (#148), and
+the extended file-viewer syntax highlighting (#150 — Java + INI/.env/.properties) all shipped.
 **There are no open tasks right now.** _(Tasks #139–#140 are reserved on another branch. The
 Kanban content-type task was renumbered #142 → #145 to avoid colliding with the separately
-merged template task #142.)_ The full entries for the recently completed #133–#150 remain
+merged template task #142.)_ The full entries for the recently completed #133–#151 remain
 below until the next `/update-docs` condenses them into the summary. New work goes here as a
 fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:`
 prerequisites.
@@ -2084,9 +2085,9 @@ does not touch `FileViewer.tsx`.
 
 ---
 
-### 151. [ ] Merge the two Kanban context-menu items into one "Kanban board" entry with a create-or-open picker
+### 151. [x] Merge the two Kanban context-menu items into one "Kanban board" entry with a create-or-open picker
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none · _(folds together the shipped #142 "open existing Kanban" and #143 "New
 Kanban board" flows — both done; reuses their `createKanbanBoard` / `addOverviewPanel` paths and
 the #56 FilePicker. Frontend-only, no backend change.)_
@@ -2135,32 +2136,63 @@ icon swap.
 
 **Subtasks**
 
-1. [ ] Remove the `new-kanban` entry from the `viewTypes` array; drop the now-unused `Plus`
+1. [x] Remove the `new-kanban` entry from the `viewTypes` array; drop the now-unused `Plus`
    import if nothing else in `Sidebar.tsx` uses it.
-2. [ ] Add a create affordance inside the kanban picker modal — a "Create new board…" row and/or a
+2. [x] Add a create affordance inside the kanban picker modal — a "Create new board…" row and/or a
    "Create '<typed>.md'" action driven by the picker's search text — scoped so it shows **only**
    when `filePickKind === "kanban"`, not for the `markdown` file-viewer picker. If `FilePicker`
    needs it, add an optional `onCreate` / create-label prop rather than forking the component.
-3. [ ] Wire the create action to `createKanbanBoard(menu.repo, name)` then `closeMenu()` (the new
+3. [x] Wire the create action to `createKanbanBoard(menu.repo, name)` then `closeMenu()` (the new
    board opens via the `addOverviewPanel` already inside `createKanbanBoard`). Normalize the
    `.md` suffix as `createKanbanBoard` already does; don't duplicate that logic.
-4. [ ] Remove the now-dead `menuMode === "new-kanban"` branch and the `newKanbanName` state (and
+4. [x] Remove the now-dead `menuMode === "new-kanban"` branch and the `newKanbanName` state (and
    `setNewKanbanName`) once folded into the picker; remove the orphaned `.newKanban*` CSS in
    `Sidebar.module.css` if unused.
 
 **Acceptance criteria**
 
-- [ ] The Views menu shows exactly **one** Kanban entry, "Kanban board", with the `SquareKanban`
+- [x] The Views menu shows exactly **one** Kanban entry, "Kanban board", with the `SquareKanban`
   icon; there is no "New Kanban board" item and no `Plus` icon for Kanban.
-- [ ] Clicking "Kanban board" opens one `.md`-scoped modal where the user can **open an existing**
+- [x] Clicking "Kanban board" opens one `.md`-scoped modal where the user can **open an existing**
   board.
-- [ ] In that **same** modal, the user can **create a new board** by naming it; doing so writes
+- [x] In that **same** modal, the user can **create a new board** by naming it; doing so writes
   `<name>.md` into the repo and opens it as a `kanban` panel (visible in the sidebar tree +
   Overview).
-- [ ] The plain "File viewer" picker is unchanged (no create affordance).
-- [ ] No backend changes; the create path still goes through `createKanbanBoard` /
+- [x] The plain "File viewer" picker is unchanged (no create affordance).
+- [x] No backend changes; the create path still goes through `createKanbanBoard` /
   `write_text_file`.
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
+- [x] `npm run build`, `npm run lint`, and `npm test` pass.
+
+**Implementation report**
+
+Merged the two Kanban Views-menu entries into one by folding the create flow into the shared
+`FilePicker` (#56) instead of a separate `menuMode`.
+
+- **`FilePicker.tsx`** — added two optional props: `onCreate?: (name: string) => void` and
+  `createSuffix?: string`. When `onCreate` is passed, the search box doubles as a name field: its
+  placeholder/aria become "Search or name a new board…", and a distinct accent **"Create
+  '<name>.md'"** row renders beneath the list whenever the trimmed query is non-empty (`canCreate`).
+  The displayed `createName` mirrors `createKanbanBoard`'s own normalization (append `.md` only if
+  absent) but still passes the raw typed name to `onCreate`. Keyboard: Up/Down/Enter pick a match as
+  before; with **no** matches, Enter triggers create — so a brand-new name flows straight through.
+  The empty-state hint is suppressed when a create candidate exists (the create row is the answer),
+  and reads "No boards yet — type a name to create one." for an empty `.md` repo. The plain
+  file-viewer picker passes neither prop, so it is unchanged (open-only, "Search files…").
+- **`FilePicker.module.css`** — added `.create` (accent row, top hairline, `--accent-dim` hover) +
+  `.createLabel` (ellipsis).
+- **`Sidebar.tsx`** — removed the `new-kanban` `viewTypes` entry (and its `Plus` icon — `Plus` is
+  kept as an import, still used by the inline "+" new-session buttons), removed the
+  `menuMode === "new-kanban"` form branch, the `newKanbanName`/`setNewKanbanName` state, and
+  `"new-kanban"` from the `menuMode` union. The single "Kanban board" entry (key `kanban`,
+  `SquareKanban` icon) opens the `.md`-scoped picker, now passed `onCreate` →
+  `createKanbanBoard(menu.repo, name)` + `closeMenu()` and `createSuffix=".md"` **only** when
+  `filePickKind === "kanban"` (both `undefined` for the file viewer).
+- **`Sidebar.module.css`** — deleted the orphaned `.newKanban` / `.newKanbanInput` /
+  `.newKanbanCreate` rules.
+
+No backend change — the create path still goes through `createKanbanBoard` → `ipc.writeTextFile`
+(`write_text_file`). `npm run build`, `npm run lint`, `npm test` (181), and `npm run format:check`
+all pass.
 
 **Notes**
 
@@ -2168,6 +2200,9 @@ icon swap.
   two menu entry points into one without changing the underlying write/open logic.
 - The `Plus` icon was the specific point of confusion (it elsewhere connotes "new session"); the
   merged entry keeps `SquareKanban`, which already reads as a task board.
+- The create row shows alongside matching files when the typed name overlaps an existing board, so
+  the user can still author a fresh `<name>.md` even when the filter has hits (re-creating an
+  existing name just re-opens it, since `addOverviewPanel` dedups by file).
 
 ---
 

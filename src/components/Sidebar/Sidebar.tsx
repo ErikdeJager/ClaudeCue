@@ -794,16 +794,8 @@ function Sidebar() {
     y: number;
   } | null>(null);
   const [menuMode, setMenuMode] = useState<
-    | "menu"
-    | "confirm"
-    | "confirm-kill"
-    | "confirm-close"
-    | "color"
-    | "files"
-    | "new-kanban"
+    "menu" | "confirm" | "confirm-kill" | "confirm-close" | "color" | "files"
   >("menu");
-  // The name being typed for a new Kanban board (#143, "new-kanban" mode).
-  const [newKanbanName, setNewKanbanName] = useState("");
   // The repo's files while the menu is in "files" mode (#44); null = loading.
   const [fileList, setFileList] = useState<string[] | null>(null);
   // Which view the "files" picker opens the chosen file as (#142): a plain file
@@ -842,22 +834,13 @@ function Sidebar() {
       key: "kanban",
       label: "Kanban board",
       icon: SquareKanban,
-      // Same searchable picker (#56), scoped to `.md` (#142) → a read-only
-      // board column; the chosen file opens as a `kanban` panel.
+      // One merged entry (#151): the same searchable picker (#56), scoped to
+      // `.md` (#142), where the user either opens an existing board *or* names a
+      // new one — the picker's create affordance writes `<name>.md` (#143) and
+      // opens it. The old separate "New Kanban board" + Plus item is gone.
       onAdd: () => {
         setFilePickKind("kanban");
         setMenuMode("files");
-      },
-    },
-    {
-      key: "new-kanban",
-      label: "New Kanban board",
-      icon: Plus,
-      // Author a board from nothing (#143): a name → `<name>.md` with the
-      // default lanes, opened as a `kanban` panel.
-      onAdd: () => {
-        setNewKanbanName("");
-        setMenuMode("new-kanban");
       },
     },
     {
@@ -1320,6 +1303,8 @@ function Sidebar() {
             ) : menuMode === "files" ? (
               // Searchable file picker (#56) → open as an Overview file column
               // (#44) or, for a Kanban board, a `.md`-scoped board column (#142).
+              // For the Kanban flow the same modal also creates a new board
+              // (#151) via the picker's create affordance — no separate menu item.
               <FilePicker
                 files={
                   filePickKind === "kanban"
@@ -1335,39 +1320,20 @@ function Sidebar() {
                   void addOverviewPanel(menu.repo, filePickKind, f);
                   closeMenu();
                 }}
+                onCreate={
+                  filePickKind === "kanban"
+                    ? (name) => {
+                        // Reuses #143's write+open path (writes `<name>.md` with
+                        // the default lanes, opens it as a kanban panel). Only the
+                        // Kanban picker gets this — plain file viewing stays
+                        // open-only.
+                        void createKanbanBoard(menu.repo, name);
+                        closeMenu();
+                      }
+                    : undefined
+                }
+                createSuffix={filePickKind === "kanban" ? ".md" : undefined}
               />
-            ) : menuMode === "new-kanban" ? (
-              // Author a new Kanban board (#143): a name → `<name>.md` with the
-              // default lanes, then opened as a board column.
-              <form
-                className={styles.newKanban}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const name = newKanbanName.trim();
-                  if (!name) return;
-                  void createKanbanBoard(menu.repo, name);
-                  closeMenu();
-                }}
-              >
-                <input
-                  className={styles.newKanbanInput}
-                  type="text"
-                  value={newKanbanName}
-                  placeholder="Board name…"
-                  autoFocus
-                  onChange={(event) =>
-                    setNewKanbanName(event.currentTarget.value)
-                  }
-                  aria-label="New Kanban board name"
-                />
-                <button
-                  type="submit"
-                  className={styles.newKanbanCreate}
-                  disabled={!newKanbanName.trim()}
-                >
-                  Create board
-                </button>
-              </form>
             ) : menuMode === "confirm" ? (
               <button
                 type="button"

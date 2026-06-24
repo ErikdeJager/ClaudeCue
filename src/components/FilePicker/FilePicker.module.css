@@ -91,3 +91,31 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* Create-a-new-board action (#151) — only rendered when an `onCreate` is passed
+   (the Kanban flow). Reads as a distinct accent row beneath the file list. */
+.create {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-top: 1px solid var(--border-hairline);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--fs-meta);
+  text-align: left;
+  cursor: pointer;
+}
+
+.create:hover {
+  background: var(--accent-dim);
+}
+
+.createLabel {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
