@@ -365,11 +365,12 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 Tasks **#1–#144 are complete** — see **Implemented (completed tasks)** above for the
 index and git history for per-task detail. The Kanban board feature (#141 engine +
-file-write, #142 content type + read-only render, #143 full editor) and the Canvas
-panel header-drag affordance (#144) all shipped. **There are no open tasks right now.**
-_(Tasks #139–#140 are reserved on another branch.)_ The full entries for the recently
-completed #133–#144 remain below until the next `/update-docs` condenses them into the
-summary. New work goes here as a fresh `### N.` entry in
+file-write, #145 content type + read-only render, #143 full editor) and the Canvas
+panel header-drag affordance (#144) all shipped. **Open now:** #146 (Canvas panel
+title truncation). _(Tasks #139–#140 are reserved on another branch. The Kanban
+content-type task was renumbered #142 → #145 to avoid colliding with the separately
+merged template task #142.)_ The full entries for the recently completed #133–#145
+remain below until the next `/update-docs` condenses them into the summary. New work goes here as a fresh `### N.` entry in
 [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) format, with its `Depends on:` prerequisites.
 
 > **Implementing tasks — never skip one.** The agent implementing this backlog
@@ -1077,7 +1078,7 @@ sites isn't unit-testable, but the logic + the fail-open contract are covered.
 
 **Status:** Done
 **Depends on:** none · _(builds on the read-only `files.rs` `read_text_file` (#44) + the
-`store.rs` JSON-persistence pattern — both shipped; foundation for #142, #143)_
+`store.rs` JSON-persistence pattern — both shipped; foundation for #145, #143)_
 **Created:** 2026-06-24
 
 **Description**
@@ -1103,7 +1104,7 @@ normal `.md` file living in a repo:
 
 **Card model (deliberately minimal):** `{ title: string; body: string; checked: boolean }`
 — `body` is the raw markdown under the card. No `dueDate` / `tags` fields (the user
-reframed cards as freeform markdown; display is #142).
+reframed cards as freeform markdown; display is #145).
 
 **This adds the app's first arbitrary file-write command** — expanding the documented
 "git/files are read-mostly; no arbitrary file writes" rule the way #74/#124 expanded the
@@ -1111,7 +1112,7 @@ git rule. The write is path-validated identically to `read_text_file` (canonical
 reject `..`/symlink escape, confine to the repo).
 
 Scope: the pure TS model + `parse`/`serialize` and the Rust write command + its IPC
-wrapper. **No** rendering, content kind, or editor (those are #142/#143).
+wrapper. **No** rendering, content kind, or editor (those are #145/#143).
 
 **Subtasks**
 
@@ -1182,12 +1183,12 @@ Tauri command (`commands.rs` + registered in `lib.rs`) + the typed `writeTextFil
 Docs: `files.rs` module doc, CLAUDE.md (a new "File access is read-mostly, with one deliberate
 write" scope bullet + the `files.rs` layout line) and the TASKS.md project-context note the new
 write. All gates pass: `npm test` (163), `npm run build`, `npm run lint`, `cargo test` (71),
-`cargo clippy -D warnings`, `prettier --check`, `cargo fmt --check`. #142 (content kind +
+`cargo clippy -D warnings`, `prettier --check`, `cargo fmt --check`. #145 (content kind +
 read-only render) and #143 (editor + write-back) build on this.
 
 ---
 
-### 142. [x] Kanban board content type — load like the file viewer + read-only board rendering
+### 145. [x] Kanban board content type — load like the file viewer + read-only board rendering
 
 **Status:** Done
 **Depends on:** #141 · _(builds on the content-kind system + the #82 repo "Views"
@@ -1290,7 +1291,7 @@ are covered.)_
 ### 143. [x] Kanban editor — full card & column editing with drag-and-drop, written back to the .md
 
 **Status:** Done
-**Depends on:** #142 · _(needs #141's `serializeBoard` + `writeTextFile` and #142's
+**Depends on:** #145 · _(needs #141's `serializeBoard` + `writeTextFile` and #145's
 `KanbanPanel`; uses dnd-kit #43/#47 and the #94 debounced-auto-save pattern — all
 shipped/prior in this chain)_
 **Created:** 2026-06-24
@@ -1304,7 +1305,7 @@ user never touches the markdown**, persisting every change back to the `.md` via
 **Card editing (freeform, not field-locked).** Per the user, a card is a **title + an
 optional markdown body** — no structured field UI. Add a card (a per-column "+ Add card"),
 edit a card's **title and body** (the body is a plain markdown textarea — the user types
-whatever tags / date / links / formatting they want, and #142 renders it), delete a card,
+whatever tags / date / links / formatting they want, and #145 renders it), delete a card,
 reorder cards within a column, and **drag a card between columns** (dnd-kit) = change its
 status. (Optionally toggle a card's checked state.)
 
@@ -1313,7 +1314,7 @@ its cards) — confirm-gated per the #103 setting where destructive.
 
 **Write-back.** Every mutation updates the in-memory `Board` and writes
 `serializeBoard(board)` to the file via `writeTextFile`, **debounced** (the #94
-`ScheduledPanel` auto-save pattern). Reconcile with #142's hot-reload poll so the panel's
+`ScheduledPanel` auto-save pattern). Reconcile with #145's hot-reload poll so the panel's
 own writes don't fight the reader (compare against the last content we wrote; reload only
 when the on-disk content diverges — a genuine external edit), preserving the frontmatter +
 `%% kanban:settings %%` block #141 round-trips. Card dragging runs in a **nested** dnd-kit
@@ -1325,7 +1326,7 @@ main Canvas view and a detached canvas window (#84).
 Kanban board"** affordance — create `<name>.md` with the `kanban-plugin` frontmatter +
 default columns (e.g. **To Do / Doing / Done**) via `writeTextFile`, then open it as a
 `kanban` panel — so a user can start a board from nothing rather than only opening an
-externally-created file. _(A plain `.md` opened in #142 also becomes a board on its first
+externally-created file. _(A plain `.md` opened in #145 also becomes a board on its first
 edit — the first write adds the structure.)_
 
 Out of scope: cross-tab / cross-panel card moves; any AI tie-in (the markdown file already
@@ -1338,11 +1339,11 @@ makes that possible externally).
 2. [x] Card drag-and-drop **between** columns (nested dnd-kit sortable context) = move
    status; reorder within a column by drag too.
 3. [x] Column mutations: add / rename / reorder / delete (delete confirm-gated per #103).
-4. [x] Debounced write-back (the #94 pattern) + reconcile with the #142 hot-reload poll
+4. [x] Debounced write-back (the #94 pattern) + reconcile with the #145 hot-reload poll
    (don't reload our own write; do reload genuine external edits); preserve frontmatter +
    settings block.
 5. [x] Card body editor = a markdown textarea (no structured field controls); the live
-   render (#142) shows the formatting.
+   render (#145) shows the formatting.
 6. [x] "New Kanban board" creation affordance (frontmatter + default To Do/Doing/Done)
    writing a fresh `.md` and opening it.
 7. [x] Verify editing + DnD in the main Canvas view and a detached canvas window (#84).
@@ -1370,7 +1371,7 @@ makes that possible externally).
   precedent); only one view mounts at a time, so it won't clash with the app-level Canvas
   drag.
 - The write loop reuses #141's `writeTextFile`; the only new persistence is the `.md`
-  itself (the panel ref lives in `overview_panels` from #142).
+  itself (the panel ref lives in `overview_panels` from #145).
 
 **Implementation report**
 
@@ -1379,9 +1380,9 @@ Frontend-only (the #141 `writeTextFile` backend already shipped). **Pure ops**
 `moveCard` (one op for reorder-within + move-between, arrayMove semantics, out-of-range →
 no-op) + `addColumn` / `renameColumn` / `deleteColumn` / `moveColumn` + `defaultBoard()`
 (To Do/Doing/Done) + `newCard()` — 17 unit tests (`kanbanOps.test.ts`). **Editor**
-(rewrote `KanbanPanel.tsx`): the read-only #142 board became editable — each card has a
+(rewrote `KanbanPanel.tsx`): the read-only #145 board became editable — each card has a
 checkbox (toggle done), an inline title input + a markdown-textarea body editor (freeform,
-**no** structured fields; the live #142 react-markdown render shows formatting in view
+**no** structured fields; the live #145 react-markdown render shows formatting in view
 mode), and edit/delete buttons; a per-column "+ Add card"; column headers rename inline,
 reorder via ◀/▶ buttons, and delete (× → confirm-gated per the #103 `confirmDestructive`
 setting when the lane has cards); a trailing "+ Add column". **Card DnD** is a **nested**
@@ -1391,7 +1392,7 @@ dnd-kit `DndContext` (PointerSensor 4px, `closestCorners`) — each card a `useS
 (reorder within or move between lanes = status change). **Write-back**: every mutation
 updates the in-memory `Board` and debounces (`SAVE_DEBOUNCE_MS` 600, the #94 pattern) a
 `serializeBoard` → `writeTextFile`, preserving frontmatter + the settings block (#141). The
-#142 hot-reload poll is reconciled via a `dirty` ref (skip reload while there are unsaved
+#145 hot-reload poll is reconciled via a `dirty` ref (skip reload while there are unsaved
 edits) + a `lastSynced` raw-string compare (our own write updates `lastSynced`, so it never
 echo-reloads; a genuine external change differs → reload), with a flush-on-unmount/
 file-change. **New board**: a store `createKanbanBoard(repo, name)` writes `<name>.md` with
@@ -1566,4 +1567,88 @@ sole canvas **with** panels (a `pendingTab` layout) → 2 tabs, `c1` survives. A
 pass: `npm test` (152), `npm run build` (type-check), `npm run lint`, `prettier --check`.
 No backend change (the `+`/`addCanvas` path is untouched; detached-window edge unhandled
 per the task's note).
+
+---
+
+### 146. [ ] Canvas panel — truncate an overflowing title so the header buttons stay visible
+
+**Status:** Not started
+**Depends on:** #144 · _(builds on the #144-restructured Canvas `LeafPanel` header — both
+touch `CanvasSurface.tsx` + `Canvas.module.css`; #144 is shipped, so this is immediately
+runnable)_
+**Created:** 2026-06-24
+
+**Description**
+
+In **Canvas** mode, a long agent/panel title (e.g. an auto-name like `/loop 5 minutes Do
+the following steps in order: 1. **Fetch latest chan…`) **overflows its title area and
+renders behind the header action buttons** (Fork #126 / Copy-resume #86 / Close), so the
+user can't see or read the buttons (per the user's screenshot).
+
+**Root cause (in `Canvas.module.css`):** the header (`.panelHeader`) is a `space-between`
+flex of `.panelTitleBlock` ⟷ `.panelActions`, but —
+
+- `.panelTitle` has `flex-shrink: 0`, so despite its already-declared
+  `text-overflow: ellipsis; white-space: nowrap; overflow: hidden`, the span never shrinks
+  below its full text width and the **ellipsis never triggers**;
+- `.panelTitleBlock` has `min-width: 0` but **no `flex: 1` and no `overflow: hidden`**, so
+  the un-shrunk title spills rightward over the actions.
+
+`.panelActions` is already `flex-shrink: 0`, so the buttons hold the right edge — the title
+text just renders *under* them.
+
+**Fix (truncate with ellipsis + tooltip — chosen for UX: buttons always fully visible, the
+title degrades gracefully):**
+
+- `.panelTitleBlock`: add `flex: 1; overflow: hidden;` (keep `min-width: 0`) so it takes the
+  free space and clips rather than pushing the actions.
+- `.panelTitle`: **drop `flex-shrink: 0`** (allow the default shrink) and add `min-width: 0`
+  so the ellipsis engages.
+- Keep `.panelActions` `flex-shrink: 0` (already) so the buttons never shrink/clip.
+- Add a hover **tooltip** (`title={titleText}`) on the title span in `CanvasSurface.tsx` so
+  the full title is still readable when truncated, and ensure the file-panel `FileSwitcher`
+  (#90) name (which uses `nameClassName={styles.panelTitle}`) truncates too — not just plain
+  agent titles.
+
+This brings the Canvas header to parity with how the sidebar (#111) and Overview titles
+already truncate. It applies to **all** panel kinds (agent / file / diff / terminal) and to
+both the main Canvas view and a detached canvas window (#84) — same component.
+
+Note: #144 already made the **whole header bar** a drag handle, so the same `<header>` now
+carries both the dnd listeners and these flex/overflow rules — confirm the truncation
+doesn't shrink the drag hit-area (it shouldn't; it only governs the title child's width).
+
+Scope: the Canvas `LeafPanel` header title truncation + tooltip only. No change to the
+buttons' behavior, the drag affordance (#135/#144), or other views.
+
+**Subtasks**
+
+1. [ ] `Canvas.module.css`: `.panelTitleBlock` → add `flex: 1; overflow: hidden;`;
+   `.panelTitle` → remove `flex-shrink: 0`, add `min-width: 0`.
+2. [ ] `CanvasSurface.tsx`: add `title={titleText}` to the `.panelTitle` span (hover tooltip
+   for the full title); confirm the file-panel `FileSwitcher` name truncates (its
+   `nameClassName` is `.panelTitle`).
+3. [ ] Verify a very long agent auto-name truncates with `…` before the buttons, the
+   Fork/Copy/Close buttons are fully visible + clickable, and the meta/badges
+   (worktree/fork) still render.
+
+**Acceptance criteria**
+
+- [ ] A long Canvas panel title truncates with an ellipsis and never renders behind the
+  header buttons; the Fork (#126), Copy-resume (#86), and Close buttons are always fully
+  visible and clickable.
+- [ ] Hovering the truncated title shows the full title (tooltip).
+- [ ] Truncation applies across agent / file / diff / terminal panels and in a detached
+  canvas window (#84). _(Runtime detached-window check best-effort per the #84/#105
+  precedent.)_
+- [ ] `npm run build`, `npm run lint`, and `npm test` pass.
+
+**Notes**
+
+- The `flex-shrink: 0` on `.panelTitle` is the literal bug — it defeats the ellipsis already
+  declared on the same rule.
+- Builds directly on the #144 header restructure (whole-bar drag); independent of the Kanban
+  work (#141 / #143 / #145) and the unmerged #139–#140.
+
+---
 
