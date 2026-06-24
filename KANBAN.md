@@ -26,9 +26,6 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #160 — Kanban: commit card edits on confirm, not per-keystroke
-	Plan: TASK-160.md
-	Depends on: none
 - [ ] #161 — Kanban board UI/UX polish pass
 	Plan: TASK-161.md
 	Depends on: #159, #160

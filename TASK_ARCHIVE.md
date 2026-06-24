@@ -1162,3 +1162,74 @@ unchanged).
 
 ---
 
+### 160. [x] Kanban: commit card edits on confirm, not on every keystroke
+
+**Status:** Done
+**Depends on:** none · _(kanban-specific edit-commit timing; orthogonal to and composes with the
+global "Auto save settings" card (#162); independent of #159 (column buttons).)_
+**Created:** 2026-06-24
+
+**Description**
+
+Editing a Kanban card wrote to disk on **every keystroke** — while typing a card's title/body the
+board was re-serialized and (debounced) written over and over. The card: "I want, for the kanban
+board specifically, it to only save once I click the little checkmark for an individual card.
+Instead of the constant auto saving." Goal: hold the in-progress title/body in **local draft state**
+and write through the save buffer **once** when the user confirms the card (the per-card Done-editing
+checkmark, or blur / Enter). Discrete actions (toggle done, drag, add/delete) keep saving
+immediately — they aren't "constant," and the complaint is specifically about typing.
+
+**Subtasks**
+
+1. [x] Added local draft state in `KanbanPanel`: `editDraft: {title, body} | null` + `renameDraft:
+   string | null`, seeded from the card/column when edit mode starts.
+2. [x] The editing card's title `<input>` / body `<textarea>` (and the column-rename input) bind to
+   the **draft**; `onChange` updates the draft only — **never** `mutate` — so typing produces zero
+   per-keystroke writes (the "Saving…" hint never churns). Non-editing cards render from `board`.
+3. [x] **Commit on confirm:** `commitCardDraft`/`commitRenameDraft` write once via the existing
+   `mutate`→`setText`→#148 debounced buffer, and only when the draft differs (no-op edits don't
+   write). Triggers: the Done-editing `<Check>`, **Enter** in the title, and **blur-out of the whole
+   card** (an `onBlur` on the `<article>` using `relatedTarget` containment so moving focus between
+   the card's own controls doesn't prematurely commit). Column rename commits on blur/Enter.
+4. [x] **Commit-on-switch:** `startCardEdit` / `startColumnRename` / add-card / add-column /
+   drag-start all commit the in-flight draft first, so switching never loses edits.
+5. [x] Same commit-on-confirm applied to column rename.
+6. [x] **No mid-edit clobber:** a `useEffect` calls the #148 hook's `onFocus()` while an edit is open
+   (pauses the hot-reload poll) and `onBlur()` on close (resume + flush), since the local draft
+   doesn't mark the buffer dirty.
+7. [x] Discrete mutations (toggle/drag/add/delete) keep calling `mutate` immediately — unchanged.
+8. [x] **Verify:** `npm run build`, `npm run lint`, `npm run format:check`, `npm test` (205) pass.
+
+**Acceptance criteria**
+
+- [x] Typing in a card's title/body triggers **no** per-keystroke disk write (no "Saving…" churn).
+- [x] The edit is written **once** on confirm (Done-editing checkmark, title blur / Enter) through the
+      existing buffer.
+- [x] Switching to edit another card or a column commits the in-flight draft (no lost edits).
+- [x] Column rename writes on confirm (blur/Enter), not per keystroke.
+- [x] Discrete actions still persist immediately.
+- [x] A hot-reload during an open edit does not clobber the in-progress draft.
+- [x] `npm run build`, `npm run lint`, `npm test` pass.
+
+**Implementation report** (commit `89bc832`, 2026-06-24)
+
+Commit-on-confirm model implemented entirely in `KanbanPanel.tsx` — no change to `kanbanOps.ts` or
+`useAutoSaveFile.ts` (the task changed *when* the pure ops are applied, not what they do). The
+keystroke-no-write guarantee is **structural** (draft state, no `mutate` on `onChange`); the `onBlur`
+uses `relatedTarget` containment so intra-card focus moves (title ↔ body ↔ Done) don't prematurely
+commit/exit.
+
+**Key files touched:** `src/components/Kanban/KanbanPanel.tsx` (only).
+
+**Notes**
+
+- **Interpretation:** "the little checkmark for an individual card" = the Done-editing `<Check>`
+  button; blur/Enter added as equivalent commit triggers for robustness.
+- **Why not all mutations:** "constant auto saving" describes per-keystroke writes while typing;
+  discrete one-shot actions aren't constant, so they stay immediate.
+- **Out of scope (untouched):** the Raw-view textarea (#149) stays a normal auto-saving editor; the
+  global "Auto save settings" card (#162) is independent and composes (a confirmed card edit feeds the
+  buffer, which the global mode then writes per its policy).
+
+---
+
