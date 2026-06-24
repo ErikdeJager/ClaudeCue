@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] branch agent button
-	Just like the earlier task for a worktree agent button, normal agents should have a similar button. A button to create any kind of panel inside their current directory. This gives the user simple access to any files the agent might be working on. It is important that for a ‘normal’ branch or ‘normal’ folder/repo this option shows items to create for the folder. While the worktree button shows items to create for htat specific worktree
 - [ ] Worktree context menu
 	The context menu of a worktree inside the left panel should also include options to inspect a file, create agent, etc. currently only shows absolute path and reveal in finder. But should include options to start anything within this worktree, from new sessions, to files. Also option to close the worktree entirely, killing its contents
 
@@ -34,6 +32,9 @@ kanban-plugin: board
 - [ ] #164 — Clickable worktree badge → worktree-scoped "open view" menu
 	Plan: TASK-164.md
 	Depends on: none
+- [ ] #165 — "Open view" button on normal (non-worktree) agents
+	Plan: TASK-165.md
+	Depends on: #164
 
 ## DONE
 
