@@ -1,6 +1,6 @@
-### 158. [ ] FileViewer cutoff in Overview at narrow widths (markdown text + Rendered/Raw toolbar)
+### 158. [x] FileViewer cutoff in Overview at narrow widths (markdown text + Rendered/Raw toolbar)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-24
 
@@ -126,3 +126,26 @@ Rendered/Raw toolbar usable at narrow widths, and ensure rendered markdown wraps
   (toolbar JSX ≈ lines 83-126, content ≈ 128-150), `Overview/Overview.module.css`
   (`.card`, `.body`), `Overview/Overview.tsx` (FileViewer render ≈ line 334),
   `Canvas/Canvas.module.css:360-373` (`.panelBody` min-width:0 — why Canvas works).
+
+**Implementation note (done 2026-06-24)**
+
+CSS-only fix in `FileViewer.module.css` (subtasks 1–4):
+- `.viewer` gained `min-width: 0` so it shrinks to a narrow Overview column instead
+  of keeping its content width and being clipped by `.card { overflow: hidden }`.
+- Responsive toolbar: `.toolbar` got `min-width: 0` + `gap: var(--space-8)`;
+  `.status` now `min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap` (truncates instead of pushing the toggle off); `.segmented`
+  got `flex-shrink: 0` (the Rendered/Raw toggle never clips).
+- `.markdown` got `min-width: 0` + `overflow-wrap: anywhere` (alongside the existing
+  `word-wrap: break-word`) so long tokens wrap; the read-only `.raw`/`.code` surface
+  now scrolls horizontally within the bounded `.viewer` (no edit needed there — a
+  side benefit of the `.viewer` fix), and `.markdown pre` code blocks scroll as before.
+- The optional `flex-wrap` on the toolbar (subtask 2) was **not** added: the
+  truncating status + non-shrinking toggle keep the toggle on one line and fully
+  visible at any realistic column width (cards are `flex: 1 0 360px`), so wrapping was
+  unnecessary. Left out to keep the toolbar single-line and predictable.
+- Canvas FileViewer is unchanged (only FileViewer CSS touched; Canvas already bounded
+  it via `.panelBody`, so the new `min-width: 0` is redundant + harmless there).
+- Subtask 5 (manual narrow-column verification) can't run headlessly; the fix mirrors
+  the proven Canvas pattern. `npm run build`, `npm run lint`, `npm run format:check`,
+  and `npm test` (205) all pass.

@@ -3,6 +3,11 @@
 .viewer {
   display: flex;
   flex: 1;
+  /* `min-width: 0` (not the flex default `auto`) lets the viewer shrink to a narrow
+     Overview column instead of keeping its content width and being clipped by the
+     column card's `overflow: hidden` (#158); Canvas already bounds it via
+     `.panelBody`. Then the markdown wraps and the raw/code surface scrolls. */
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
 }
@@ -10,19 +15,26 @@
 .toolbar {
   display: flex;
   flex-shrink: 0;
+  min-width: 0;
   align-items: center;
   justify-content: flex-end;
+  gap: var(--space-8);
   padding: var(--space-4) var(--space-6);
   border-bottom: 1px solid var(--border-hairline);
   background: var(--bg-panel);
 }
 
 /* Subtle auto-save hint (#148) — "Saving… / Saved". `margin-right: auto` pushes it
-   to the left so the Rendered/Raw toggle stays on the right when both are shown. */
+   to the left so the Rendered/Raw toggle stays on the right when both are shown. At
+   narrow widths it truncates (ellipsis) rather than pushing the toggle off (#158). */
 .status {
+  min-width: 0;
   margin-right: auto;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: var(--fs-meta-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Two-segment Rendered / Raw toggle (#73): a bordered group with the active mode
@@ -30,6 +42,8 @@
    view is obvious. */
 .segmented {
   display: flex;
+  /* Never shrink/clip the Rendered/Raw toggle — the status truncates instead (#158). */
+  flex-shrink: 0;
   gap: var(--space-1);
   padding: var(--space-1);
   border: 1px solid var(--border-strong);
@@ -209,6 +223,7 @@
 /* --- Rendered markdown (ported from #40) --- */
 .markdown {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   /* See .raw: a stable gutter (#64) keeps the scrollbar off the content's right
@@ -219,7 +234,11 @@
   color: var(--text-secondary);
   font-size: var(--fs-meta);
   line-height: 1.6;
+  /* Wrap long content to the column width (#158): `break-word` for normal text plus
+     `anywhere` so unbreakable tokens (URLs, inline code) wrap instead of forcing a
+     horizontal overflow that the column then clips. Code blocks still scroll. */
   word-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .markdown :where(h1, h2, h3, h4, h5, h6) {
