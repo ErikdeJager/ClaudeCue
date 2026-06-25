@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] copy path on files
-	The context menu of a file in the left panel should have the option to copy its absolute or relative path and open in finder.
 
 ## READY
 
@@ -22,6 +20,9 @@ kanban-plugin: board
 	Depends on: none
 - [ ] #170 — Stop macOS auto-capitalizing (and auto-correcting) text inputs
 	Plan: TASK-170.md
+	Depends on: none
+- [ ] #171 — Copy path / Reveal in Finder on sidebar file & Kanban rows
+	Plan: TASK-171.md
 	Depends on: none
 
 ## DONE
