@@ -1,8 +1,8 @@
 # TASK-172
 
-### 172. [ ] Empty-area (background) context menu for the left sidebar — add folder without an agent
+### 172. [x] Empty-area (background) context menu for the left sidebar — add folder without an agent
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #168
 **Created:** 2026-06-25
 
@@ -172,3 +172,18 @@ store action.
   `stopPropagation`, so the background handler must self-guard with
   `event.target === event.currentTarget` rather than relying on propagation being stopped
   by children.
+
+- **Implementation notes (2026-06-25):** Implemented as planned. Backend: `add_recent`
+  command (reuses `Store::touch_recent`, deduped/capped/persisted) + `lib.rs` registration
+  + `ipc.ts addRecent`. Store: `addFolder()` action — `pickDirectory()` → `addRecent` →
+  move-to-top `recents` dedupe; no toast, no select, no view switch (cancel = no-op). In
+  `Sidebar.tsx`: a second `useRowMenu()` instance (`bgMenu`) rendered via the shared
+  `RowContextMenu`; a `bgMenuItems` array (New folder… / New session / Schedule session /
+  Collapse-or-Expand sidebar / and Clear Overview filter only when `overviewRepoFilter` is
+  set). Wired a guarded `openBgMenu` (`event.target === event.currentTarget`) onto the
+  expanded `.repos` container **and** the collapsed-rail `.rail` + `.railRepos` containers,
+  plus a direct (unguarded) handler on the zero-repo `emptyHint` so a folder-less sidebar is
+  still right-clickable. Repo-header/row right-clicks still open only their own menus (the
+  guard rejects bubbled events). All green: npm build / lint / test (221) / format:check;
+  cargo test (73) / clippy / fmt. Live picker/Finder behavior not runtime-verified in the
+  autonomous loop, but the flow reuses proven `pickDirectory` + `touch_recent` paths.

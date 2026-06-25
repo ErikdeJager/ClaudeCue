@@ -1020,6 +1020,7 @@ function Sidebar() {
   const startRepoSession = useStore((s) => s.startRepoSession);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
   const openSchedule = useStore((s) => s.openSchedule);
+  const addFolder = useStore((s) => s.addFolder);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const confirmDestructive = useStore((s) => s.settings.confirmDestructive);
   const sidebarWidth = useStore((s) => s.sidebarWidth);
@@ -1068,6 +1069,34 @@ function Sidebar() {
     setMenu({ repo, x, y });
     setMenuMode("menu");
   };
+
+  // Background (empty-area) context menu (#172): a non-repo-scoped menu opened by
+  // right-clicking the sidebar's empty space — in both the expanded list and the
+  // collapsed rail. Reuses the shared cursor-menu hook + `RowContextMenu` renderer.
+  const bgMenu = useRowMenu();
+  // Only fire on the container's *own* background, not when a right-click bubbles up
+  // from a repo header / item row (whose handlers don't all stopPropagation, #172).
+  const openBgMenu = (event: ReactMouseEvent) => {
+    if (event.target !== event.currentTarget) return;
+    bgMenu.openMenu(event);
+  };
+  const bgMenuItems: RowMenuItem[] = [
+    { label: "New folder…", onActivate: () => void addFolder() },
+    { label: "New session", onActivate: () => openNewSession() },
+    { label: "Schedule session", onActivate: () => openSchedule() },
+    {
+      label: sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar",
+      onActivate: () => toggleSidebarCollapsed(),
+    },
+    ...(overviewRepoFilter
+      ? [
+          {
+            label: "Clear Overview filter",
+            onActivate: () => setOverviewRepoFilter(null),
+          },
+        ]
+      : []),
+  ];
 
   // Top-level groups exclude worktree agents (#74) — their repo_path is the
   // worktree folder, not a repo — but include every worktree's parent so the
@@ -1219,7 +1248,7 @@ function Sidebar() {
   // context menus still functional. The repo context-menu JSX (rendered after the
   // footer) and each WorktreeHeader's own menu sit over the rail unchanged.
   const rail = (
-    <div className={styles.rail}>
+    <div className={styles.rail} onContextMenu={openBgMenu}>
       <button
         type="button"
         className={styles.railButton}
@@ -1239,7 +1268,7 @@ function Sidebar() {
         <Clock size={16} strokeWidth={1.5} />
       </button>
       <ViewSwitch compact />
-      <div className={styles.railRepos}>
+      <div className={styles.railRepos} onContextMenu={openBgMenu}>
         {repos.map((repo) => {
           const repoSessions = sessions.filter(
             (s) => s.repoPath === repo && !s.worktreeParent,
@@ -1364,9 +1393,11 @@ function Sidebar() {
             <ViewSwitch />
           </div>
 
-          <div className={styles.repos}>
+          <div className={styles.repos} onContextMenu={openBgMenu}>
             {repos.length === 0 && (
-              <p className={styles.emptyHint}>No repositories yet.</p>
+              <p className={styles.emptyHint} onContextMenu={bgMenu.openMenu}>
+                No repositories yet.
+              </p>
             )}
 
             {repos.map((repo) => {
@@ -1569,6 +1600,14 @@ function Sidebar() {
           )}
         </button>
       </div>
+
+      {/* Background (empty-area) context menu (#172) — works in both the expanded
+          list and the collapsed rail; clamped + dismissed by the shared hook. */}
+      <RowContextMenu
+        menu={bgMenu.menu}
+        items={bgMenuItems}
+        onClose={bgMenu.closeMenu}
+      />
 
       {menu && (
         <>

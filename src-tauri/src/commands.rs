@@ -369,6 +369,16 @@ pub fn remove_recent(store: State<'_, Store>, path: String) -> Result<(), Sessio
         .map_err(|e| SessionError::Io(e.to_string()))
 }
 
+/// Add a folder to recents without spawning an agent (#172 sidebar background menu →
+/// "New folder…"). Reuses `touch_recent` (deduped, capped, persisted) so the folder
+/// shows as an empty repo group immediately and survives restart.
+#[tauri::command]
+pub fn add_recent(store: State<'_, Store>, path: String) -> Result<(), SessionError> {
+    store
+        .touch_recent(&path)
+        .map_err(|e| SessionError::Io(e.to_string()))
+}
+
 #[tauri::command]
 pub fn list_repo_colors(store: State<'_, Store>) -> std::collections::HashMap<String, String> {
     store.repo_colors()

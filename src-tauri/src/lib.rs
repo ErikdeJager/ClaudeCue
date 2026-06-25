@@ -154,6 +154,7 @@ pub fn run() {
             commands::list_sessions,
             commands::list_recents,
             commands::remove_recent,
+            commands::add_recent,
             commands::list_repo_colors,
             commands::set_repo_color,
             commands::list_overview_panels,

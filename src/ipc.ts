@@ -104,6 +104,10 @@ export const listRecents = () => invoke<string[]>("list_recents");
 export const removeRecent = (path: string) =>
   invoke<void>("remove_recent", { path });
 
+/** Add a folder to persisted recents without spawning an agent (#172 sidebar
+ * background menu → "New folder…"). */
+export const addRecent = (path: string) => invoke<void>("add_recent", { path });
+
 /** Assigned per-repo colors, path → hex (#35). */
 export const listRepoColors = () =>
   invoke<Record<string, string>>("list_repo_colors");

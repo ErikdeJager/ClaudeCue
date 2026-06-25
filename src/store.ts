@@ -537,6 +537,11 @@ export interface AppState {
   startRepoSession: (repo: string) => Promise<void>;
   /** Open the modal in schedule mode (#93). */
   openSchedule: (repo?: string) => void;
+  /** Add an existing folder to recents without spawning an agent (#172 sidebar
+   * background menu → "New folder…"): opens the native folder picker and persists
+   * the choice so it shows as a folder group immediately. Cancel = no-op; an already
+   * listed folder just moves to the top. Doesn't select or switch the view. */
+  addFolder: () => Promise<void>;
   closeNewSession: () => void;
   /** Open/close the Settings modal (#100). */
   setSettingsOpen: (open: boolean) => void;
@@ -1263,6 +1268,17 @@ export const useStore = create<AppState>()((set, get) => ({
       scheduleMode: false,
       newSessionInitialBranches: null,
     }),
+
+  addFolder: async () => {
+    // Native folder picker (#172): cancel returns null → no-op.
+    const path = await ipc.pickDirectory();
+    if (!path) return;
+    // Persist to recents (deduped/capped backend-side), then mirror the move-to-top
+    // dedupe locally so the folder group appears immediately. No agent, no selection
+    // change, no view switch.
+    await ipc.addRecent(path).catch(() => {});
+    set((s) => ({ recents: [path, ...s.recents.filter((r) => r !== path)] }));
+  },
 
   init: async () => {
     // Subscribe exactly once. The flag is set *before* the await so StrictMode's
