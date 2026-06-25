@@ -1,8 +1,8 @@
 # TASK-169
 
-### 1. [ ] Refresh auto-generated session names promptly — no click required
+### 1. [x] Refresh auto-generated session names promptly — no click required
 
-**Status:** Not started · _(Not started | In progress | Done)_
+**Status:** Done · _(Not started | In progress | Done)_
 **Depends on:** none
 **Created:** 2026-06-25
 
@@ -204,3 +204,21 @@ same store `sessions` array — the Sidebar, Overview cards, and Canvas panels a
 - **Why `Depends on: none`:** this fixes shipped #97 code; every symbol it touches already
   exists. The other open cards (#167 file tree viewer, #168 collapsible sidebar) are
   unrelated and produce nothing this consumes.
+
+- **Implementation notes (2026-06-25):** Backend-only, all in `pty.rs`. Added the tunable
+  `TITLE_REREAD_OFFSETS_MS = [0, 1_500, 4_000, 8_000, 15_000, 30_000]` (~30s window). Gave
+  `SessionManager` a `title_tx: Mutex<Sender<String>>` field (a clone of the poke channel,
+  taken before the original moves into `monitor_loop`); `spawn_with_id` now pokes the title
+  worker right after registering the session (best-effort — covers new/resume/fork/boot).
+  Rewrote `title_worker` from a blocking `recv()` into a `recv_timeout`-driven,
+  schedule-aware loop holding a `pending: Vec<(Instant, String)>` of re-read deadlines: a
+  poke replaces that session's still-pending burst and re-enqueues all offsets from now;
+  each loop processes (and drops) every due deadline, deduping ids per pass; with nothing
+  pending it blocks on `recv()` (no busy-wait); a dropped sender returns. Extracted the
+  read-and-emit body into `read_and_emit_title` (identical #97/#138 dedup behavior) and a
+  pure `next_due_wait` helper (unit-tested via `next_due_wait_picks_the_soonest_deadline`).
+  No frontend / `title.rs` / `lib.rs` / `ipc.ts` / `store.ts` changes. All green: cargo test
+  (73), clippy, cargo fmt; npm build / lint / test (221) / format:check. Subtask 5 (manual
+  end-to-end timing in the running app) was **not** runtime-verified in the autonomous loop
+  — the cadence logic is unit-tested + reviewed against the read/emit path, but the
+  few-seconds visual refresh wasn't observed in a live `tauri dev` session.

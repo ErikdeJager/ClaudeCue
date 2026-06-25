@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -37,6 +37,14 @@ const MONITOR_TICK_MS: u64 = 200;
 /// #55) unless it arrives at least this long after the last keystroke. Tuned so
 /// keystroke echo never reads as busy, while sustained autonomous output does.
 const INPUT_ECHO_MS: u64 = 300;
+/// Title re-read schedule (#169): after each poke (a busy→idle edge or a session
+/// spawn), the title worker re-reads claude's `ai-title` at these offsets (ms),
+/// spanning ~30s. `claude` writes the LLM-generated title **asynchronously**, a
+/// moment after the turn ends, so a single read at the busy→idle edge often misses
+/// it — the burst picks it up within seconds with no user click. The per-session
+/// dedup makes re-reading an unchanged title a cheap no-op; extending the last
+/// value lengthens the window.
+const TITLE_REREAD_OFFSETS_MS: &[u64] = &[0, 1_500, 4_000, 8_000, 15_000, 30_000];
 
 /// Errors surfaced to the frontend. Serialized as `{ kind, message }` so the UI
 /// can branch on `kind` (e.g. show the "claude not found" surface).
@@ -190,6 +198,10 @@ pub struct SessionManager {
     sessions: Mutex<HashMap<String, Session>>,
     // `mpsc::Sender` is `!Sync`; the Mutex lets `SessionManager` be a Tauri state.
     events: Mutex<Sender<SessionEvent>>,
+    // A clone of the title-worker poke channel (#169), so a spawn can kick off a
+    // title re-read burst immediately (the monitor keeps its own clone for the
+    // busy→idle edge). Mutex for the same `!Sync` reason as `events`.
+    title_tx: Mutex<Sender<String>>,
     // Busy-heuristic state (#42), shared with the reader + monitor threads.
     activity: Activity,
     // Monotonic base for the millis timestamps in `activity`.
@@ -204,6 +216,9 @@ impl SessionManager {
         // busy→idle edge through this side channel, so reading claude's `ai-title`
         // (a file scan) never runs inline in the monitor's tick.
         let (title_tx, title_rx) = std::sync::mpsc::channel::<String>();
+        // Keep a clone for spawn-time pokes (#169) before moving the original into
+        // the monitor thread.
+        let spawn_title_tx = title_tx.clone();
         // A single background thread derives busy/idle from output activity and
         // emits `State` transitions (#42). It holds a `Sender` clone, so — like
         // the long-lived manager — it keeps the event channel open for the app's
@@ -222,6 +237,7 @@ impl SessionManager {
         Self {
             sessions: Mutex::new(HashMap::new()),
             events: Mutex::new(events),
+            title_tx: Mutex::new(spawn_title_tx),
             activity,
             base,
         }
@@ -562,6 +578,15 @@ impl SessionManager {
         };
         self.lock_sessions()?.insert(id.clone(), session);
 
+        // Kick off a title re-read burst (#169) the moment the session is registered,
+        // so a fresh agent's first `ai-title` — and a resumed/forked session's
+        // already-written title on boot — surfaces within seconds instead of waiting
+        // for the first incidental busy→idle edge. Best-effort: a dead worker (e.g. at
+        // shutdown) must never fail a spawn. Harmless no-op until the log exists.
+        if let Ok(tx) = self.title_tx.lock() {
+            let _ = tx.send(id.clone());
+        }
+
         Ok(SessionInfo {
             id,
             name,
@@ -711,42 +736,120 @@ fn monitor_loop(
     }
 }
 
-/// Reads claude's auto-title for a session off the monitor's hot path (#97). The
-/// monitor sends a session id on each busy→idle edge; this worker reads the title
-/// (a file scan) and, only when it differs from the last title it emitted for that
-/// session, sends a `Name` event for the command layer to persist + forward. Runs
-/// until the channel closes (app shutdown).
+/// Reads claude's auto-title for a session off the monitor's hot path (#97/#169).
+/// A poke (a busy→idle edge from the monitor, or a session spawn) arrives on
+/// `title_rx`; because `claude` writes its `ai-title` **asynchronously** — a moment
+/// after the turn ends — a single read at that instant frequently misses it. So each
+/// poke schedules a **burst** of re-reads over ~30s (`TITLE_REREAD_OFFSETS_MS`),
+/// and the late-written title surfaces within seconds with no user click. A new poke
+/// for the same session restarts its window. Each due re-read runs the same
+/// read-and-emit-on-change logic (the per-session `last` dedup keeps repeated reads
+/// of an unchanged title/flag silent). Runs until the channel closes (app shutdown);
+/// an idle worker with nothing pending blocks on `recv()` rather than spinning.
 fn title_worker(title_rx: Receiver<String>, events: Sender<SessionEvent>) {
     let mut last: HashMap<String, String> = HashMap::new();
     let mut last_forkable: HashMap<String, bool> = HashMap::new();
-    while let Ok(id) = title_rx.recv() {
-        // Forkability (#138): computed every poke (independent of the title, which may
-        // be absent) and emitted only when it flips — false→true the moment the log
-        // first materializes a real turn. Same file-scan class as the title read.
-        let forkable = crate::title::has_conversation(&id);
-        if last_forkable.get(&id) != Some(&forkable) {
-            last_forkable.insert(id.clone(), forkable);
-            if events
-                .send(SessionEvent::Forkable {
-                    id: id.clone(),
-                    forkable,
-                })
-                .is_err()
-            {
+    // Pending re-read deadlines (#169): one `(Instant, id)` per burst offset. Drained
+    // as they fall due, so the set stays bounded to roughly one window's worth.
+    let mut pending: Vec<(Instant, String)> = Vec::new();
+    loop {
+        // Wait for the next poke, but never past the soonest pending deadline so a
+        // scheduled re-read fires on time. With nothing pending, block until a poke
+        // (no busy-wait). A dropped sender (app shutdown) ends the worker.
+        let poke = match next_due_wait(&pending, Instant::now()) {
+            Some(wait) => title_rx.recv_timeout(wait),
+            None => title_rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
+        };
+        match poke {
+            Ok(id) => {
+                // A fresh poke restarts this session's window: drop its still-pending
+                // burst and re-enqueue the full schedule from now.
+                pending.retain(|(_, pid)| pid != &id);
+                let now = Instant::now();
+                for off in TITLE_REREAD_OFFSETS_MS {
+                    pending.push((now + Duration::from_millis(*off), id.clone()));
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => return,
+        }
+        // Process (and drop) every deadline now due. Dedup ids in case several of a
+        // session's offsets came due together (e.g. after a long read), so we scan
+        // its log once per pass.
+        let now = Instant::now();
+        let mut due: Vec<String> = Vec::new();
+        pending.retain(|(at, id)| {
+            if *at <= now {
+                due.push(id.clone());
+                false
+            } else {
+                true
+            }
+        });
+        due.sort();
+        due.dedup();
+        for id in due {
+            if read_and_emit_title(&id, &events, &mut last, &mut last_forkable).is_err() {
                 return; // receiver dropped (app shutting down)
             }
         }
-        let Some(title) = crate::title::read_session_title(&id) else {
-            continue; // no log / no title yet (e.g. a shell terminal item) — skip
-        };
-        if last.get(&id) == Some(&title) {
-            continue; // unchanged since we last emitted — nothing to do
-        }
-        last.insert(id.clone(), title.clone());
-        if events.send(SessionEvent::Name { id, name: title }).is_err() {
-            return; // receiver dropped (app shutting down)
+    }
+}
+
+/// The wait until the soonest pending re-read deadline (#169), or `None` when none
+/// is pending (the worker then blocks until the next poke). `Duration::ZERO` when a
+/// deadline is already due. Pure — unit-tested.
+fn next_due_wait(pending: &[(Instant, String)], now: Instant) -> Option<Duration> {
+    pending
+        .iter()
+        .map(|(at, _)| at.saturating_duration_since(now))
+        .min()
+}
+
+/// Read a session's forkability (#138) + `ai-title` (#97) and emit the matching
+/// events only when either changed since last time — the shared body of every
+/// re-read in the #169 burst. `Err(())` signals the event receiver was dropped
+/// (app shutdown), so the worker returns. Behavior is identical to the pre-#169
+/// single read; only the cadence (how often it runs) changed.
+fn read_and_emit_title(
+    id: &str,
+    events: &Sender<SessionEvent>,
+    last: &mut HashMap<String, String>,
+    last_forkable: &mut HashMap<String, bool>,
+) -> Result<(), ()> {
+    // Forkability (#138): computed every poke (independent of the title, which may be
+    // absent) and emitted only when it flips — false→true the moment the log first
+    // materializes a real turn. Same file-scan class as the title read.
+    let forkable = crate::title::has_conversation(id);
+    if last_forkable.get(id) != Some(&forkable) {
+        last_forkable.insert(id.to_string(), forkable);
+        if events
+            .send(SessionEvent::Forkable {
+                id: id.to_string(),
+                forkable,
+            })
+            .is_err()
+        {
+            return Err(());
         }
     }
+    let Some(title) = crate::title::read_session_title(id) else {
+        return Ok(()); // no log / no title yet (e.g. a shell terminal item) — skip
+    };
+    if last.get(id) == Some(&title) {
+        return Ok(()); // unchanged since we last emitted — nothing to do
+    }
+    last.insert(id.to_string(), title.clone());
+    if events
+        .send(SessionEvent::Name {
+            id: id.to_string(),
+            name: title,
+        })
+        .is_err()
+    {
+        return Err(());
+    }
+    Ok(())
 }
 
 /// Resolve `program` to an executable path via `PATH` (or a direct path).
@@ -782,6 +885,24 @@ mod tests {
 
     fn tmp() -> PathBuf {
         std::env::temp_dir()
+    }
+
+    #[test]
+    fn next_due_wait_picks_the_soonest_deadline() {
+        let now = Instant::now();
+        // Nothing pending → None (the worker blocks on recv, no busy-wait).
+        assert_eq!(next_due_wait(&[], now), None);
+        // Future deadlines → the wait to the soonest, regardless of vec order.
+        let pending = vec![
+            (now + Duration::from_millis(8_000), "b".to_string()),
+            (now + Duration::from_millis(1_500), "a".to_string()),
+        ];
+        let wait = next_due_wait(&pending, now).expect("a pending deadline");
+        assert!(wait <= Duration::from_millis(1_500));
+        assert!(wait > Duration::from_millis(1_000));
+        // An already-due deadline → zero, so the worker processes it immediately.
+        let past = vec![(now - Duration::from_millis(10), "x".to_string())];
+        assert_eq!(next_due_wait(&past, now), Some(Duration::ZERO));
     }
 
     #[test]
