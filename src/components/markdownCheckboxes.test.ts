@@ -2,6 +2,7 @@ import type { Element, Root } from "hast";
 import { describe, expect, it } from "vitest";
 
 import {
+  isExternalHref,
   rehypeTaskListPositions,
   toggleTaskMarker,
 } from "./markdownCheckboxes";
@@ -55,6 +56,28 @@ describe("toggleTaskMarker (#173)", () => {
     expect(flip("just some text")).toBeNull();
     // A `[ ]`-looking string that isn't a list item (no bullet/number marker).
     expect(flip("[ ] orphan")).toBeNull();
+  });
+});
+
+describe("isExternalHref (#182)", () => {
+  it("is true for http(s) URLs (any case)", () => {
+    expect(isExternalHref("https://example.com")).toBe(true);
+    expect(isExternalHref("http://example.com/path?q=1")).toBe(true);
+    expect(isExternalHref("HTTPS://Example.com")).toBe(true);
+  });
+
+  it("is false for non-http(s) hrefs (neutralized, no nav)", () => {
+    expect(isExternalHref("./rel.md")).toBe(false);
+    expect(isExternalHref("../up.md")).toBe(false);
+    expect(isExternalHref("mailto:a@b.com")).toBe(false);
+    expect(isExternalHref("tel:123")).toBe(false);
+    expect(isExternalHref("#anchor")).toBe(false);
+    expect(isExternalHref("ftp://example.com")).toBe(false);
+  });
+
+  it("is false for empty / undefined href", () => {
+    expect(isExternalHref("")).toBe(false);
+    expect(isExternalHref(undefined)).toBe(false);
   });
 });
 

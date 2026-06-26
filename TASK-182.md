@@ -1,8 +1,8 @@
 # TASK-182
 
-### 182. [ ] Markdown links must open in the external browser, never inside the app window
+### 182. [x] Markdown links must open in the external browser, never inside the app window
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 

@@ -43,6 +43,7 @@ import { useAutoSaveFile } from "../../useAutoSaveFile";
 import Checkbox from "../Checkbox/Checkbox";
 import {
   makeCheckboxComponents,
+  markdownLinkComponents,
   rehypeTaskListPositions,
 } from "../markdownCheckboxes";
 import { type Board, type Card, parseBoard, serializeBoard } from "./kanban";
@@ -284,7 +285,12 @@ function CardPreview({ card }: { card: Card }) {
       </div>
       {card.body.trim() && (
         <div className={styles.cardBody}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{card.body}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={markdownLinkComponents}
+          >
+            {card.body}
+          </ReactMarkdown>
         </div>
       )}
     </article>

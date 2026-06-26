@@ -16,9 +16,50 @@
 //! `[ ]`-looking text inside fenced code blocks (the parser never makes those into
 //! task items, so they're never stamped) — unlike a naive line-index regex.
 
+import type { MouseEvent } from "react";
 import type { Element, Root } from "hast";
 import type { Components } from "react-markdown";
 import { visitParents } from "unist-util-visit-parents";
+
+import { openUrl } from "../ipc";
+
+/**
+ * Pure: is `href` an `http`/`https` URL? Only such links open externally (#182);
+ * anything else (relative path, `mailto:`, `tel:`, `#anchor`, empty) is a neutralized
+ * no-op. Exported for unit tests.
+ */
+export function isExternalHref(href: string | undefined): boolean {
+  return /^https?:\/\//i.test(href ?? "");
+}
+
+/**
+ * Intercept a rendered-markdown link click (#182). Always `preventDefault` so a plain
+ * anchor can never navigate the Tauri webview in place (which would swap out the SPA);
+ * an `http(s)` href is then opened in the system browser via the #109 `openUrl` →
+ * Rust `open_url` path. Non-web schemes are simply neutralized.
+ */
+function onLinkClick(event: MouseEvent<HTMLAnchorElement>, href?: string): void {
+  event.preventDefault();
+  if (isExternalHref(href)) void openUrl(href!).catch(() => {});
+}
+
+/**
+ * A reusable react-markdown `components` map whose `a` override routes clicks through
+ * {@link onLinkClick} (#182). `node` is intentionally **not** destructured/spread onto
+ * the DOM `<a>` (react-markdown v9 passes it), exactly as the `input` override avoids
+ * spreading. Merged into {@link makeCheckboxComponents} (so FileViewer markdown views
+ * and Kanban card bodies get it for free) and applied directly at the `CardPreview`
+ * render site, which builds no checkbox map.
+ */
+export const markdownLinkComponents: Components = {
+  a({ href, children }) {
+    return (
+      <a href={href} onClick={(event) => onLinkClick(event, href)}>
+        {children}
+      </a>
+    );
+  },
+};
 
 /**
  * Rehype plugin: stamp every GFM task-list checkbox `<input>` with the source
@@ -102,6 +143,8 @@ export function makeCheckboxComponents(opts: {
 }): Components {
   const { source, interactive, onToggle } = opts;
   return {
+    // Links open in the external browser, never in-place (#182).
+    ...markdownLinkComponents,
     input(props) {
       const properties = props.node?.properties as
         | Record<string, unknown>
