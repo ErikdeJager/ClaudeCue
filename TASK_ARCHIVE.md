@@ -2022,3 +2022,61 @@ added.
 
 ---
 
+### 173. [x] Clickable task-list checkboxes in rendered markdown (FileViewer + Kanban card bodies)
+
+**Status:** Done
+**Depends on:** none _(independent — builds only on already-shipped code)_
+**Created:** 2026-06-25
+
+**Description**
+
+**Reverses the #52 "task-list checkboxes are never editable" rule** for two render sites: rendered
+markdown in the universal **FileViewer** and **Kanban card bodies**. GFM task items (`- [ ]` / `- [x]`)
+previously rendered as `disabled` read-only checkboxes; now clicking one flips the underlying source
+marker `- [ ]` ⇄ `- [x]` and persists via each site's existing **`useAutoSaveFile`** buffer — so the
+#162 **save mode** applies for free (auto: debounced write; manual: marks dirty, writes on ⌘S/Save,
+flushed on close). Only the checkbox character is mutable; no other in-place editing of rendered
+markdown. Large files (`tooLarge`) stay raw read-only, and the Kanban card's own header done-checkbox
+(already interactive) is untouched.
+
+**The mapping problem.** remark-gfm's synthesized checkbox `<input>` hast node has **no `position`**,
+but its nearest ancestor **`li`** does. So a small rehype plugin stamps each checkbox input with its
+nearest `li`'s source offsets; the `input` component override reads those offsets and a pure helper
+flips the first marker inside that source slice. Offsets are relative to the exact string handed to each
+`<ReactMarkdown>` (the whole `text` for FileViewer, the de-indented `card.body` for a Kanban card), so
+the flip writes back directly. This is deliberately position-based, not a line-regex index, so a
+`[ ]`-looking string inside a fenced code block (never a task item) is never treated as a checkbox.
+
+**What shipped** (commit `a04448a`, 2026-06-26)
+
+- **Shared module `src/components/markdownCheckboxes.tsx`:** `rehypeTaskListPositions` (stamps offsets
+  via `visitParents`), `toggleTaskMarker(source, start, end)` (pure marker flip → new source or null),
+  and `makeCheckboxComponents({ source, interactive, onToggle })` (the react-markdown `input` override —
+  a native enabled checkbox when interactive + valid offsets, else the default disabled one).
+- **FileViewer:** rendered markdown wired interactive (`onToggle: setText`); the toolbar save/status
+  block is now gated by a new `writable = !tooLarge && (markdown || text)` so rendered markdown shows
+  the Save button (manual) / Saving…/Saved (auto), consistent with the raw view.
+- **KanbanPanel:** `SortableCard` body wired via a new `onBodyToggle`/`onCardBodyToggle` prop chain →
+  `mutate(updateCard(board, col, idx, { body }))`; `CardPreview` (drag overlay) stays non-interactive
+  (default disabled boxes by omission).
+- Added **`unist-util-visit-parents@^6.0.2`** as a direct dependency (previously only transitive);
+  pointer-cursor + app-`Checkbox`-matched styling for `.markdown` and `.cardBody` checkboxes.
+- **Tests:** `markdownCheckboxes.test.ts` covers `toggleTaskMarker` (all listed cases: `[ ]`↔`[x]`,
+  `[X]`, ordered-list markers, nested items, trailing links, non-task → null) and
+  `rehypeTaskListPositions` against a hand-built hast tree.
+
+**Key files touched:** `src/components/markdownCheckboxes.tsx` (+`.test.ts`, new),
+`src/components/FileViewer/FileViewer.tsx` (+`.module.css`),
+`src/components/Kanban/KanbanPanel.tsx` (+`.module.css`), `package.json`, `package-lock.json`.
+
+**Notes**
+
+- The checked marker char is lowercase `x` (matches existing serialization); no other source
+  normalization.
+- All green: `npm run build`, `npm run lint`, `npm test`. **Caveat:** no DOM/render test was added — the
+  repo's Vitest env is node-only (no jsdom), so a render test would mean pulling in a DOM stack out of
+  proportion to the task; the pure logic is unit-tested but the live click behavior was not
+  automatically verified.
+
+---
+
