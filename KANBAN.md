@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Filetree open double
-	Clciking a file inside the filetree panel that is already open; it should jump to and show that file if in overview mode. Or open the file in the canvas if not present
 - [ ] Increase panel min width
 	The minimum width of a panel should be increased very slightly in overview mode. So that there is a bit more space for the different elements
 - [ ] open view in folder session option
@@ -15,6 +13,9 @@ kanban-plugin: board
 
 ## READY
 
+- [ ] #175 — File-tree click: jump to an already-open file, open in the current view
+	Plan: TASK-175.md
+	Depends on: none
 
 ## DONE
 
