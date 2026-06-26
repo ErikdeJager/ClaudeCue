@@ -25,7 +25,3 @@ kanban-plugin: board
 	Depends on: none
 
 ## DONE
-
-- [ ] #197 — Click a worktree to filter Overview to just that worktree
-	Plan: TASK-197.md
-	Depends on: #196

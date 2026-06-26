@@ -3488,3 +3488,61 @@ the repo `+` pattern. Sibling worktree cards (#197 filter-on-click, #198 schedul
 
 ---
 
+### 197. [x] Click a worktree in the sidebar to filter Overview to just that worktree
+
+**Status:** Done
+**Depends on:** #196
+**Created:** 2026-06-26
+
+**Description**
+
+Clicking a **repo** name filters the Overview wall to that repo (`overviewRepoFilter`, #34),
+but a **worktree** sub-group header wasn't clickable that way. This makes a worktree header
+click filter Overview to only the items running/shown inside that worktree, mirroring the repo
+filter.
+
+**The core wrinkle:** the Overview filter matched on `effectiveRepo(s) === filter`, but a
+worktree agent's `effectiveRepo` is its **parent** repo (#96) — so a worktree folder couldn't
+be a filter target. The fix broadens the predicate to also match the actual folder.
+
+**What shipped** (commit `a9bd2dc`, 2026-06-26) — **frontend-only** (no Rust):
+
+- **Broadened filter predicate:** a new shared `sessionInFilter(session, filter)` in `paths.ts`
+  (`effectiveRepo === filter || repoPath === filter`, + tests). `store.ts`'s `overviewClusters`
+  was restructured to build `wtParent`/`clusterRepoOf` first, then apply a single
+  `folderInFilter(folder)` (`!filter || folder === filter || clusterRepoOf(folder) === filter`)
+  uniformly to agents, panels (`panelsByCluster`, keyed by folder), and schedules — so a
+  worktree-folder filter shows just that worktree's agents + panels (clustered under the parent
+  header) and excludes the parent's own direct items; a **repo** filter is byte-identical to
+  before. `Overview.tsx`'s `shown` predicate was broadened the same way.
+- **Clickable worktree name:** the `WorktreeHeader` name became a `<button>` →
+  `setOverviewRepoFilter(path)` (the existing store action already toggles off if it's the
+  active filter) + `setView("overview")`; a `.worktreeActive` style (accent-dim box + accent
+  name) + `aria-pressed` marks the active-filter row. The existing "Show all" control clears it.
+- **+5 unit tests** (worktree-filter `overviewClusterKeys` returns exactly the worktree's
+  items; `sessionInFilter` truth table; repo-filter behavior unchanged).
+
+**Key files touched:** `src/paths.ts` (+ `.test.ts`), `src/store.ts` (`overviewClusters`
+restructure) + `src/store.test.ts`, `src/components/Overview/Overview.tsx`,
+`src/components/Sidebar/Sidebar.tsx` (+ `.module.css`).
+
+**Dependencies:** #196 (both edit `WorktreeHeader`; sequenced after the header redesign to
+avoid conflicting edits; functionally independent otherwise). Reuses the #34 `overviewRepoFilter`
+mechanism.
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** decisions in `ASSUMPTIONS.md` — broaden the predicate to
+  `effectiveRepo === filter || repoPath === filter`; grouping unchanged (worktree items still
+  render under the parent cluster header, now showing only that worktree).
+- **Documented deviation:** the plan said the worktree click should *not* switch views (citing
+  #79), but the **repo** name click — the thing the plan says to mirror — *does* `setView("overview")`
+  (#79 governs item-row clicks, not the filter-header gesture). So the implementation mirrors the
+  repo header exactly (`setOverviewRepoFilter(path)` + `setView("overview")`); no acceptance
+  criterion mentions view-switching, and it's a one-line change if the other choice is preferred.
+- **Runtime-unverified** in this autonomous loop (no GUI session): the live click → narrowed
+  wall + active-row highlight. The filter math is unit-tested. `npm run build` / `npm run lint` /
+  `npm test` (282, +5) all green; no Rust changes.
+
+---
+
