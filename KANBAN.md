@@ -6,10 +6,11 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] diff view hidden folders
-	The diff view panel doesnt show hidden folders or their contents that have changed. Fix this bug
-
 ## READY
+
+- [ ] #183 — Diff view: show untracked (new) files in the working-tree diff
+	Plan: TASK-183.md
+	Depends on: none
 
 
 ## DONE
