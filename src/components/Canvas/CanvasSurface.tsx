@@ -1,4 +1,4 @@
-import { type ReactElement, useEffect, useRef } from "react";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 import { DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import {
   Copy,
@@ -16,6 +16,7 @@ import {
   Separator,
 } from "react-resizable-panels";
 
+import { noAutoCapitalize } from "../../inputProps";
 import { FORK_UNAVAILABLE_REASON, repoName, sessionLabel } from "../../paths";
 import { repoColor, useStore } from "../../store";
 import type { CanvasEdge, CanvasLeaf, CanvasNode } from "../../types";
@@ -84,6 +85,7 @@ function LeafPanel({
   const setLeafFile = useStore((s) => s.setLeafFile);
   const setLeafFileAbsolute = useStore((s) => s.setLeafFileAbsolute);
   const maximizeItem = useStore((s) => s.maximizeItem);
+  const renameSession = useStore((s) => s.renameSession);
   const isActive = leaf.id === activeLeafId;
 
   // Drag source for reorder/reposition (#135): the **whole header bar** carries the
@@ -130,6 +132,38 @@ function LeafPanel({
     : repoPath
       ? `${repoName(repoPath)}${branch ? ` · ${branch}` : ""}`
       : null;
+
+  // Double-click the header to rename the agent inline (#188) — same state machine
+  // as the sidebar rename (#57) and the tab rename (CanvasTabs): seed the current
+  // custom name, placeholder = the derived label it reverts to, Enter/blur commit,
+  // Escape cancels, a `committed` guard so Enter-then-blur doesn't double-commit.
+  // Agents only; the input stops pointerdown so the header drag (#144) can't grab it.
+  const canRename = content.kind === "agent" && !!session;
+  const renamePlaceholder = canRename
+    ? sessionLabel(
+        undefined,
+        autoNameOn ? session?.autoName : null,
+        branch || repoName(repoPath),
+      ).primary
+    : "";
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const committed = useRef(false);
+  const beginRename = () => {
+    setDraft(session?.name ?? "");
+    committed.current = false;
+    setEditing(true);
+  };
+  const finishRename = () => {
+    if (committed.current) return;
+    committed.current = true;
+    setEditing(false);
+    if (session) void renameSession(session.id, draft);
+  };
+  const cancelRename = () => {
+    committed.current = true;
+    setEditing(false);
+  };
 
   // When this panel becomes the keyboard-focused one (#76), focus its terminal so
   // subsequent keystrokes go there; non-terminal panels just take the highlight.
@@ -195,9 +229,45 @@ function LeafPanel({
                 nameClassName={styles.panelTitle}
               />
             </span>
+          ) : canRename && editing ? (
+            // Inline agent rename (#188); stops pointerdown so the header drag (#144)
+            // can't grab it (like the FileSwitcher / panelActions group).
+            <input
+              className={styles.renameInput}
+              {...noAutoCapitalize}
+              autoFocus
+              value={draft}
+              placeholder={renamePlaceholder}
+              onPointerDown={(event) => event.stopPropagation()}
+              onChange={(event) => setDraft(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  finishRename();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelRename();
+                }
+              }}
+              onBlur={finishRename}
+              aria-label="Rename agent"
+            />
           ) : (
-            // Tooltip shows the full title when truncated (#146).
-            <span className={styles.panelTitle} title={titleText}>
+            // Tooltip shows the full title when truncated (#146). Agent titles
+            // double-click to rename inline (#188); preventDefault avoids selecting
+            // the text. Non-agent titles have no custom name → no rename.
+            <span
+              className={styles.panelTitle}
+              title={titleText}
+              onDoubleClick={
+                canRename
+                  ? (event) => {
+                      event.preventDefault();
+                      beginRename();
+                    }
+                  : undefined
+              }
+            >
               {titleText}
             </span>
           )}

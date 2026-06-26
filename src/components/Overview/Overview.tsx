@@ -1,4 +1,10 @@
-import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Clock, Copy, GitFork, GripVertical, Maximize2, X } from "lucide-react";
 import {
   closestCenter,
@@ -18,6 +24,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { noAutoCapitalize } from "../../inputProps";
 import { overviewClusters, repoColor, useStore } from "../../store";
 import {
   effectiveRepo,
@@ -147,6 +154,7 @@ function SessionCard({
   onRemove,
 }: SessionCardProps) {
   const maximizeItem = useStore((s) => s.maximizeItem);
+  const renameSession = useStore((s) => s.renameSession);
   // Agent label (#95): a single line showing only the primary — the custom name if
   // set, else the branch (folder name when non-git). No subtitle, no repo dot; repo
   // color reads from the card's top band (#36). `sessionLabel` still computes the
@@ -154,16 +162,77 @@ function SessionCard({
   // The #100 "auto-name" setting gates claude's auto-title (#97): off → the label
   // skips the auto-name and falls straight to the branch.
   const autoNameOn = useStore((s) => s.settings.autoName);
+  const fallbackLabel = branch || repoName(session.repoPath);
   const { primary } = sessionLabel(
     session.name,
     autoNameOn ? session.autoName : null,
-    branch || repoName(session.repoPath),
+    fallbackLabel,
   );
+
+  // Double-click the card header title to rename the agent inline (#188) — the same
+  // state machine as the sidebar rename (#57): seed the current custom name,
+  // placeholder = the derived label it reverts to, Enter/blur commit, Escape
+  // cancels, a `committed` guard against double-commit. The input stops pointerdown
+  // so the header drag (#70) can't grab it.
+  const renamePlaceholder = sessionLabel(
+    undefined,
+    autoNameOn ? session.autoName : null,
+    fallbackLabel,
+  ).primary;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const committed = useRef(false);
+  const beginRename = () => {
+    setDraft(session.name ?? "");
+    committed.current = false;
+    setEditing(true);
+  };
+  const finishRename = () => {
+    if (committed.current) return;
+    committed.current = true;
+    setEditing(false);
+    void renameSession(session.id, draft);
+  };
+  const cancelRename = () => {
+    committed.current = true;
+    setEditing(false);
+  };
+
   // A worktree agent (#74/#96): the "worktree" cue is now a clickable badge (#164)
   // opening worktree-scoped add-view actions (`repoPath` is the worktree folder).
-  const title = (
+  const title = editing ? (
+    <input
+      className={styles.renameInput}
+      {...noAutoCapitalize}
+      autoFocus
+      value={draft}
+      placeholder={renamePlaceholder}
+      onPointerDown={(event) => event.stopPropagation()}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          finishRename();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          cancelRename();
+        }
+      }}
+      onBlur={finishRename}
+      aria-label="Rename agent"
+    />
+  ) : (
     <span className={styles.agentTitle}>
-      <span className={styles.name}>{primary}</span>
+      {/* preventDefault avoids selecting the title text on double-click (#188). */}
+      <span
+        className={styles.name}
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          beginRename();
+        }}
+      >
+        {primary}
+      </span>
       {session.worktreeParent && (
         <WorktreeViewsBadge repoPath={session.repoPath} />
       )}

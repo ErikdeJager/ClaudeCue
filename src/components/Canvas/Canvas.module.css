@@ -302,6 +302,21 @@
   white-space: nowrap;
 }
 
+/* Inline agent-rename input (#188) — fills the title area, mirrors the sidebar
+   `.renameInput` / the tab strip `.tabInput`. */
+.renameInput {
+  min-width: 0;
+  flex: 1;
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-chip);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-meta-sm);
+  font-weight: 500;
+}
+
 .panelMeta {
   overflow: hidden;
   color: var(--text-muted);

@@ -180,6 +180,21 @@
   white-space: nowrap;
 }
 
+/* Inline agent-rename input (#188) — fills the title area, mirrors the sidebar
+   `.renameInput`. */
+.renameInput {
+  min-width: 0;
+  width: 100%;
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-chip);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+
 /* "worktree" marker (#96) — mirrors the sidebar badge (#74). A worktree agent
    inherits the parent repo's color, so this text chip is the sole worktree cue. */
 .worktreeBadge {
