@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Clean up Kanban card UI — reposition checkbox + action icons
-	The edit (pen) and delete icons crowd the card title, and the overall card layout looks bad. Redesign for a cleaner look with the checkbox and action icons in better positions. Whoever refines this should search the internet for examples of good-looking Kanban cards first.
 - [ ] Worktree header: icon indicator + the same new-item button repos have
 	A worktree row shows the literal word "worktree" and its create flow looks different from a repo's. Drop the word in favor of a simple icon that marks it as a worktree, and give the worktree header the same new-panel/create button repos have — items created still go into that same worktree.
 - [ ] Click a worktree to filter Overview to just that worktree
@@ -39,6 +37,9 @@ kanban-plugin: board
 - [ ] #194 — Kanban: optional card checkbox (render plain `- bullet` lines as cards)
 	Plan: TASK-194.md
 	Depends on: none
+- [ ] #195 — Clean up Kanban card UI (hover-revealed actions, declutter title)
+	Plan: TASK-195.md
+	Depends on: #194
 
 ## DONE
 

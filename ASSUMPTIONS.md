@@ -210,3 +210,18 @@ judgment with "see if this … has good UX"):
   new UI to toggle a checkbox on/off. Only `- ` bullets (not `*`/`+`/numbered).
 - **Depends on: none** — self-contained engine + minimal render change; independent of the
   "Clean up Kanban card UI" card (which should account for the optional checkbox).
+
+---
+
+## TASK-195 — Clean up Kanban card UI
+
+- **Web-researched pattern adopted** (Trello/Linear/shadcn-kanban): **edit+delete hidden at
+  rest, revealed on `.card:hover`/`:focus-within`** in a top-right cluster; **title full-width**;
+  checkbox + grip kept quiet. Frees the title of the crowding action icons.
+- **Keyboard/touch fallback:** reveal on `:focus-within` (not hover-only) + keep click-to-edit
+  on the title, so actions never depend solely on hover.
+- **Layout/CSS-only** — no dnd re-architecture, no new card content (labels/dates); all
+  behavior (toggle/edit/delete/drag/body-checkboxes) preserved; `CardPreview` kept consistent.
+- **Must render #194's `null` (no-checkbox) card** (title flush-left, no gap) — hence the dep.
+- **Depends on: #194** — building before it would conflict on `KanbanPanel`'s checkbox render;
+  lowest-number-first implements #194 first.
