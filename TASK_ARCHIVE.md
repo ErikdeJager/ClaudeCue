@@ -2903,3 +2903,65 @@ of #186.
 
 ---
 
+### 188. [x] Double-click a panel / card header to rename the agent inline
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+An agent's **header bar** is the primary **drag handle** — in the Canvas the whole panel
+`<header>` carries the dnd-kit move listeners (#144), and in the Overview the whole card
+`<header>` is the sortable drag handle (#70). Renaming an agent was only reachable from the
+**sidebar row context menu** (#57). This task adds **double-click the header bar → inline
+rename** straight from the panel/card you're looking at, on both surfaces.
+
+**What shipped** (commit `e5612f7`, 2026-06-26) — **frontend-only** (no Rust, no
+`renameSession`/persistence change):
+
+- **Canvas** (`CanvasSurface.tsx` `LeafPanel`) and **Overview** (`Overview.tsx`
+  `SessionCard`) agent titles get an `onDoubleClick` that swaps the title span for an inline
+  `<input>`, reusing the **proven sidebar rename state machine verbatim**
+  (`editing`/`draft`/`committed` refs + `beginRename`/`finishRename`/`cancelRename`; Enter &
+  blur commit, Escape cancels, a `committed` guard against Enter-then-blur double-commit).
+- The input is **seeded with the current custom name** and shows the **derived label**
+  (auto-title #97 / branch) as its placeholder; an **empty commit clears** the custom name
+  (`renameSession` trims → `null`, reverting to the derived label) — identical semantics to
+  the sidebar. Commit writes through the existing `renameSession(id, name)` (#57), read
+  optimistically from `session.name` everywhere, so Canvas / Overview / sidebar update
+  together.
+- **Drag vs. double-click coexist** via the existing **4px `PointerSensor`** activation
+  distance (a stationary double-click can't move 4px → never starts a drag), and the
+  `<input>` stops `pointerdown` propagation (like the header's `panelActions` / `FileSwitcher`
+  already do) so editing never grabs the header drag. Same pattern `CanvasTabs`' tab rename
+  already relies on.
+- **Agents only:** a `canRename` gate (`content.kind === "agent" && !!session`) means
+  non-agent panels (file/diff/terminal/kanban/filetree) and scheduled cards (which have their
+  own #94 name editor) get no rename gesture. Distinct DOM target from #186's `Separator`
+  double-click ("distribute evenly") — no conflict.
+
+**Key files touched:** `src/components/Canvas/CanvasSurface.tsx` (`LeafPanel` rename machine
++ input/double-click), `src/components/Canvas/Canvas.module.css` (`.renameInput`),
+`src/components/Overview/Overview.tsx` (`SessionCard` rename machine + input/double-click),
+`src/components/Overview/Overview.module.css` (`.renameInput`). `renameSession` (#57) reused
+unchanged; no new pure functions (so no new unit tests, consistent with the untested
+sidebar/tab rename machines).
+
+**Dependencies:** none — `renameSession` (#57), the draggable headers (#70/#144), and the
+inline-rename pattern (sidebar #57 / `CanvasTabs`) were all already shipped. Independent of
+#186 and #187.
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** the user wasn't responding; decisions logged in
+  `ASSUMPTIONS.md` — renamable = agents only; surfaces = Canvas + Overview header bars (the
+  sidebar already renames via its #57 menu and its rows aren't header bars); input seeds the
+  custom name with the derived label as placeholder; empty commit clears.
+- **Runtime-unverified** in this autonomous loop (no GUI session): the live double-click →
+  type → Enter/Escape/blur flow and its cross-surface propagation. The state machine and
+  `renameSession` are shipped, exercised code; the wiring is type-checked + lint/format clean.
+  `npm run build` / `npm run lint` / `npm test` (257) all green; no Rust changes.
+
+---
+
