@@ -2443,3 +2443,63 @@ remote listing).
 
 ---
 
+### 181. [x] "Pull" action in the repo + worktree context menus (ff-only)
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+There was no way to pull a folder's latest changes from inside ClaudeCue — the user had to drop into
+a terminal and run `git pull`. This task adds a **"Pull"** item to the sidebar **repo** context menu
+and the **worktree header** context menu that fast-forwards the folder's currently-checked-out branch
+to its upstream and reports the result as a toast. Since you can only pull into the branch checked out
+in a given working tree, "pull" here means `git -C <path> pull --ff-only` on the current branch (the
+repo path for a repo folder, the worktree path for a worktree).
+
+**What shipped** (commit `ab15adc`, 2026-06-26)
+
+- **Backend (`src-tauri/src/git.rs`):** new `pull_ff(cwd) -> Result<String, String>` runs
+  `git -C <cwd> pull --ff-only` with `GIT_TERMINAL_PROMPT=0` in the child env (modeled on #180's
+  `fetch_remotes`), returning git's trimmed **stdout** on success (e.g. `"Already up to date."` or the
+  fast-forward summary) and trimmed **stderr** on a non-zero exit. `--ff-only` only ever
+  fast-forwards — never a merge commit or a half-finished merge/conflict state in a folder an agent
+  may be using — so a diverged or upstream-less branch fails cleanly with an error message, and a
+  busy/dirty tree simply errors (nothing lost). It fetches-then-fast-forwards, so no separate fetch
+  is needed.
+- **IPC (`commands.rs` / `lib.rs` / `src/ipc.ts`):** new `pull_branch(cwd) -> Result<String,
+  SessionError>` command (mapping the error to `SessionError::Git`), registered in the invoke handler,
+  with an `ipc.pull(cwd)` wrapper resolving the summary / rejecting with the error.
+- **Store (`src/store.ts`):** new `pullFolder(cwd)` action calls `ipc.pull` and toasts the outcome —
+  a concise success summary or a `"Pull failed: <message>"` error toast — reusing the existing toast
+  helper.
+- **Sidebar (`src/components/Sidebar/Sidebar.tsx`):** a neutral **"Pull"** menu item (tooltip
+  `git pull --ff-only`) added to **both** the repo context menu and the worktree header menu, placed in
+  the non-destructive utilities cluster next to Reveal in Finder / Copy path. It is **gated on a known
+  current branch** (`branches[path]` non-empty), so it's hidden for non-git folders; the repo item
+  pulls `menu.repo`, the worktree item pulls the worktree's own `path`. **No confirm gate** (per the
+  user — `--ff-only` can't lose work).
+
+**Key files touched:** `src-tauri/src/git.rs` (`pull_ff` + three Rust tests), `src-tauri/src/commands.rs`
++ `src/lib.rs` (`pull_branch` command + registration), `src/ipc.ts` (`pull` wrapper), `src/store.ts`
+(`pullFolder` action + toasts), `src/components/Sidebar/Sidebar.tsx` (Pull item in both menus), and
+`CLAUDE.md` (git-scope note + sidebar context-menu line).
+
+**Dependencies:** none (independent of #180, but follows #180's `fetch_remotes` as the model for the
+network git write's `GIT_TERMINAL_PROMPT=0` env guard + best-effort error handling).
+
+**Notes**
+
+- User answers (refine Q&A, 2026-06-26): **fast-forward only** (`git pull --ff-only`); **no confirm —
+  just toast the result** (success summary or git's error).
+- Rust tests cover the three paths: fast-forward success (clone an origin, advance origin, `pull_ff`
+  pulls the new file), divergence error (local + origin both commit → `pull_ff` errors, no merge), and
+  no-upstream error (a remote-less repo). `cargo test` (78) + `cargo clippy` + `npm run build` /
+  `npm test` (248) / `npm run lint` all green.
+- Manual GUI verification of the live right-click menus (clicking Pull, seeing the toast) was **not**
+  runtime-tested in the headless loop; the backend is covered by the three Rust tests, the wiring
+  type-checks, and the menu reuses the existing `menuItem` machinery.
+
+---
+
