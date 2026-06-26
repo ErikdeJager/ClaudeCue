@@ -2235,3 +2235,54 @@ upgrades cleanly to the 400 default.
 
 ---
 
+### 177. [x] "Open view in this folder" on every panel + an instant "New session" option
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+Two related additions to the per-folder **"Open view in this folder"** affordance (the #165
+`OpenViewButton` → `ViewsPopover`/`ViewsMenu`, scoped to a folder):
+
+**(A) Put the button on non-agent panels.** Previously the button rendered **only on agent surfaces**
+(Overview `SessionCard`, Canvas agent panel headers; worktree agents use `WorktreeViewsBadge`).
+Non-agent panels (Overview `ExtraPanel`, non-agent Canvas headers) only had Maximize + Close despite
+already carrying a `repoPath`. Now every **non-agent folder panel** — file viewer / kanban / diff /
+file tree / terminal — shows the button in **both** the Overview column header and the Canvas panel
+header, using each panel's own `repoPath`. Pending **scheduled** cards are excluded.
+
+**(B) Add an instant "New session here" to the Views menu.** A new shared-menu item **immediately spawns
+an agent on the panel's folder, on its current branch, with no modal** — `store.spawnSession(repoPath)`
+(omitting the `branch` arg → current branch, no checkout; works for git and non-git folders; selects the
+new agent and toasts "Started …"). This is deliberately distinct from the repo context-menu's modal-based
+"New session" (`startRepoSession` #127). Living in the **shared** `ViewsMenu`, it appears **everywhere the
+button does** — including agent cards/panels and the worktree badge (which already renders `ViewsMenu`,
+so it inherits the item for free).
+
+**What shipped** (commit `60a501f`, 2026-06-26)
+
+- **`ViewsMenu.tsx` (+ `.module.css`):** a "New session here" item (instant `spawnSession(repoPath)` +
+  `onClose()`), rendered above a thin separator to set it apart from the five add-view items.
+- **`Overview.tsx`:** `ExtraPanel`'s actions gained `<OpenViewButton repoPath={…}>` as the first action
+  (before Maximize).
+- **`CanvasSurface.tsx`:** a branch renders `OpenViewButton` for non-agent folder content
+  (`file | diff | kanban | filetree | terminal`; excluding `agent`/`scheduled`/`pending`) using the
+  already-resolved `repoPath`.
+- **`OpenViewButton.tsx`:** tooltip/aria broadened to "Open a view or start a session in this folder".
+
+**Key files touched:** `src/components/ViewsMenu/ViewsMenu.tsx` (+`.module.css`),
+`src/components/Overview/Overview.tsx`, `src/components/Canvas/CanvasSurface.tsx`,
+`src/components/OpenViewButton/OpenViewButton.tsx`. Frontend-only (no Rust change).
+
+**Notes**
+
+- The instant session is unnamed (auto-named like any spawn), doesn't switch the main view (just selects
+  the new agent), and needs no destructive-checkout warning (current branch only, no `git checkout`).
+- This is the final card of the #168–#177 batch; with it archived the board's DONE column is empty.
+- All green: `npm run build`, `npm run lint`, `npm test`, `npm run format:check`, `cargo test`,
+  `npm run lint:rust`.
+
+---
+
