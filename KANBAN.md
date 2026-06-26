@@ -10,6 +10,8 @@ kanban-plugin: board
 	After creating a canvas, I want to be able to translate a canvas setup I just created to a template. It would open the template editor and add the elements that I had in my canvas as templated elements. Items such as file viewers or kanban will have correct file names already entered
 - [ ] double click drag bar renames
 	Agent header bars (and also other panels) can be dragged. Its the main target for dragging targets around. Howeever, there should be a mechanic that allows for a rename. If the user double clicks the top bar in quick succession, it should rename the agent instead, alowing the user to type a custom name for the agent.
+- [ ] Keybinds for panel creation
+	There should be a keybind that opens a modal for panel creation. User can select panel and repo. There are also keybinds for individual panels. Cmd+1 = session, Cmd+2 = file view, etc. The next step in the modal is repo or repo-worktree selection. This feature is meant as a nice to have for users to quickly load new panels.
 
 ## READY
 
@@ -18,8 +20,4 @@ kanban-plugin: board
 	Depends on: none
 
 ## DONE
-
-- [ ] #185 — Activity dot blinks yellow when focusing / leaving a busy agent
-	Plan: TASK-185.md
-	Depends on: none
 

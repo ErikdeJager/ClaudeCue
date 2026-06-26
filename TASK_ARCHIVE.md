@@ -2669,3 +2669,85 @@ sidebar file-row menu convention).
 
 ---
 
+### 185. [x] Activity dot blinks yellow when focusing / leaving a busy agent
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+A working agent's `BusyIndicator` dot should stay **blue** (the #42/#88 "working"
+shimmer) while it works, but it **blinked yellow** — the #112 "finished — needs input"
+settled state — for a tick, then returned to blue, in two situations: (1) **clicking /
+focusing** an agent panel or card while it was working, and (2) **switching away** from a
+currently-selected, working agent. Both wrongly signalled "needs your input" mid-turn and
+were distracting.
+
+**Root cause.** The blink was a real, transient backend state change, not a render glitch.
+`sessionBusy` (which drives the dot) is written only by `setBusy` ← `onState` ←
+`session://state`, and `BusyIndicator` faithfully renders `!busy && hasBeenActive` as
+yellow. The backend `monitor_loop` busy heuristic carries the #55 **keystroke-echo guard**:
+output arriving within `INPUT_ECHO_MS` (300ms) *after* the last input is assumed to be the
+terminal echoing the user's typing, so it doesn't read as busy. `last_input` is stamped by
+`write_stdin` for **every** byte written to the PTY. But xterm's `onData` forwards more than
+keystrokes — it also sends automatic terminal-protocol **reports** that Claude's TUI
+requests via DECSET: **focus in/out** (`\x1b[I` / `\x1b[O`, 1004) and **mouse** reports
+(1000/1002/1003 X10, 1006 SGR). So focusing/clicking/leaving an agent wrote report bytes
+that stamped `last_input` *as if the user had typed*, dropping the agent's in-flight output
+into the 300ms echo window → misclassified as echo → `busy:false` for ~one monitor tick →
+the dot rendered yellow until the next output flipped it back. The "switch away" symptom
+specifically pinned **focus-out** reporting as a cause.
+
+**What shipped** (commit `d63f2ce`, 2026-06-26) — **backend-only** (`src-tauri/src/pty.rs`):
+
+- Added a pure `is_noninput_report(data: &str) -> bool` helper (with a `consume_report`
+  sub-helper) that returns `true` **iff** `data` is non-empty and consists **entirely** of
+  back-to-back recognized automatic CSI reports: focus in/out (`ESC [ I` / `ESC [ O`), X10
+  mouse (`ESC [ M` + exactly 3 payload bytes), and SGR mouse (`ESC [ < <digits/';'>… M|m`).
+  Conservative by design — if **any** byte falls outside a recognized report it returns
+  `false` (treat as real input), so a genuine keystroke's echo guard is never suppressed.
+  SS3 keys (`ESC O …`, no `[`) and CSI arrows/`~`-sequences are deliberately classified as
+  input, distinct from focus-out (`ESC [ O`).
+- In `write_stdin`, the bytes are still written to the PTY **unconditionally** (Claude needs
+  the mouse + focus events), but `last_input` is stamped only when
+  `!is_noninput_report(data)`.
+- **No change** to `monitor_loop`, the `INPUT_ECHO_MS` / `BUSY_WINDOW_MS` constants, the
+  store, or `BusyIndicator` — so the genuine end-of-turn busy→idle yellow transition's
+  timing is unchanged (#112 preserved), and the #55 echo suppression for *actual typing* is
+  fully preserved.
+- Tests: a `is_noninput_report_matches_automatic_reports_only` unit test (positive: focus
+  in/out, SGR press/release, X10 mouse, concatenated reports; negative: `"ls\n"`, `"\r"`,
+  CSI arrow, SS3 key, lone `ESC`, empty, `"\x1b[Ix"`, `"\x1b[3~"`), plus integration tests
+  `focus_report_does_not_blink_busy_to_idle` (a continuously-working seeded session sent a
+  focus report stays busy — no idle edge) and `real_keystroke_still_suppresses_echo_after_fix`
+  (a real `"x"` still produces the #55 echo-suppression idle edge).
+
+**Key files touched:** `src-tauri/src/pty.rs` only (`write_stdin` guard + `is_noninput_report`
+/ `consume_report` helpers + unit/integration tests). No frontend, store, or `CLAUDE.md`
+change.
+
+**Dependencies:** none. Prior art / context: #42 (busy indicator), #55 (echo-aware "typing
+≠ busy"), #88 (shimmer), #112 (yellow "needs input" third state), #116 (`has_work` /
+seeded).
+
+**Notes**
+
+- **User decisions (2026-06-26):** chose the **targeted** fix (ignore non-keystroke reports
+  in the busy heuristic) over an idle-debounce/hysteresis or doing both — so the genuine
+  yellow transition's timing stays as-is. A follow-up refinement ("it also happens when
+  switching AWAY") pinned focus-out reporting; the fix covers focus in/out **and** mouse
+  together.
+- **Subtask 5 (runtime-verify the exact sequences Claude emits on click/focus-out) was NOT
+  performed** in this autonomous loop — no interactive `tauri dev` / human session. Mitigated
+  by the matcher covering the full DECSET report superset (1004 focus + 1000/1002/1003 X10 +
+  1006 SGR), the plan's deliberately safe choice: worst case, an unmatched future report form
+  degrades to today's behavior (counts as input, could blink) — never worse. No temporary
+  logging was added.
+- All gates green for the backend change (`cargo test` — 83 Rust tests pass — `npm run build`,
+  `npm run lint`, `npm test`, `npm run lint:rust`, `npm run format:rust`). The one
+  `npm run format:check` warning is on `src/components/markdownCheckboxes.tsx`, a
+  **pre-existing** issue from #182 (`affaf6d`), untouched by this backend-only task.
+
+---
+
