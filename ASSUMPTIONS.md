@@ -195,3 +195,18 @@ judgment with "see if this … has good UX"):
 - **Sets `update.notes`** (the #192 field) so it exercises the patch-notes render too.
 - **Depends on: #190, #191, #192** — the mock exists to test the full update UI; it drives
   every field those three add. Matches the lowest-number-first implement order.
+
+---
+
+## TASK-194 — Kanban optional card checkbox
+
+- **Tri-state `Card.checked: boolean | null`** (null = no checkbox `- title`, false = `- [ ]`,
+  true = `- [x]`) — minimal lossless model, chosen over a separate `hasCheckbox` flag.
+- **Parse:** a plain-bullet branch tried **after** `CARD_RE` (so checkbox cards still win);
+  **serialize** emits `null` as `- title` for a byte-stable round-trip.
+- **Render:** `KanbanPanel` omits the `<Checkbox>` + `cardDone` for a null card (both render
+  sites); still draggable/editable/deletable.
+- **UI-created cards still default to `- [ ]`**; plain bullets originate from the markdown. No
+  new UI to toggle a checkbox on/off. Only `- ` bullets (not `*`/`+`/numbered).
+- **Depends on: none** — self-contained engine + minimal render change; independent of the
+  "Clean up Kanban card UI" card (which should account for the optional checkbox).
