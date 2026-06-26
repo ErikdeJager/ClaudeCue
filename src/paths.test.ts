@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { effectiveRepo, repoName, sessionInFilter, splitPath } from "./paths";
+import {
+  effectiveRepo,
+  FORK_UNAVAILABLE_REASON,
+  forkUnavailableReason,
+  repoName,
+  sessionInFilter,
+  splitPath,
+} from "./paths";
 
 describe("splitPath (#163)", () => {
   it("splits a nested absolute path into parent dir + basename", () => {
@@ -17,6 +24,13 @@ describe("splitPath (#163)", () => {
   it("returns an empty dir for a bare filename (no slash)", () => {
     expect(splitPath("todo.md")).toEqual({ dir: "", base: "todo.md" });
   });
+
+  it("splits a Windows path on the backslash separator (#143)", () => {
+    expect(splitPath("C:\\Users\\me\\notes\\todo.md")).toEqual({
+      dir: "C:\\Users\\me\\notes",
+      base: "todo.md",
+    });
+  });
 });
 
 describe("repoName", () => {
@@ -30,6 +44,13 @@ describe("repoName", () => {
 
   it("falls back to the input for a root-ish path", () => {
     expect(repoName("/")).toBe("/");
+  });
+
+  it("splits Windows backslash paths (#143)", () => {
+    expect(repoName("C:\\Users\\me\\code\\claudecue")).toBe("claudecue");
+    expect(repoName("C:\\Users\\me\\code\\claudecue\\")).toBe("claudecue");
+    // Mixed separators (a normalized prefix + a raw segment) still take the tail.
+    expect(repoName("C:/Users/me\\repo")).toBe("repo");
   });
 });
 
@@ -83,5 +104,25 @@ describe("sessionInFilter (#197)", () => {
   it("excludes sessions of an unrelated folder", () => {
     expect(sessionInFilter(repoAgent, "/work/other")).toBe(false);
     expect(sessionInFilter(wtAgent, "/work/other")).toBe(false);
+  });
+});
+
+describe("forkUnavailableReason (#138/#142)", () => {
+  it("is null for a claude session with conversation history", () => {
+    expect(
+      forkUnavailableReason({ agent: "claude", forkable: true }),
+    ).toBeNull();
+  });
+
+  it("is the no-history reason for a claude session with no turn yet (#138)", () => {
+    expect(forkUnavailableReason({ agent: "claude", forkable: false })).toBe(
+      FORK_UNAVAILABLE_REASON,
+    );
+  });
+
+  it("is a Codex-specific reason that takes precedence over forkable (#142)", () => {
+    // Even with forkable true, a Codex session can't fork at all.
+    const reason = forkUnavailableReason({ agent: "codex", forkable: true });
+    expect(reason).toContain("Codex");
   });
 });

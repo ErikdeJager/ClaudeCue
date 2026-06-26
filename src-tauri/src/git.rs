@@ -20,6 +20,25 @@ use std::process::Command;
 
 use serde::Serialize;
 
+/// Build a `Command` that does **not** flash a console window on Windows. A GUI app
+/// has no attached console, so each shelled-out `git` (or `<cli> --version`) call
+/// would otherwise pop a transient black `conhost` window — and `current_branch` /
+/// `working_diff` / branch listing run on every refresh, so it flashes constantly.
+/// Sets `CREATE_NO_WINDOW` (0x0800_0000) on Windows; a **no-op on unix**, so macOS
+/// keeps spawning `git` exactly as before. Shared by `git.rs` and `commands.rs`.
+pub(crate) fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let cmd = Command::new(program);
+    #[cfg(windows)]
+    let mut cmd = cmd;
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 /// File status in a working-tree diff (renames surface as a delete + an add).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum FileStatus {
@@ -341,7 +360,7 @@ pub fn checkout_branch(cwd: impl AsRef<Path>, branch: &str) -> Result<(), String
     if !list_branches(cwd).all.iter().any(|b| b == branch) {
         return Err(format!("unknown branch `{branch}`"));
     }
-    let output = Command::new("git")
+    let output = hidden_command("git")
         .arg("-C")
         .arg(cwd)
         .args(["checkout", branch])
@@ -372,7 +391,7 @@ pub fn worktree_add(
     if !list_branches(repo).all.iter().any(|b| b == branch) {
         return Err(format!("unknown branch `{branch}`"));
     }
-    let output = Command::new("git")
+    let output = hidden_command("git")
         .arg("-C")
         .arg(repo)
         .args(["worktree", "add"])
@@ -430,7 +449,7 @@ pub fn create_branch(cwd: impl AsRef<Path>, name: &str, base: &str) -> Result<()
     let name = name.trim();
     let base = base.trim();
     validate_new_branch(cwd, name, base)?;
-    let mut cmd = Command::new("git");
+    let mut cmd = hidden_command("git");
     cmd.arg("-C").arg(cwd).args(["checkout", "-b", name]);
     if !base.is_empty() {
         cmd.arg(base);
@@ -461,7 +480,7 @@ pub fn worktree_add_new_branch(
     let name = name.trim();
     let base = base.trim();
     validate_new_branch(repo, name, base)?;
-    let mut cmd = Command::new("git");
+    let mut cmd = hidden_command("git");
     cmd.arg("-C")
         .arg(repo)
         .args(["worktree", "add", "-b", name])
@@ -490,7 +509,7 @@ pub fn worktree_remove(
     dest: impl AsRef<Path>,
     force: bool,
 ) -> Result<(), String> {
-    let mut cmd = Command::new("git");
+    let mut cmd = hidden_command("git");
     cmd.arg("-C")
         .arg(repo.as_ref())
         .args(["worktree", "remove"]);
@@ -667,7 +686,7 @@ pub fn is_git_repo(cwd: impl AsRef<Path>) -> bool {
 
 /// Run `git -C <cwd> <args>`; trimmed stdout on success, else `None`.
 fn run_git(cwd: &Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
+    let output = hidden_command("git")
         .arg("-C")
         .arg(cwd)
         .args(args)
@@ -681,7 +700,7 @@ fn run_git(cwd: &Path, args: &[&str]) -> Option<String> {
 
 /// Like `run_git` but returns raw (untrimmed) stdout — for diff text.
 fn run_git_raw(cwd: &Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
+    let output = hidden_command("git")
         .arg("-C")
         .arg(cwd)
         .args(args)
@@ -869,7 +888,7 @@ index 0..1
     }
 
     fn git_in(dir: &Path, args: &[&str]) -> bool {
-        Command::new("git")
+        hidden_command("git")
             .arg("-C")
             .arg(dir)
             .args(args)

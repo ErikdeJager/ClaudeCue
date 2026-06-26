@@ -62,12 +62,16 @@ body {
   outline-offset: 2px;
 }
 
-/* --- Themed custom scrollbars --- */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
-}
-
+/* --- Themed custom scrollbars ---
+   We style scrollbars via the `::-webkit-scrollbar` pseudo-elements only, which
+   both of the app's two engines honor: WKWebView (macOS) and Chromium/WebView2
+   (Windows). We deliberately do NOT set the standard `scrollbar-width` /
+   `scrollbar-color` properties: when those are present with non-`auto` values,
+   Chromium SUPPRESSES the `::-webkit-scrollbar` styling and falls back to a plain
+   native thin scrollbar — so on WebView2 the themed 10px thumb, hover color, and
+   inset border below were being dropped. Omitting them lets WebView2 render the
+   same themed scrollbar as macOS. (The app never runs in Firefox, the only engine
+   that needs the standard props, so nothing is lost.) */
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;

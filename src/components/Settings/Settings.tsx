@@ -21,6 +21,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { SELECTABLE_AGENTS } from "../../agents";
 import * as ipc from "../../ipc";
 import { patchnotesFor } from "../../patchnotes";
 import { DEFAULT_SETTINGS, REPO_PALETTE, useStore } from "../../store";
@@ -349,12 +350,35 @@ function SettingsModal() {
             )}
 
             {section === "sessions" && (
-              <Checkbox
-                checked={draft.autoName}
-                onChange={(v) => update("autoName", v)}
-                label="Auto-name agents from claude's session title"
-                className={styles.checkRow}
-              />
+              <>
+                <div className={styles.field}>
+                  <span className={styles.fieldLabel}>Coding agent</span>
+                  <div className={styles.segmented}>
+                    {SELECTABLE_AGENTS.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        className={`${styles.segment} ${draft.defaultAgent === a.id ? styles.segmentActive : ""}`}
+                        onClick={() => update("defaultAgent", a.id)}
+                        aria-pressed={draft.defaultAgent === a.id}
+                      >
+                        {a.displayName}
+                      </button>
+                    ))}
+                  </div>
+                  <span className={styles.fieldHelp}>
+                    The CLI new sessions launch under. Codex sessions can't be
+                    resumed, forked, or auto-named yet. Existing sessions keep
+                    their agent.
+                  </span>
+                </div>
+                <Checkbox
+                  checked={draft.autoName}
+                  onChange={(v) => update("autoName", v)}
+                  label="Auto-name agents from claude's session title"
+                  className={styles.checkRow}
+                />
+              </>
             )}
 
             {section === "updates" && (

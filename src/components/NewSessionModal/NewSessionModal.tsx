@@ -17,6 +17,7 @@ import {
   pickDirectory,
 } from "../../ipc";
 import { repoName } from "../../paths";
+import { kbdHint } from "../../platform";
 import { useStore } from "../../store";
 import { toLocalInput } from "../../time";
 import type { BranchList, SkillInfo } from "../../types";
@@ -72,6 +73,7 @@ function NewSessionModal() {
   const prefillRepo = useStore((s) => s.newSessionRepo);
   const recents = useStore((s) => s.recents);
   const sessions = useStore((s) => s.sessions);
+  const platform = useStore((s) => s.platform);
   const close = useStore((s) => s.closeNewSession);
   const spawnSession = useStore((s) => s.spawnSession);
   const spawnWorktreeSession = useStore((s) => s.spawnWorktreeSession);
@@ -1208,7 +1210,10 @@ function NewSessionModal() {
                       : "Start in an isolated git worktree"
                   }
                 >
-                  Worktree <kbd className={styles.btnKbd}>⌘⏎</kbd>
+                  Worktree{" "}
+                  <kbd className={styles.btnKbd}>
+                    {kbdHint(platform, "⌘⏎", "Ctrl+↵")}
+                  </kbd>
                 </button>
               )}
               <button

@@ -157,8 +157,8 @@ function panelLabel(kind: OverviewPanel["kind"], file?: string): string {
   if (kind === "filetree") return "file tree";
   if (kind === "terminal") return "terminal";
   if (kind === "kanban")
-    return file ? (file.split("/").pop() ?? file) : "kanban board";
-  return file ? (file.split("/").pop() ?? file) : "file viewer";
+    return file ? (file.split(/[\\/]/).pop() ?? file) : "kanban board";
+  return file ? (file.split(/[\\/]/).pop() ?? file) : "file viewer";
 }
 
 function toSessionView(record: SessionRecord): SessionView {
@@ -515,6 +515,7 @@ export const DEFAULT_SETTINGS: Settings = {
   canvasCloseBehavior: "ask",
   autoName: true,
   autoSave: true,
+  defaultAgent: "claude",
 };
 
 /** Merge a persisted (possibly partial / null) settings blob over the defaults so
@@ -734,6 +735,10 @@ export interface AppState {
    * Terminal exit overlay for non-agent PTYs (they aren't in `sessions`). */
   terminalExits: Record<string, number | null>;
   claudeMissing: boolean;
+  /** Host OS family (#143), read once at boot from the backend `platform()` command
+   * — "windows" / "macos" / "linux", or "" until loaded. Drives OS-appropriate
+   * display labels (Finder vs Explorer, ⌘ vs Ctrl); keyboard handling is unaffected. */
+  platform: string;
   toasts: Toast[];
   /** New session modal (rendered by #10); `newSessionRepo` optionally prefills it. */
   newSessionOpen: boolean;
@@ -1449,6 +1454,7 @@ export const useStore = create<AppState>()((set, get) => ({
   sessionActive: {},
   terminalExits: {},
   claudeMissing: false,
+  platform: "",
   toasts: [],
   newSessionOpen: false,
   newSessionRepo: null,
@@ -1951,6 +1957,12 @@ export const useStore = create<AppState>()((set, get) => ({
       get().setDetachedCanvasIds(await ipc.listCanvasWindows());
     } catch {
       // Outside Tauri / no windows; leave the (empty) default.
+    }
+    // Host OS family (#143), once, for OS-appropriate display labels.
+    try {
+      set({ platform: await ipc.platform() });
+    } catch {
+      // Outside Tauri; leave "" → the macOS-default labels.
     }
   },
 
@@ -2682,6 +2694,7 @@ export const useStore = create<AppState>()((set, get) => ({
           cwd,
           block.name?.trim() || undefined,
           block.prompt,
+          get().settings.defaultAgent,
         );
         get().upsertSession(toSessionView(record));
         live = resolvedContent(block, cwd, { sessionId: record.id });
@@ -3029,7 +3042,14 @@ export const useStore = create<AppState>()((set, get) => ({
       // checkout (e.g. dirty tree) aborts without spawning so nothing starts on
       // the wrong branch.
       if (branch) await ipc.checkoutBranch(cwd, branch);
-      const record = await ipc.spawnSession(cwd, name);
+      // New sessions launch under the Settings-chosen coding agent (#142); existing
+      // sessions keep their recorded agent (#101).
+      const record = await ipc.spawnSession(
+        cwd,
+        name,
+        undefined,
+        get().settings.defaultAgent,
+      );
       get().upsertSession(toSessionView(record));
       set((s) => ({ recents: [cwd, ...s.recents.filter((r) => r !== cwd)] }));
       get().select(record.id);
@@ -3054,7 +3074,11 @@ export const useStore = create<AppState>()((set, get) => ({
       // Isolated worktree agent (#74): no checkout, no custom name. The backend
       // creates-or-reuses the app-managed worktree and spawns claude there; the
       // record carries worktree_parent = repo for the sidebar nesting.
-      const record = await ipc.spawnWorktreeAgent(repo, branch);
+      const record = await ipc.spawnWorktreeAgent(
+        repo,
+        branch,
+        get().settings.defaultAgent,
+      );
       get().upsertSession(toSessionView(record));
       get().select(record.id);
       get().pushToast(`Started isolated worktree on ${branch}`);
@@ -3082,8 +3106,13 @@ export const useStore = create<AppState>()((set, get) => ({
     }
     try {
       // The branch is created + checked out, so HEAD is already correct — spawn
-      // with no further checkout.
-      const record = await ipc.spawnSession(cwd);
+      // with no further checkout, under the chosen agent (#142).
+      const record = await ipc.spawnSession(
+        cwd,
+        undefined,
+        undefined,
+        get().settings.defaultAgent,
+      );
       get().upsertSession(toSessionView(record));
       set((s) => ({ recents: [cwd, ...s.recents.filter((r) => r !== cwd)] }));
       get().select(record.id);
@@ -3100,7 +3129,12 @@ export const useStore = create<AppState>()((set, get) => ({
 
   createBranchWorktreeSession: async (repo, name, base) => {
     try {
-      const record = await ipc.spawnWorktreeAgentNewBranch(repo, name, base);
+      const record = await ipc.spawnWorktreeAgentNewBranch(
+        repo,
+        name,
+        base,
+        get().settings.defaultAgent,
+      );
       get().upsertSession(toSessionView(record));
       get().select(record.id);
       get().pushToast(`Created ${name} worktree & started`);
@@ -3481,6 +3515,9 @@ export const useStore = create<AppState>()((set, get) => ({
         createBranch,
         base,
         worktree,
+        // The schedule fires under the agent chosen at schedule time (#142), recorded
+        // on the ScheduledSession so it launches the right CLI at fire time.
+        get().settings.defaultAgent,
       );
       // Newest-first; surface the (possibly new) folder in recents immediately.
       set((s) => ({

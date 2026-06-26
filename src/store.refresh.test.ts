@@ -233,7 +233,12 @@ describe("startRepoSession (#127)", () => {
     await useStore.getState().startRepoSession("/repo/plain");
 
     expect(useStore.getState().newSessionOpen).toBe(false);
-    expect(ipc.spawnSession).toHaveBeenCalledWith("/repo/plain", undefined);
+    expect(ipc.spawnSession).toHaveBeenCalledWith(
+      "/repo/plain",
+      undefined,
+      undefined,
+      "claude",
+    );
   });
 
   it("listBranches failure: treated as non-git → direct spawn", async () => {
@@ -248,7 +253,12 @@ describe("startRepoSession (#127)", () => {
     await useStore.getState().startRepoSession("/repo/err");
 
     expect(useStore.getState().newSessionOpen).toBe(false);
-    expect(ipc.spawnSession).toHaveBeenCalledWith("/repo/err", undefined);
+    expect(ipc.spawnSession).toHaveBeenCalledWith(
+      "/repo/err",
+      undefined,
+      undefined,
+      "claude",
+    );
   });
 });
 

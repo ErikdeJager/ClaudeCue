@@ -1,7 +1,9 @@
 # CLAUDE.md
 
-Guidance for working in this repository. ClaudeCue is a **macOS** desktop app for
-running and managing many live `claude` CLI sessions at once.
+Guidance for working in this repository. ClaudeCue is a **macOS and Windows** desktop
+app (#139/#140/#143) for running and managing many live `claude` CLI sessions at once.
+Per-OS divergence is `#[cfg(...)]`-gated in Rust and a single store-cached `platform`
+signal in the frontend; the macOS arm is always the original behavior.
 
 ## What this app is
 
@@ -301,7 +303,8 @@ even though it works in `tauri dev`.
   scrolls inside the content pane (the nav + action row stay put) — with five sections —
   **Terminal** (font size / line height via the custom **`Slider`** #122 + cursor
   blink → the live pooled xterms via `terminalPool.applyTerminalSettings`),
-  **Sessions** (the #97 auto-name toggle),
+  **Sessions** (the #97 auto-name toggle + the #142 **Coding agent** selector →
+  `defaultAgent`),
   **Appearance** (an accent swatch over the Catppuccin palette + a reduce-motion
   toggle), **Behavior** (default launch view + confirm-destructive gating #103 + the
   Canvas tab-close default `canvasCloseBehavior`: Ask / Always kill / Never kill #137),
@@ -316,8 +319,22 @@ even though it works in `tauri dev`.
   how it spawns / resumes / seeds a session; the **`claude`** spec preserves today's
   exact flags. Each session and schedule **records its own `agent`** (serde-default
   `"claude"`), and `pty.rs` (`spawn_session` / `spawn_session_with_prompt` /
-  `resume_session`) resolves the spec instead of hardcoding `"claude"`. **Claude is
-  still the only agent** — the Codex spec + a Settings selector are a planned part 2.
+  `resume_session`) resolves the spec instead of hardcoding `"claude"`. **#141** adds the
+  **`codex`** spec + its backend capability gating: Codex owns its own session identity
+  (`codex [PROMPT]`, **no** `--session-id`), and `supports_resume` / `supports_auto_name`
+  are `false`, so the boot-resume loop / Restart / Fork (typed `ResumeUnsupported`) and the
+  #97/#138 title+forkable globs are all gated off for Codex (a per-session `uses_claude_log`
+  flag, carried in the monitor's title-worker poke, skips the glob — Codex reports
+  `forkable: false`, falls back to the branch label). An `agent_info(agent)` command exposes
+  each spec's binary / install-hint / capabilities + a live `--version` presence check.
+  **Claude behaves byte-for-byte as before.** **#142** surfaces the choice: a **Coding
+  agent** selector in Settings → Sessions persists a `defaultAgent` that every new-session
+  spawn path threads through (global / per-repo #127 / worktree #74 / scheduled #93 /
+  template `new-agent` #118; a Fork inherits the *source's* agent). A TS capability mirror
+  (`src/agents.ts`) gates the UI: Fork is disabled with a Codex-specific tooltip
+  (`forkUnavailableReason`, `paths.ts`), copy-resume / Copy-session-ID are hidden for a
+  non-resumable agent, and `ClaudeMissing` reads the selected agent's `agent_info` to name
+  the right CLI + install hint. Selecting Claude leaves everything exactly as before.
 - **Resizable sidebar (#108):** a thin right-edge drag handle sets the sidebar width,
   clamped to **[180, 560]** (default 260) and **persisted** via a dedicated Rust
   `sidebar_width` value (`get_sidebar_width` / `set_sidebar_width`), kept **separate**
@@ -401,10 +418,28 @@ npm run lint           # ESLint (frontend)
 npm run format         # Prettier write (frontend)
 npm run format:check   # Prettier check (frontend)
 npm test               # Vitest (store / pure-logic unit tests)
+npm run test:coverage  # Vitest with v8 coverage (text + html report in ./coverage)
 npm run lint:rust      # cargo clippy (backend)
 npm run format:rust    # cargo fmt (backend)
 cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
+
+# Rust coverage (Windows + macOS) — install once: cargo install cargo-llvm-cov
+cargo llvm-cov --manifest-path src-tauri/Cargo.toml          # text summary
+cargo llvm-cov --manifest-path src-tauri/Cargo.toml --html   # html report
 ```
+
+> **Cross-platform builds (#139/#140/#143).** The project builds, tests, **and runs** on
+> **Windows and macOS**. **#139** got it compiling + green on both (`#[cfg(...)]`-gated Rust,
+> `cfg(unix)` POSIX-shell tests, `.gitattributes` LF normalization so `cargo fmt`/`prettier`
+> pass on a Windows checkout, + a coverage push). **#140** made it *function* on Windows:
+> PowerShell terminals, `explorer.exe` for open/reveal/url, a no-op login-shell PATH probe, a
+> cross-platform `home_dir()` (`USERPROFILE`), and `claude.cmd` resolution via `PATHEXT` +
+> launch through `cmd.exe /C`. **#143** finished it: a platform-neutral bundle description
+> (NSIS+MSI), a backend `platform()` signal cached once in the store, OS-appropriate display
+> labels (Finder↔Explorer, ⌘↔Ctrl via `src/platform.ts`), `metaKey || ctrlKey` link-open,
+> and `[\\/]` path splitting (`repoName`/`lastSegment`). The macOS arm is always the prior
+> code. Runtime items needing a GUI/installer (the `claude.cmd` spawn, the Windows installer,
+> e2e smoke) are flagged for interactive verification (the #84/#105 precedent).
 
 ## v1 scope decisions / out of scope
 

@@ -16,8 +16,9 @@ import {
   Separator,
 } from "react-resizable-panels";
 
+import { agentSupportsResume } from "../../agents";
 import { noAutoCapitalize } from "../../inputProps";
-import { FORK_UNAVAILABLE_REASON, repoName, sessionLabel } from "../../paths";
+import { forkUnavailableReason, repoName, sessionLabel } from "../../paths";
 import { repoColor, useStore } from "../../store";
 import type { CanvasEdge, CanvasLeaf, CanvasNode } from "../../types";
 import { IS_MAIN_WINDOW } from "../../windowContext";
@@ -307,19 +308,20 @@ function LeafPanel({
               />
             )}
           {/* Fork the conversation into a new parallel session (#126) — agents only.
-              Gated (#138): unavailable until the source has a real turn to fork. */}
+              Gated (#138/#142): unavailable until the source has a real turn to fork,
+              or when the agent can't fork at all (Codex). */}
           {content.kind === "agent" && session && (
             <button
               type="button"
               className={styles.panelClose}
               onClick={() => {
-                if (session.forkable !== false) void forkSession(session.id);
+                if (forkUnavailableReason(session) === null)
+                  void forkSession(session.id);
               }}
-              aria-disabled={session.forkable === false}
+              aria-disabled={forkUnavailableReason(session) !== null}
               title={
-                session.forkable === false
-                  ? FORK_UNAVAILABLE_REASON
-                  : "Fork conversation into a new parallel session"
+                forkUnavailableReason(session) ??
+                "Fork conversation into a new parallel session"
               }
               aria-label="Fork conversation"
             >
@@ -327,23 +329,26 @@ function LeafPanel({
             </button>
           )}
           {/* Copy `claude --resume <id>` (#28) — agents only, re-homed here
-              post-Focus (#86). Non-agent panels have no resumable session. */}
-          {content.kind === "agent" && session && (
-            <button
-              type="button"
-              className={styles.panelClose}
-              onClick={() =>
-                void copyToClipboard(
-                  `claude --resume ${session.id}`,
-                  "resume command",
-                )
-              }
-              title="Copy resume command (claude --resume <id>)"
-              aria-label="Copy resume command"
-            >
-              <Copy size={14} strokeWidth={1.5} />
-            </button>
-          )}
+              post-Focus (#86). Hidden for non-agent panels and for non-resumable
+              agents (Codex, #142), which have no `claude --resume` to copy. */}
+          {content.kind === "agent" &&
+            session &&
+            agentSupportsResume(session.agent) && (
+              <button
+                type="button"
+                className={styles.panelClose}
+                onClick={() =>
+                  void copyToClipboard(
+                    `claude --resume ${session.id}`,
+                    "resume command",
+                  )
+                }
+                title="Copy resume command (claude --resume <id>)"
+                aria-label="Copy resume command"
+              >
+                <Copy size={14} strokeWidth={1.5} />
+              </button>
+            )}
           {/* Maximize into big mode (#157) — every item except a pending template
               panel (no stable content to maximize yet). */}
           {content.kind !== "pending" && (

@@ -264,6 +264,12 @@ pub fn resume_session(
     let record = store
         .session(&id)
         .ok_or_else(|| SessionError::SessionNotFound(id.clone()))?;
+    // Gate on the agent's resume capability (#141): a Codex session can't be resumed
+    // by id (no app-ownable identity), so Restart refuses cleanly rather than spawning
+    // a CLI that would mis-handle `--resume`. Claude resumes exactly as before.
+    if !crate::agents::agent_spec(&record.agent).supports_resume {
+        return Err(SessionError::ResumeUnsupported(record.agent));
+    }
     manager.resume_session(
         &record.claude_session_id,
         &record.repo_path,
@@ -290,6 +296,11 @@ pub fn fork_session(
     let source = store
         .session(&source_id)
         .ok_or_else(|| SessionError::SessionNotFound(source_id.clone()))?;
+    // Gate on the agent's resume/fork capability (#141): Codex can't fork (no
+    // app-ownable session id), so refuse up front (the #142 UI also hides the button).
+    if !crate::agents::agent_spec(&source.agent).supports_resume {
+        return Err(SessionError::ResumeUnsupported(source.agent));
+    }
     // Guard (#134): forking needs the source's on-disk conversation log to exist with
     // ≥1 real turn. A brand-new / never-interacted source — including a just-created
     // fork whose log isn't materialized yet (#116 keeps it gray) — would otherwise
@@ -1012,6 +1023,38 @@ fn sanitize_seg(s: &str) -> String {
         .collect()
 }
 
+/// Make a (already `sanitize_seg`'d) path segment safe as a **Windows** file name:
+/// (1) Windows silently strips trailing dots/spaces, which would desync the path we
+/// record from the one it actually creates, so trim them; (2) Windows refuses to
+/// create a file/dir whose stem is a reserved device name (`CON`, `PRN`, `AUX`,
+/// `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, case-insensitive) — all of which are *valid
+/// git branch names* — so suffix `_` to dodge the collision. **No-op on unix** (these
+/// names are ordinary there), so macOS worktree paths are byte-for-byte unchanged.
+#[cfg(windows)]
+fn windows_safe_seg(seg: String) -> String {
+    const RESERVED: &[&str] = &[
+        "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
+        "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+    ];
+    let trimmed = seg.trim_end_matches([' ', '.']);
+    let base = if trimmed.is_empty() {
+        "branch"
+    } else {
+        trimmed
+    };
+    let stem = base.split('.').next().unwrap_or(base);
+    if RESERVED.iter().any(|r| r.eq_ignore_ascii_case(stem)) {
+        format!("{base}_")
+    } else {
+        base.to_string()
+    }
+}
+
+#[cfg(unix)]
+fn windows_safe_seg(seg: String) -> String {
+    seg
+}
+
 /// A stable (deterministic) hash of a string — `DefaultHasher` uses fixed keys,
 /// so the same repo path always maps to the same worktree-id across runs (#74).
 fn stable_hash(s: &str) -> u64 {
@@ -1035,7 +1078,7 @@ fn worktree_path(store: &Store, repo: &str, branch: &str) -> Result<PathBuf, Ses
     Ok(base
         .join("worktrees")
         .join(repo_id)
-        .join(sanitize_seg(branch)))
+        .join(windows_safe_seg(sanitize_seg(branch))))
 }
 
 // --- Application settings (#100) ---
@@ -1124,27 +1167,44 @@ pub fn clear_recents(store: State<'_, Store>) -> Result<(), SessionError> {
         .map_err(|e| SessionError::Io(e.to_string()))
 }
 
-/// Reveal the app-data directory (where `sessions.json` lives) in Finder (#100
-/// Settings → Data). macOS `open`; creates the dir first so it always succeeds.
+/// Open a folder or `http(s)` URL with the OS's default handler, **without a shell**
+/// (so there is no injection vector) — macOS `open`, Windows `explorer.exe`. Both
+/// respect the user's default browser for a URL and default file manager for a
+/// folder. The single OS-open helper behind `open_data_folder` / `open_url` /
+/// `reveal_path` (#100/#109/#129/#140).
+fn os_open(target: impl AsRef<std::ffi::OsStr>) -> Result<(), SessionError> {
+    #[cfg(not(windows))]
+    let mut cmd = std::process::Command::new("open");
+    #[cfg(windows)]
+    let mut cmd = std::process::Command::new("explorer.exe");
+    cmd.arg(target.as_ref())
+        .spawn()
+        .map_err(|e| SessionError::Io(e.to_string()))?;
+    Ok(())
+}
+
+/// Reveal the app-data directory (where `sessions.json` lives) in the OS file
+/// manager (#100 Settings → Data). Creates the dir first so it always succeeds.
 #[tauri::command]
 pub fn open_data_folder(store: State<'_, Store>) -> Result<(), SessionError> {
     let dir = store
         .data_dir()
         .ok_or_else(|| SessionError::Io("no app data directory".to_string()))?;
     let _ = std::fs::create_dir_all(dir);
-    std::process::Command::new("open")
-        .arg(dir)
-        .spawn()
-        .map_err(|e| SessionError::Io(e.to_string()))?;
-    Ok(())
+    os_open(dir)
 }
 
-/// Open an `http`/`https` URL in the user's default browser (#109) — a ⌘-click on a
-/// linkified terminal URL routes here. Mirrors the `open_data_folder` OS-open
-/// precedent: macOS `open <url>` already respects the default browser. Only
-/// `http`/`https` is accepted (so an escape-crafted terminal link can't open another
-/// scheme or a local file), and `open` runs **without a shell**
-/// (`Command::new("open").arg(url)`), so there is no shell-injection vector.
+/// Open an `http`/`https` URL in the user's default browser (#109) — a ⌘/Ctrl-click
+/// on a linkified terminal URL routes here. Only `http`/`https` is accepted (so an
+/// escape-crafted terminal link can't open another scheme or a local file), and the
+/// opener runs **without a shell**, so there is no injection vector.
+///
+/// Unlike `reveal_path`/`open_data_folder` (which open a *folder* and route through
+/// `os_open` → `explorer.exe` on Windows), this opens a *browser*, so on Windows it
+/// uses `cmd /C start` rather than `explorer.exe <url>` — the latter opened a File
+/// Explorer window instead of the browser (#217). The http/https-only guard keeps it
+/// shell-injection-safe: the URL is always a separate, validated argument, never
+/// interpolated into a shell string.
 #[tauri::command]
 pub fn open_url(url: String) -> Result<(), SessionError> {
     if !is_http_url(&url) {
@@ -1152,11 +1212,6 @@ pub fn open_url(url: String) -> Result<(), SessionError> {
             "refusing to open non-http(s) URL `{url}`"
         )));
     }
-    // Open the URL in the OS default browser, per platform (#217). Previously this was
-    // hardcoded to the macOS `open`, so on Windows it opened a folder instead of the
-    // browser. The http/https-only guard above keeps this shell-injection-safe: the URL
-    // is always passed as a separate, validated argument, never interpolated into a
-    // shell string.
     #[cfg(target_os = "macos")]
     let mut command = {
         let mut c = std::process::Command::new("open");
@@ -1183,18 +1238,13 @@ pub fn open_url(url: String) -> Result<(), SessionError> {
     Ok(())
 }
 
-/// Reveal a folder in Finder (#129 repo context menu → "Reveal in Finder"). Opens
-/// the folder itself (`open <path>`, per the user's decision — not `open -R`).
-/// Mirrors the `open_data_folder` / `open_url` precedent: macOS `open` runs
-/// **without a shell** (`Command::new("open").arg(path)`), so there is no
-/// shell-injection vector; the path is a tracked repo dir.
+/// Reveal a folder in the OS file manager (#129 repo context menu → "Reveal in
+/// Finder"/"…Explorer"). Opens the folder itself (not a select-in-parent). Runs
+/// **without a shell** (`os_open`), so there is no injection vector; the path is a
+/// tracked repo dir.
 #[tauri::command]
 pub fn reveal_path(path: String) -> Result<(), SessionError> {
-    std::process::Command::new("open")
-        .arg(&path)
-        .spawn()
-        .map_err(|e| SessionError::Io(e.to_string()))?;
-    Ok(())
+    os_open(path)
 }
 
 /// Reveal a **file** in Finder (#171 sidebar file/Kanban row → "Reveal in Finder").
@@ -1218,14 +1268,33 @@ pub fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-/// `claude --version` (#100 Settings → About). Best-effort: `None` if the CLI is
-/// missing or errors, so the UI just omits the line.
+/// The host OS family (#143) — `std::env::consts::OS` (`"windows"` / `"macos"` /
+/// `"linux"`). Read once at boot and cached in the store so the frontend shows
+/// OS-appropriate **display** labels (Finder vs Explorer, ⌘ vs Ctrl). Keyboard
+/// *handling* stays platform-agnostic (`metaKey || ctrlKey`).
 #[tauri::command]
-pub fn claude_version() -> Option<String> {
-    let output = std::process::Command::new("claude")
-        .arg("--version")
-        .output()
-        .ok()?;
+pub fn platform() -> String {
+    std::env::consts::OS.to_string()
+}
+
+/// `<binary> --version`. Best-effort: `None` if the CLI is missing or errors. This
+/// doubles as the **presence check** — `None` means the binary isn't runnable.
+fn binary_version(binary: &str) -> Option<String> {
+    // Resolve the binary exactly as the PTY spawn does (#140) so this presence/
+    // version probe agrees with what actually launches: on Windows an npm-installed
+    // `claude` is `claude.cmd`, which `Command::new("claude")` can neither find
+    // (CreateProcess appends `.exe`, never consults PATHEXT) nor execute (a batch
+    // file needs `cmd.exe /C`) — so the probe used to report claude as missing even
+    // when it was installed and sessions spawned fine. On unix this resolves to the
+    // bare program name, so macOS runs the identical command as before.
+    let (program, prefix_args) = crate::pty::resolve_command(binary)?;
+    // `crate::git::hidden_command` keeps this `--version` probe from flashing a
+    // console window on Windows (no-op on macOS); it can run on the agent selector.
+    let mut cmd = crate::git::hidden_command(&program);
+    for arg in &prefix_args {
+        cmd.arg(arg);
+    }
+    let output = cmd.arg("--version").output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -1234,6 +1303,45 @@ pub fn claude_version() -> Option<String> {
         None
     } else {
         Some(text)
+    }
+}
+
+/// `claude --version` (#100 Settings → About). Best-effort: `None` if the CLI is
+/// missing or errors, so the UI just omits the line. (Behavior unchanged by #141.)
+#[tauri::command]
+pub fn claude_version() -> Option<String> {
+    binary_version("claude")
+}
+
+/// Metadata about a coding agent (#141), for the #142 Settings selector + the
+/// generalized missing-binary screen: the spec's labels/capabilities plus a live
+/// `version` (the binary's `--version`, `None` ⇒ **not found / not runnable**).
+#[derive(serde::Serialize)]
+pub struct AgentInfo {
+    pub id: String,
+    pub display_name: String,
+    pub binary_name: String,
+    pub install_hint: String,
+    pub supports_resume: bool,
+    pub supports_auto_name: bool,
+    /// `<binary> --version`, or `None` when the agent's CLI isn't installed.
+    pub version: Option<String>,
+}
+
+/// Report the selected agent's binary, install hint, capabilities, and whether its
+/// CLI is present (#141) — the backend foundation the #142 missing-binary screen +
+/// agent selector consume. An unknown id resolves to Claude (per `agent_spec`).
+#[tauri::command]
+pub fn agent_info(agent: String) -> AgentInfo {
+    let spec = crate::agents::agent_spec(&agent);
+    AgentInfo {
+        id: spec.id.to_string(),
+        display_name: spec.display_name.to_string(),
+        binary_name: spec.binary_name.to_string(),
+        install_hint: spec.install_hint.to_string(),
+        supports_resume: spec.supports_resume,
+        supports_auto_name: spec.supports_auto_name,
+        version: binary_version(spec.binary_name),
     }
 }
 
@@ -1260,5 +1368,32 @@ mod tests {
         // Defense in depth: no control/whitespace characters.
         assert!(!is_http_url("https://example.com/a b"));
         assert!(!is_http_url("https://example.com/\nmalicious"));
+    }
+
+    // `windows_safe_seg` only diverges from identity on Windows; gate the assertions
+    // so the unix run (where it's a no-op) doesn't make false claims.
+    #[cfg(windows)]
+    #[test]
+    fn windows_safe_seg_dodges_reserved_names_and_trailing_dots() {
+        // Reserved device names (any case, with or without an extension) get `_`.
+        assert_eq!(windows_safe_seg("con".to_string()), "con_");
+        assert_eq!(windows_safe_seg("NUL".to_string()), "NUL_");
+        assert_eq!(windows_safe_seg("com1".to_string()), "com1_");
+        assert_eq!(windows_safe_seg("lpt9".to_string()), "lpt9_");
+        assert_eq!(windows_safe_seg("aux.txt".to_string()), "aux.txt_");
+        // Trailing dots/spaces (silently stripped by Windows) are trimmed.
+        assert_eq!(windows_safe_seg("feature.".to_string()), "feature");
+        assert_eq!(windows_safe_seg("v1 ".to_string()), "v1");
+        // An ordinary branch is untouched; an all-dots stem falls back.
+        assert_eq!(windows_safe_seg("feature-x".to_string()), "feature-x");
+        assert_eq!(windows_safe_seg("...".to_string()), "branch");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn windows_safe_seg_is_identity_on_unix() {
+        // macOS preservation: the guard must not alter any segment off-Windows.
+        assert_eq!(windows_safe_seg("con".to_string()), "con");
+        assert_eq!(windows_safe_seg("feature.".to_string()), "feature.");
     }
 }

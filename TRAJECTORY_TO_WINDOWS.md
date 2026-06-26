@@ -1,0 +1,200 @@
+# Trajectory to Windows
+
+A running log of Windows-specific bugs found and fixed while keeping macOS behavior
+intact. Newest entries appended under a dated heading.
+
+## 2026-06-24
+
+### Audit summary (state at start of this pass)
+
+The backend + frontend were already substantially ported across tasks #139–#143
+(cfg-gated Rust, PowerShell/`claude.cmd` launch via `cmd.exe /C` + `PATHEXT`,
+`USERPROFILE` home-dir, `explorer.exe` for open/reveal/url, `platform()` signal,
+`kbdHint` display labels, `metaKey || ctrlKey` everywhere, `[\\/]` path splitting,
+NSIS+MSI bundle with `icon.ico`). The audit confirmed those paths are sound. Remaining
+issues found, ranked by severity:
+
+1. **(Low / cosmetic) Scrollbar styling suppressed on WebView2** — `global.css` set the
+   standard `scrollbar-width: thin` + `scrollbar-color` on `*` *alongside* the
+   `::-webkit-scrollbar` rules. Chromium (WebView2) suppresses `::-webkit-scrollbar`
+   custom styling when the standard properties are non-`auto`, so on Windows the themed
+   10px thumb / hover color / inset border were dropped to a plain native thin bar.
+   WKWebView honored the webkit rules. **Fixed below.**
+2. **(Info, no change) `os_open` via `explorer.exe`** — `explorer.exe` returns a nonzero
+   exit even on success, but `os_open` only `spawn()`s (never waits on status), so this
+   is harmless. No change.
+3. **(Info, no change) `csp: null`** — disables CSP on both platforms equally; not a
+   Windows-specific issue.
+
+No functional Windows defects were found in this pass — paths, shell/launch, home-dir,
+keyboard, and bundle config are all correctly guarded.
+
+### Fixes
+
+- **Bug**: Themed scrollbars rendered as plain native thin bars on Windows (WebView2)
+  because the standard `scrollbar-width`/`scrollbar-color` props suppressed the
+  `::-webkit-scrollbar` styling in Chromium.
+  **Fix**: Removed the standard `scrollbar-width`/`scrollbar-color` declarations from the
+  global `*` rule, leaving only the `::-webkit-scrollbar` pseudo-element styling (honored
+  by both WKWebView and Chromium/WebView2). Added an explanatory comment.
+  **Files**: `src/styles/global.css`
+  **macOS**: Preserved — macOS already rendered via `::-webkit-scrollbar`; the removed
+  standard props were redundant (or, on Safari 18.2+ WKWebView, were themselves
+  suppressing the webkit styling, so removal restores the intended look on both engines).
+
+### Needs manual Windows verification
+
+- Scrollbars in the sidebar, file viewer, and settings panes render as a 10px themed
+  thumb with the hover color (not a plain native bar) on a real WebView2 build.
+- `claude.cmd` (npm-installed) actually spawns through `cmd.exe /C` in a packaged build.
+- NSIS + MSI installers build and install cleanly; `icon.ico` shows in Explorer/taskbar.
+- `explorer.exe` open/reveal/url actions open the right default browser + file manager.
+
+### Iteration 2
+
+- **Bug**: Every shelled-out `git` command (`current_branch`, `working_diff`,
+  `list_branches`, `checkout_branch`, `create_branch`, `worktree_add/remove`,
+  `worktree_add_new_branch`, compare) and the `<cli> --version` presence/version probe
+  used `std::process::Command` with no `CREATE_NO_WINDOW` flag. On Windows a GUI app has
+  no attached console, so each call pops a transient black `conhost` window — and the
+  branch/diff reads run on every refresh, so the flicker is near-constant and very
+  visible. (HIGHEST-impact Windows UX bug found so far.)
+  **Fix**: Added a shared `pub(crate) fn hidden_command(program)` in `git.rs` that sets
+  `CREATE_NO_WINDOW` (0x0800_0000) on Windows via `CommandExt::creation_flags` and is a
+  no-op on unix. Routed all 8 `git` invocations and `commands.rs::binary_version` through
+  it. Verified: `cargo check` clean on Windows; 16 git tests pass.
+  **Files**: `src-tauri/src/git.rs`, `src-tauri/src/commands.rs`
+  **macOS**: Preserved — the `creation_flags` call is `#[cfg(windows)]`-gated; on unix
+  `hidden_command` just returns `Command::new(program)` exactly as before. (PTY-spawned
+  terminals are untouched — they run inside ConPTY and are *meant* to be visible.)
+
+### Iteration 3
+
+- **Audited, no change needed**: `files.rs` path validation is Windows-correct (repo-rel
+  display paths normalize `\`→`/`; both repo + target are `canonicalize()`d so the
+  Windows `\\?\` extended-length prefix matches in the `starts_with` containment check;
+  `PathBuf::join` accepts the frontend's `/`-separated relative paths on Windows).
+  `capabilities/default.json` is minimal + platform-agnostic (`core:default`,
+  `dialog:default`). Tauri default `webviewInstallMode` (downloadBootstrapper) handles a
+  missing WebView2 runtime — no config change needed.
+- **Bug**: `Store::persist` does an atomic write via temp-file + `fs::rename`. The rename
+  is correct on Windows (MOVEFILE_REPLACE_EXISTING), but on Windows it can transiently
+  fail with "Access Denied" (os error 5) when antivirus / the Search indexer / a backup
+  agent briefly holds a handle on `sessions.json` or the temp file — a failure mode POSIX
+  `rename(2)` doesn't have. Because the app persists frequently (every busy→idle edge,
+  rename, recent-touch), a transient lock meant a lost write plus a leftover `sessions.tmp`.
+  **Fix**: Wrapped the rename in a short bounded retry (5 attempts, 20ms·n backoff); on
+  final failure it removes the temp file so no litter is left. Verified: 19 store tests
+  pass on Windows.
+  **Files**: `src-tauri/src/store.rs`
+  **macOS**: Preserved — not platform-gated, but macOS `rename(2)` succeeds on the first
+  attempt, so the retry/sleep path is never entered; behavior is byte-for-byte unchanged.
+
+### Iteration 4
+
+- **Audited, no change needed**: `home_dir` (USERPROFILE→HOMEDRIVE+HOMEPATH fallback),
+  `sanitize_seg`, and `title.rs::locate_log` (globs by UUID, never replicates claude's
+  cwd→dir encoding) are all Windows-correct. `path_env`'s login-shell PATH probe is
+  `#[cfg(unix)]`-only (correct — no Windows equivalent needed; PATH is inherited there).
+- **Bug**: `worktree_path` built an app-managed worktree folder from the branch name via
+  `sanitize_seg` only. A branch named after a Windows **reserved device name** (`con`,
+  `prn`, `aux`, `nul`, `com1`–`com9`, `lpt1`–`lpt9` — all valid git branch names) yields a
+  folder Windows refuses to create, so the worktree agent fails to launch. Trailing
+  dots/spaces are also silently stripped by Windows, desyncing the recorded path from the
+  one created. (macOS allows all of these, so it was never hit there.)
+  **Fix**: Added `windows_safe_seg` — suffixes `_` to a reserved-name stem and trims
+  trailing dots/spaces — applied to the branch segment in `worktree_path`. Added unit
+  tests for both the Windows behavior and the unix identity. Verified: full Rust suite (65)
+  + new tests pass on Windows.
+  **Files**: `src-tauri/src/commands.rs`
+  **macOS**: Preserved — `windows_safe_seg` is `#[cfg(windows)]`; the `#[cfg(unix)]` arm is
+  the identity function, and a unix test asserts segments are returned verbatim.
+- **FLAGGED for manual Windows verification (not changed)**: the xterm.js (v6) terminal in
+  `terminalPool.ts` sets no `windowsPty` option. ConPTY output can render with extra blank
+  lines / wrong reflow on resize without it — but the *correct* setting depends on the
+  ConPTY backend's build-number reflow support, and a wrong value makes rendering worse.
+  **What to test on a real Windows box**: open a PowerShell shell terminal (#72) and an
+  agent, type long lines, and resize the panel — watch for duplicated/blank lines or
+  mis-wrapped text. If present, set `windowsPty: { backend: 'conpty', buildNumber }` (gated
+  to Windows via the cached `platform` signal) and re-test; leave unset on macOS.
+
+### Iteration 5
+
+- **Areas newly audited (no change needed)**: `pty.rs` spawn/resolution (already
+  Windows-correct via #140 `find_on_path` + `launch_target` + ConPTY), `agents.rs`
+  (platform-agnostic; binary names resolve through `find_on_path`/PATHEXT), `skills.rs`
+  (normalizes `\`→`/` in command names, uses `path_env::home_dir`), `lib.rs` (pure Tauri
+  abstractions — `app_data_dir`, event forwarding, schedule poll), `tauri.conf.json`
+  (native decorations, no vibrancy/transparency; `targets: "all"` → NSIS+MSI on Windows),
+  the `Slider` range-input CSS (the `-5px` thumb `margin-top` is the standard hack honored
+  by **both** Chromium/WebView2 and WebKit), and the frontend `/`-path splits in
+  `FilePicker`/`FileSwitcher`/`CanvasSurface`/`fileType` (all operate on **repo-relative**
+  paths that `files.rs` already normalizes to `/`, so they're correct on Windows).
+  Keyboard handling is uniformly `metaKey || ctrlKey`.
+- **Bug**: The `<binary> --version` presence/version probe (`commands::binary_version`,
+  behind `claude_version` for Settings → About and `agent_info().version` for the #142
+  agent selector) ran `Command::new(binary)` directly. On Windows `std::process::Command`
+  uses `CreateProcess`, which appends `.exe` but **never consults `PATHEXT`** and **cannot
+  execute a batch file** — so an npm-installed `claude` (which is `claude.cmd`) was reported
+  as *not found / no version* even though it was installed and **sessions spawned fine**
+  (the PTY path resolves it correctly via #140's `find_on_path` + `cmd.exe /C`). Symptom:
+  Settings → About silently omitted the Claude version on a normal Windows install, and the
+  selector misreported an installed agent. (`claudeMissing` itself is driven by real spawn
+  `BinaryNotFound` errors, so it was unaffected — this was a probe/launch *inconsistency*.)
+  **Fix**: Added `pub(crate) fn pty::resolve_command(program)` that shares the PTY spawn's
+  resolution (`find_on_path` + `launch_target`), returning the `(exe, prefix_args)` the OS
+  actually needs (on Windows, `cmd.exe /C <…\claude.cmd>`; on unix, the bare program name).
+  `binary_version` now resolves through it before probing `--version`, so the probe matches
+  what launches. Added 3 tests (missing-binary → None; Windows `.cmd`→`cmd.exe /C` routing;
+  unix bare-name identity). Verified: 69 Rust tests pass + clippy clean on Windows.
+  **Files**: `src-tauri/src/pty.rs`, `src-tauri/src/commands.rs`
+  **macOS**: Preserved — on unix `find_on_path` resolves via `PATH` and `launch_target`
+  returns the bare program name with no prefix args, so `binary_version` runs the *identical*
+  command it always did. A unix test asserts the bare-name identity; the Windows-specific
+  routing lives entirely inside the `#[cfg(windows)]` arms of `find_on_path`/`launch_target`.
+
+### Needs manual Windows verification (Iteration 5)
+
+- On a Windows box with `claude` installed via npm (so it's `claude.cmd`), open
+  Settings → About and confirm the **Claude version line now appears** (it was blank before
+  this fix), and that the #142 agent selector shows Claude as installed.
+
+### Iteration 6 (audit pass — no code changes; remaining areas confirmed clean)
+
+- **Git diff parsing (`git.rs::parse_unified_diff`, `run_git`/`run_git_raw`) — clean**:
+  splits via `str::lines()`, which treats `\r\n` as one terminator and strips the trailing
+  `\r`, so CRLF-file diffs render without stray carriage returns on Windows; output is read
+  as UTF-8-lossy. `git` is a real `.exe`, so `Command::new("git")` resolves it via PATH+
+  `.exe` (the PATHEXT/`.cmd` problem fixed in Iter 5 doesn't apply). All `git` calls already
+  route through `hidden_command` (Iter 2). Diff output is byte-identical across OSes — no
+  platform divergence.
+- **Frontend file rendering — clean**: `read_text_file` returns content verbatim (CRLF
+  preserved), but `FileViewer` renders through react-markdown / Prism (CRLF-safe) and does
+  **no** manual `\n`-splitting for line numbers; the only frontend `\n`/`\r` handling is in
+  a test. No stray-`\r` rendering under WebView2.
+- **WebView2-divergent CSS — clean**: `color-mix(in srgb, …)` (used widely) is supported in
+  WebView2/Edge ≥111 (evergreen) and the code already ships plain-color fallbacks
+  (`Overview.module.css`); `inset: 0`, `aspect-ratio`, and `<input type="datetime-local">`
+  all work in both WKWebView and Chromium (the date-picker chrome differs cosmetically only).
+  No `backdrop-filter`/vibrancy/`-webkit-`-only declarations without fallbacks (the lone
+  `-webkit-font-smoothing` is a harmless macOS-only no-op on Windows).
+- **`worktree_path` (`commands.rs`) — clean**: extracts the repo basename via
+  `Path::new(repo).file_name()` (correct on a `C:\foo\bar` path) and builds the dest with
+  `PathBuf::join` + the Iter-4 `sanitize_seg`/`windows_safe_seg` guards.
+- **Drag-and-drop — clean**: no OS-level file-drop (`onDragDrop`/Tauri `dragDrop`) is wired,
+  so no native Windows paths are ingested; the app's only DnD is dnd-kit's internal
+  reordering, which is path-agnostic.
+- **xterm WebGL renderer — clean**: `WebglAddon` load is wrapped in try/catch with an
+  `onContextLoss` dispose and a DOM-renderer fallback, so a WebView2 GPU/context failure
+  degrades gracefully rather than breaking the terminal.
+- **Flagged, not fixed (low risk, both platforms behave; would risk a macOS regression to
+  change)**: repo grouping / worktree `repo_id` key off the **exact** `repoPath` string, so
+  on Windows's case-insensitive filesystem the *same* folder added with different casing
+  would group/hash as two repos. In practice the OS folder picker returns consistent casing
+  and recents dedup by exact string, so this isn't hit; normalizing case here would be wrong
+  on case-sensitive macOS volumes. Left as-is.
+- **Still open (carried from Iter 4)**: the xterm `windowsPty` option remains unset — needs
+  a real Windows box to choose the correct `{ backend, buildNumber }` (a wrong value worsens
+  ConPTY reflow). Not changed without runtime testing.
+
+No new functional Windows defects found this pass.

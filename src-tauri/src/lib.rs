@@ -112,17 +112,26 @@ pub fn run() {
                 let manager = resume.state::<SessionManager>();
                 let store = resume.state::<Store>();
                 for record in store.sessions() {
-                    let _ = manager.resume_session(
-                        &record.claude_session_id,
-                        &record.repo_path,
-                        record.name.clone(),
-                        &record.agent,
-                    );
+                    let spec = crate::agents::agent_spec(&record.agent);
+                    // Only resume agents that support id-based resume (#141). A Codex
+                    // record has no app-ownable session id, so resuming by id would
+                    // fail/garble — leave it dormant (the record persists; the user can
+                    // relaunch it as a fresh session). Claude resumes exactly as before.
+                    if spec.supports_resume {
+                        let _ = manager.resume_session(
+                            &record.claude_session_id,
+                            &record.repo_path,
+                            record.name.clone(),
+                            &record.agent,
+                        );
+                    }
                     // Seed forkability once at boot (#138): read the on-disk log so a
                     // resumed session **with** history shows Fork available immediately,
-                    // rather than waiting for its first busy→idle edge. Persist-on-change,
+                    // rather than waiting for its first busy→idle edge. A non-claude-log
+                    // agent (Codex, #141) is never forkable — no glob. Persist-on-change,
                     // then notify the UI (the persisted value also covers a missed emit).
-                    let forkable = crate::title::has_conversation(&record.claude_session_id);
+                    let forkable = spec.supports_auto_name
+                        && crate::title::has_conversation(&record.claude_session_id);
                     let _ = store.set_forkable(&record.id, forkable);
                     let _ = resume.emit(
                         "session://forkable",
@@ -219,6 +228,8 @@ pub fn run() {
             commands::reveal_file_in_finder,
             commands::app_version,
             commands::claude_version,
+            commands::agent_info,
+            commands::platform,
             usage::claude_session_usage,
         ])
         .build(tauri::generate_context!())

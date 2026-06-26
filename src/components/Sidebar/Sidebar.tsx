@@ -32,9 +32,11 @@ import {
   X,
 } from "lucide-react";
 
+import { agentSupportsResume } from "../../agents";
 import { noAutoCapitalize } from "../../inputProps";
 import { openUrl, revealFileInFinder, revealPath } from "../../ipc";
-import { FORK_UNAVAILABLE_REASON, repoName, sessionLabel } from "../../paths";
+import { forkUnavailableReason, repoName, sessionLabel } from "../../paths";
+import { kbdHint, revealLabel } from "../../platform";
 import { formatFireTime } from "../../time";
 import {
   dedupeBranchLabels,
@@ -282,9 +284,12 @@ function SessionRow({
   const copyToClipboard = useStore((s) => s.copyToClipboard);
   // Open the agent in Canvas (#153) — reuse its existing tab or create a new one.
   const openSessionInCanvas = useStore((s) => s.openSessionInCanvas);
-  // Fork is unavailable (#138) until the source has a real turn to fork; fail-open
-  // (undefined/true → available, only a confident `false` disables it).
-  const canFork = session.forkable !== false;
+  // Fork is unavailable (#138/#142) until the source has a real turn to fork, or when
+  // the agent can't fork at all (Codex); fail-open elsewhere. `forkReason` (Codex
+  // takes precedence) is the disabled tooltip. Copy session ID is resume-only (#142).
+  const forkReason = forkUnavailableReason(session);
+  const canFork = forkReason === null;
+  const canResume = agentSupportsResume(session.agent);
 
   // Draggable into Canvas (#47); a small activation distance keeps the click
   // (select) working. The drag snaps back outside Canvas's drop zones.
@@ -442,7 +447,7 @@ function SessionRow({
               role="menuitem"
               className={`${styles.menuItem} ${styles.menuItemView}`}
               aria-disabled={!canFork}
-              title={canFork ? undefined : FORK_UNAVAILABLE_REASON}
+              title={forkReason ?? undefined}
               onClick={() => {
                 if (!canFork) return;
                 setMenu(null);
@@ -456,18 +461,21 @@ function SessionRow({
               />
               Fork conversation
             </button>
-            {/* Copy the claude session UUID (#131) — usable with `claude --resume`. */}
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.menuItem}
-              onClick={() => {
-                setMenu(null);
-                void copyToClipboard(session.claudeSessionId, "session ID");
-              }}
-            >
-              Copy session ID
-            </button>
+            {/* Copy the claude session UUID (#131) — usable with `claude --resume`.
+                Hidden for non-resumable agents (Codex, #142) — no app-owned id. */}
+            {canResume && (
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuItem}
+                onClick={() => {
+                  setMenu(null);
+                  void copyToClipboard(session.claudeSessionId, "session ID");
+                }}
+              >
+                Copy session ID
+              </button>
+            )}
             {/* Open the agent in the Canvas view (#153): reuse its existing tab if
                 it's already shown there (or raise its detached window #84), else a
                 new "Canvas N" tab. Same icon+label layout as Fork (#82/#131). */}
@@ -529,7 +537,7 @@ function FileRow({ repoPath, file, selected, onOpen, onClose }: FileRowProps) {
       id: `file:${repoPath}:${file}`,
       data: { kind: "file", repoPath, file },
     });
-  const name = file.split("/").pop() || file;
+  const name = file.split(/[\\/]/).pop() || file;
   const { menu, openMenu, closeMenu } = useRowMenu();
   const style = transform
     ? { transform: CSS.Translate.toString(transform) }
@@ -897,6 +905,7 @@ function WorktreeHeader({
   const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
   const setView = useStore((s) => s.setView);
   const isFiltered = useStore((s) => s.overviewRepoFilter === path);
+  const platform = useStore((s) => s.platform);
   const { menu, openMenu, closeMenu } = useRowMenu();
   const [confirming, setConfirming] = useState(false);
   const close = () => {
@@ -1032,7 +1041,7 @@ function WorktreeHeader({
                     close();
                   }}
                 >
-                  Reveal in Finder
+                  {revealLabel(platform)}
                 </button>
                 <button
                   type="button"
@@ -1322,6 +1331,7 @@ function Sidebar() {
   const pullFolder = useStore((s) => s.pullFolder);
   const openSchedule = useStore((s) => s.openSchedule);
   const addFolder = useStore((s) => s.addFolder);
+  const platform = useStore((s) => s.platform);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const confirmDestructive = useStore((s) => s.settings.confirmDestructive);
   const sidebarWidth = useStore((s) => s.sidebarWidth);
@@ -1560,7 +1570,7 @@ function Sidebar() {
         type="button"
         className={styles.railButton}
         onClick={() => openNewSession()}
-        title="New session ⌘N"
+        title={`New session ${kbdHint(platform, "⌘N", "Ctrl+N")}`}
         aria-label="New session"
       >
         <Plus size={18} strokeWidth={1.5} />
@@ -1569,7 +1579,7 @@ function Sidebar() {
         type="button"
         className={styles.railButton}
         onClick={() => openSchedule()}
-        title="Schedule session ⌘⇧N"
+        title={`Schedule session ${kbdHint(platform, "⌘⇧N", "Ctrl+Shift+N")}`}
         aria-label="Schedule session"
       >
         <Clock size={16} strokeWidth={1.5} />
@@ -1915,7 +1925,7 @@ function Sidebar() {
                     closeMenu();
                   }}
                 >
-                  Reveal in Finder
+                  {revealLabel(platform)}
                 </button>
                 <button
                   type="button"

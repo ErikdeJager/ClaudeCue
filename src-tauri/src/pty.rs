@@ -64,6 +64,11 @@ pub enum SessionError {
     /// before spawning a `claude` that would exit 1 ("No conversation found").
     #[error("Nothing to fork yet — send the agent a message first.")]
     NothingToFork,
+    /// The agent doesn't support resuming/forking a session by id (#141) — e.g.
+    /// Codex, whose session identity isn't app-ownable. Refused before spawning a
+    /// CLI that would mis-handle our `--resume <id>`. `{0}` is the agent's id.
+    #[error("the `{0}` agent can't resume or fork a session yet")]
+    ResumeUnsupported(String),
 }
 
 impl SessionError {
@@ -75,6 +80,7 @@ impl SessionError {
             Self::Io(_) => "Io",
             Self::Git(_) => "Git",
             Self::NothingToFork => "NothingToFork",
+            Self::ResumeUnsupported(_) => "ResumeUnsupported",
         }
     }
 }
@@ -145,6 +151,12 @@ struct ActivityState {
     /// "work to do" from spawn even though `last_input` stays 0. An interactive
     /// session starts `false`, so its pre-input startup paint never reads as busy.
     seeded: AtomicBool,
+    /// Whether this session reads claude's `ai-title` / conversation log (#141): true
+    /// for the `claude` agent, false for an agent that doesn't write one (Codex) and
+    /// for shell terminals. Set once at spawn; the monitor forwards it to the title
+    /// worker so the #97 auto-name + #138 forkable globs never run for a non-claude
+    /// session (which would be meaningless / could mis-report forkable).
+    uses_claude_log: bool,
 }
 
 /// Per-session activity map shared between the reader threads, `write_stdin`, and
@@ -201,7 +213,7 @@ pub struct SessionManager {
     // A clone of the title-worker poke channel (#169), so a spawn can kick off a
     // title re-read burst immediately (the monitor keeps its own clone for the
     // busy→idle edge). Mutex for the same `!Sync` reason as `events`.
-    title_tx: Mutex<Sender<String>>,
+    title_tx: Mutex<Sender<(String, bool)>>,
     // Busy-heuristic state (#42), shared with the reader + monitor threads.
     activity: Activity,
     // Monotonic base for the millis timestamps in `activity`.
@@ -215,7 +227,9 @@ impl SessionManager {
         // The busy/idle monitor (#42) also pokes the title worker (#97) on each
         // busy→idle edge through this side channel, so reading claude's `ai-title`
         // (a file scan) never runs inline in the monitor's tick.
-        let (title_tx, title_rx) = std::sync::mpsc::channel::<String>();
+        // The poke carries the session id + whether it reads a claude log (#141), so
+        // the worker skips the #97/#138 globs for a non-claude session (Codex).
+        let (title_tx, title_rx) = std::sync::mpsc::channel::<(String, bool)>();
         // Keep a clone for spawn-time pokes (#169) before moving the original into
         // the monitor thread.
         let spawn_title_tx = title_tx.clone();
@@ -283,6 +297,7 @@ impl SessionManager {
             cwd.as_ref(),
             name,
             seeded,
+            spec.supports_auto_name,
         )
     }
 
@@ -312,6 +327,7 @@ impl SessionManager {
             cwd.as_ref(),
             name,
             false,
+            spec.supports_auto_name,
         )
     }
 
@@ -333,7 +349,15 @@ impl SessionManager {
         let spec = crate::agents::agent_spec(agent);
         let args = spec.fork_args(&id, source_session_id);
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        self.spawn_with_id(id, spec.binary_name, &arg_refs, cwd.as_ref(), name, false)
+        self.spawn_with_id(
+            id,
+            spec.binary_name,
+            &arg_refs,
+            cwd.as_ref(),
+            name,
+            false,
+            spec.supports_auto_name,
+        )
     }
 
     /// Spawn the user's `$SHELL` (fallback `/bin/zsh`) in `cwd` under a
@@ -348,8 +372,9 @@ impl SessionManager {
         id: String,
         cwd: impl AsRef<Path>,
     ) -> Result<SessionInfo, SessionError> {
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        self.spawn_with_id(id, shell.as_str(), &[], cwd.as_ref(), None, false)
+        let shell = default_shell();
+        // A shell terminal has no claude conversation log (#141).
+        self.spawn_with_id(id, shell.as_str(), &[], cwd.as_ref(), None, false, false)
     }
 
     /// Send keystrokes / paste to a session's stdin.
@@ -450,8 +475,9 @@ impl SessionManager {
         Ok(scrollback.snapshot())
     }
 
-    /// Number of registered sessions. Currently used only by tests.
-    #[cfg(test)]
+    /// Number of registered sessions. Currently used only by the (unix-only,
+    /// PTY-spawning) tests.
+    #[cfg(all(test, unix))]
     pub fn session_count(&self) -> usize {
         self.lock_sessions().map(|s| s.len()).unwrap_or(0)
     }
@@ -466,23 +492,43 @@ impl SessionManager {
         cwd: &Path,
         name: Option<String>,
     ) -> Result<SessionInfo, SessionError> {
-        self.spawn_with_id(Uuid::new_v4().to_string(), program, args, cwd, name, false)
+        self.spawn_with_id(
+            Uuid::new_v4().to_string(),
+            program,
+            args,
+            cwd,
+            name,
+            false,
+            false,
+        )
     }
 
     /// Like `spawn_program` but marks the session prompt-seeded (#116): its output
-    /// reads as work with no `write_stdin`, mirroring a scheduled agent (#93).
-    #[cfg(test)]
+    /// reads as work with no `write_stdin`, mirroring a scheduled agent (#93). Only the
+    /// unix PTY tests exercise this, so it's gated to keep the Windows build dead-code-clean.
+    #[cfg(all(test, unix))]
     fn spawn_program_seeded(
         &self,
         program: &str,
         args: &[&str],
         cwd: &Path,
     ) -> Result<SessionInfo, SessionError> {
-        self.spawn_with_id(Uuid::new_v4().to_string(), program, args, cwd, None, true)
+        self.spawn_with_id(
+            Uuid::new_v4().to_string(),
+            program,
+            args,
+            cwd,
+            None,
+            true,
+            false,
+        )
     }
 
     /// Spawn `program` in a PTY under a caller-chosen session id. Backs
-    /// `spawn_session`, `resume_session`, and the tests.
+    /// `spawn_session`, `resume_session`, and the tests. (Several orthogonal spawn
+    /// inputs — id, program, args, cwd, name, seeded, the #141 claude-log flag — hence
+    /// the arg count; an opts struct would only add indirection for this one caller.)
+    #[allow(clippy::too_many_arguments)]
     fn spawn_with_id(
         &self,
         id: String,
@@ -491,6 +537,7 @@ impl SessionManager {
         cwd: &Path,
         name: Option<String>,
         seeded: bool,
+        uses_claude_log: bool,
     ) -> Result<SessionInfo, SessionError> {
         if !cwd.is_dir() {
             return Err(SessionError::Spawn(format!(
@@ -498,9 +545,13 @@ impl SessionManager {
                 cwd.display()
             )));
         }
-        if find_on_path(program).is_none() {
-            return Err(SessionError::BinaryNotFound(program.to_string()));
-        }
+        let resolved = match find_on_path(program) {
+            Some(path) => path,
+            None => return Err(SessionError::BinaryNotFound(program.to_string())),
+        };
+        // Unix runs the bare program name (today's behavior); Windows runs the
+        // resolved path and routes a `.cmd`/`.bat` shim through `cmd.exe /C` (#140).
+        let (exe, prefix_args) = launch_target(program, &resolved);
 
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -512,7 +563,10 @@ impl SessionManager {
             })
             .map_err(|e| SessionError::Spawn(e.to_string()))?;
 
-        let mut cmd = CommandBuilder::new(program);
+        let mut cmd = CommandBuilder::new(&exe);
+        for arg in &prefix_args {
+            cmd.arg(arg);
+        }
         for arg in args {
             cmd.arg(arg);
         }
@@ -549,6 +603,7 @@ impl SessionManager {
             last_output: AtomicU64::new(0),
             last_input: AtomicU64::new(0),
             seeded: AtomicBool::new(seeded),
+            uses_claude_log,
         });
         if let Ok(mut map) = self.activity.lock() {
             map.insert(id.clone(), Arc::clone(&activity_state));
@@ -591,7 +646,7 @@ impl SessionManager {
         // for the first incidental busy→idle edge. Best-effort: a dead worker (e.g. at
         // shutdown) must never fail a spawn. Harmless no-op until the log exists.
         if let Ok(tx) = self.title_tx.lock() {
-            let _ = tx.send(id.clone());
+            let _ = tx.send((id.clone(), uses_claude_log));
         }
 
         Ok(SessionInfo {
@@ -734,7 +789,7 @@ fn reader_loop(
 fn monitor_loop(
     activity: Activity,
     events: Sender<SessionEvent>,
-    title_tx: Sender<String>,
+    title_tx: Sender<(String, bool)>,
     base: Instant,
 ) {
     // Last state we emitted per session, so we only send on change.
@@ -743,7 +798,7 @@ fn monitor_loop(
         std::thread::sleep(Duration::from_millis(MONITOR_TICK_MS));
         let now = base.elapsed().as_millis() as u64;
         // Snapshot (id, busy) under the lock, then release it before sending.
-        let snapshot: Vec<(String, bool)> = {
+        let snapshot: Vec<(String, bool, bool)> = {
             let map = match activity.lock() {
                 Ok(map) => map,
                 Err(poisoned) => poisoned.into_inner(),
@@ -767,14 +822,14 @@ fn monitor_loop(
                         && out != 0
                         && now.saturating_sub(out) < BUSY_WINDOW_MS
                         && (inp == 0 || out.saturating_sub(inp) >= INPUT_ECHO_MS);
-                    (id.clone(), busy)
+                    (id.clone(), busy, state.uses_claude_log)
                 })
                 .collect()
         };
         // Forget sessions that are gone (killed/exited) so a reused id starts fresh.
-        let live: HashSet<&str> = snapshot.iter().map(|(id, _)| id.as_str()).collect();
+        let live: HashSet<&str> = snapshot.iter().map(|(id, _, _)| id.as_str()).collect();
         emitted.retain(|id, _| live.contains(id.as_str()));
-        for (id, busy) in &snapshot {
+        for (id, busy, uses_claude_log) in &snapshot {
             if emitted.get(id) != Some(busy) {
                 let was = emitted.insert(id.clone(), *busy);
                 if events
@@ -791,7 +846,7 @@ fn monitor_loop(
                 // off the hot path (#97). A best-effort send: a dead worker never
                 // stalls the monitor tick.
                 if !*busy && was == Some(true) {
-                    let _ = title_tx.send(id.clone());
+                    let _ = title_tx.send((id.clone(), *uses_claude_log));
                 }
             }
         }
@@ -800,20 +855,23 @@ fn monitor_loop(
 
 /// Reads claude's auto-title for a session off the monitor's hot path (#97/#169).
 /// A poke (a busy→idle edge from the monitor, or a session spawn) arrives on
-/// `title_rx`; because `claude` writes its `ai-title` **asynchronously** — a moment
-/// after the turn ends — a single read at that instant frequently misses it. So each
-/// poke schedules a **burst** of re-reads over ~30s (`TITLE_REREAD_OFFSETS_MS`),
-/// and the late-written title surfaces within seconds with no user click. A new poke
-/// for the same session restarts its window. Each due re-read runs the same
+/// `title_rx` carrying the session id + whether it reads a claude log (#141);
+/// because `claude` writes its `ai-title` **asynchronously** — a moment after the
+/// turn ends — a single read at that instant frequently misses it. So each poke
+/// schedules a **burst** of re-reads over ~30s (`TITLE_REREAD_OFFSETS_MS`), and the
+/// late-written title surfaces within seconds with no user click. A new poke for the
+/// same session restarts its window. Each due re-read runs the same
 /// read-and-emit-on-change logic (the per-session `last` dedup keeps repeated reads
-/// of an unchanged title/flag silent). Runs until the channel closes (app shutdown);
+/// of an unchanged title/flag silent), and skips the #97/#138 globs entirely for a
+/// non-claude session (Codex, #141). Runs until the channel closes (app shutdown);
 /// an idle worker with nothing pending blocks on `recv()` rather than spinning.
-fn title_worker(title_rx: Receiver<String>, events: Sender<SessionEvent>) {
+fn title_worker(title_rx: Receiver<(String, bool)>, events: Sender<SessionEvent>) {
     let mut last: HashMap<String, String> = HashMap::new();
     let mut last_forkable: HashMap<String, bool> = HashMap::new();
-    // Pending re-read deadlines (#169): one `(Instant, id)` per burst offset. Drained
-    // as they fall due, so the set stays bounded to roughly one window's worth.
-    let mut pending: Vec<(Instant, String)> = Vec::new();
+    // Pending re-read deadlines (#169): one `(Instant, id, uses_claude_log)` per burst
+    // offset. Drained as they fall due, so the set stays bounded to roughly one
+    // window's worth.
+    let mut pending: Vec<(Instant, String, bool)> = Vec::new();
     loop {
         // Wait for the next poke, but never past the soonest pending deadline so a
         // scheduled re-read fires on time. With nothing pending, block until a poke
@@ -823,13 +881,17 @@ fn title_worker(title_rx: Receiver<String>, events: Sender<SessionEvent>) {
             None => title_rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
         };
         match poke {
-            Ok(id) => {
+            Ok((id, uses_claude_log)) => {
                 // A fresh poke restarts this session's window: drop its still-pending
                 // burst and re-enqueue the full schedule from now.
-                pending.retain(|(_, pid)| pid != &id);
+                pending.retain(|(_, pid, _)| pid != &id);
                 let now = Instant::now();
                 for off in TITLE_REREAD_OFFSETS_MS {
-                    pending.push((now + Duration::from_millis(*off), id.clone()));
+                    pending.push((
+                        now + Duration::from_millis(*off),
+                        id.clone(),
+                        uses_claude_log,
+                    ));
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
@@ -837,12 +899,13 @@ fn title_worker(title_rx: Receiver<String>, events: Sender<SessionEvent>) {
         }
         // Process (and drop) every deadline now due. Dedup ids in case several of a
         // session's offsets came due together (e.g. after a long read), so we scan
-        // its log once per pass.
+        // its log once per pass (a session's `uses_claude_log` is constant, so the
+        // tuple dedup collapses repeats cleanly).
         let now = Instant::now();
-        let mut due: Vec<String> = Vec::new();
-        pending.retain(|(at, id)| {
+        let mut due: Vec<(String, bool)> = Vec::new();
+        pending.retain(|(at, id, uses_claude_log)| {
             if *at <= now {
-                due.push(id.clone());
+                due.push((id.clone(), *uses_claude_log));
                 false
             } else {
                 true
@@ -850,8 +913,10 @@ fn title_worker(title_rx: Receiver<String>, events: Sender<SessionEvent>) {
         });
         due.sort();
         due.dedup();
-        for id in due {
-            if read_and_emit_title(&id, &events, &mut last, &mut last_forkable).is_err() {
+        for (id, uses_claude_log) in due {
+            if read_and_emit_title(&id, uses_claude_log, &events, &mut last, &mut last_forkable)
+                .is_err()
+            {
                 return; // receiver dropped (app shutting down)
             }
         }
@@ -861,28 +926,31 @@ fn title_worker(title_rx: Receiver<String>, events: Sender<SessionEvent>) {
 /// The wait until the soonest pending re-read deadline (#169), or `None` when none
 /// is pending (the worker then blocks until the next poke). `Duration::ZERO` when a
 /// deadline is already due. Pure — unit-tested.
-fn next_due_wait(pending: &[(Instant, String)], now: Instant) -> Option<Duration> {
+fn next_due_wait(pending: &[(Instant, String, bool)], now: Instant) -> Option<Duration> {
     pending
         .iter()
-        .map(|(at, _)| at.saturating_duration_since(now))
+        .map(|(at, _, _)| at.saturating_duration_since(now))
         .min()
 }
 
 /// Read a session's forkability (#138) + `ai-title` (#97) and emit the matching
 /// events only when either changed since last time — the shared body of every
-/// re-read in the #169 burst. `Err(())` signals the event receiver was dropped
-/// (app shutdown), so the worker returns. Behavior is identical to the pre-#169
-/// single read; only the cadence (how often it runs) changed.
+/// re-read in the #169 burst. `uses_claude_log` is false for a non-claude agent
+/// (Codex, #141): such a session has no app-globbable conversation, so it's never
+/// forkable and never auto-named, and **both** globs are skipped. `Err(())` signals
+/// the event receiver was dropped (app shutdown), so the worker returns.
 fn read_and_emit_title(
     id: &str,
+    uses_claude_log: bool,
     events: &Sender<SessionEvent>,
     last: &mut HashMap<String, String>,
     last_forkable: &mut HashMap<String, bool>,
 ) -> Result<(), ()> {
-    // Forkability (#138): computed every poke (independent of the title, which may be
-    // absent) and emitted only when it flips — false→true the moment the log first
-    // materializes a real turn. Same file-scan class as the title read.
-    let forkable = crate::title::has_conversation(id);
+    // Forkability (#138): for a claude session, computed every poke (independent of the
+    // title, which may be absent) and emitted only when it flips — false→true the moment
+    // the log first materializes a real turn. A non-claude session reports false without
+    // a glob (which could otherwise fail-open to true on an unreadable dir).
+    let forkable = uses_claude_log && crate::title::has_conversation(id);
     if last_forkable.get(id) != Some(&forkable) {
         last_forkable.insert(id.to_string(), forkable);
         if events
@@ -894,6 +962,11 @@ fn read_and_emit_title(
         {
             return Err(());
         }
+    }
+    // Auto-name (#97) reads claude's `ai-title` log; skip it entirely for an agent
+    // that doesn't write one (Codex keeps the branch / first-prompt label).
+    if !uses_claude_log {
+        return Ok(());
     }
     let Some(title) = crate::title::read_session_title(id) else {
         return Ok(()); // no log / no title yet (e.g. a shell terminal item) — skip
@@ -914,7 +987,28 @@ fn read_and_emit_title(
     Ok(())
 }
 
-/// Resolve `program` to an executable path via `PATH` (or a direct path).
+/// The default plain-terminal shell (#72) for the current OS: the user's `$SHELL`
+/// (fallback `/bin/zsh`) on unix; PowerShell — `pwsh.exe`, else `powershell.exe`,
+/// else `%COMSPEC%`/`cmd.exe` — on Windows.
+fn default_shell() -> String {
+    #[cfg(unix)]
+    {
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())
+    }
+    #[cfg(windows)]
+    {
+        for candidate in ["pwsh.exe", "powershell.exe"] {
+            if find_on_path(candidate).is_some() {
+                return candidate.to_string();
+            }
+        }
+        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
+    }
+}
+
+/// Resolve `program` to an executable path via `PATH` (or a direct path). Unix:
+/// the historic behavior (a `/` means a direct path; otherwise scan `PATH`).
+#[cfg(unix)]
 fn find_on_path(program: &str) -> Option<PathBuf> {
     if program.contains('/') {
         let direct = PathBuf::from(program);
@@ -927,6 +1021,86 @@ fn find_on_path(program: &str) -> Option<PathBuf> {
     })
 }
 
+/// Resolve `program` on Windows. An absolute/relative path with a separator is a
+/// direct path; a bare name is scanned over `PATH`. Either way, a name with no
+/// extension is also tried against `PATHEXT` — critically, an npm-installed
+/// `claude` is usually **`claude.cmd`** (#140).
+#[cfg(windows)]
+fn find_on_path(program: &str) -> Option<PathBuf> {
+    let resolve = |base: PathBuf| -> Option<PathBuf> {
+        if is_executable(&base) {
+            return Some(base);
+        }
+        if base.extension().is_none() {
+            return pathext().into_iter().find_map(|ext| {
+                let cand = base.with_extension(ext.trim_start_matches('.'));
+                is_executable(&cand).then_some(cand)
+            });
+        }
+        None
+    };
+    if Path::new(program).is_absolute() || program.contains(['/', '\\']) {
+        return resolve(PathBuf::from(program));
+    }
+    let paths = std::env::var_os("PATH")?;
+    std::env::split_paths(&paths).find_map(|dir| resolve(dir.join(program)))
+}
+
+/// The `PATHEXT` extensions (`.COM;.EXE;.BAT;.CMD;…`) tried when resolving a bare
+/// program name on Windows, with the documented default if it's unset.
+#[cfg(windows)]
+fn pathext() -> Vec<String> {
+    std::env::var("PATHEXT")
+        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
+        .split(';')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// How to actually launch a resolved program — the executable to run plus any
+/// prefix args before the program's own. Unix runs the bare program name (PATH is
+/// resolved by `exec`, preserving today's macOS behavior). Windows runs the
+/// **resolved** path, and routes a `.cmd`/`.bat` shim through `cmd.exe /C` because
+/// `CreateProcess` (under `portable-pty`'s ConPTY) can't execute a batch file
+/// directly — this is what lets `claude.cmd` (the npm install on Windows) launch.
+#[cfg(unix)]
+fn launch_target(program: &str, _resolved: &Path) -> (String, Vec<String>) {
+    (program.to_string(), Vec::new())
+}
+
+#[cfg(windows)]
+fn launch_target(_program: &str, resolved: &Path) -> (String, Vec<String>) {
+    let is_batch = resolved
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"))
+        .unwrap_or(false);
+    if is_batch {
+        let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+        (
+            comspec,
+            vec!["/C".to_string(), resolved.to_string_lossy().into_owned()],
+        )
+    } else {
+        (resolved.to_string_lossy().into_owned(), Vec::new())
+    }
+}
+
+/// Resolve `program` to the `(executable, prefix_args)` the OS needs to launch it,
+/// or `None` if it isn't found on `PATH`. Shares the PTY spawn's resolution (#140)
+/// — `find_on_path` + `launch_target` — so a version/presence probe
+/// (`commands::binary_version`) agrees with what actually spawns. Critically, an
+/// npm-installed `claude` on Windows is `claude.cmd`, which `Command::new("claude")`
+/// can neither find (CreateProcess appends `.exe`, never consults `PATHEXT`) nor
+/// execute directly (a batch file needs `cmd.exe /C`). Unix returns the bare program
+/// name, so a probe runs the identical command it always did (macOS unchanged).
+pub(crate) fn resolve_command(program: &str) -> Option<(String, Vec<String>)> {
+    let resolved = find_on_path(program)?;
+    Some(launch_target(program, &resolved))
+}
+
+#[cfg(unix)]
 fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     std::fs::metadata(path)
@@ -934,10 +1108,36 @@ fn is_executable(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(windows)]
+fn is_executable(path: &Path) -> bool {
+    // Windows has no Unix permission bits: an executable is a regular file whose
+    // extension is in the well-known set (a subset of PATHEXT). Resolving a *bare*
+    // program name against PATHEXT is the functional Windows port (#140) — here we
+    // only answer "is this concrete path a runnable file?", which is what
+    // `find_on_path` and the test suite need and keeps the crate compiling on Windows.
+    const EXEC_EXTS: [&str; 5] = ["exe", "cmd", "bat", "com", "ps1"];
+    std::fs::metadata(path)
+        .map(|m| m.is_file())
+        .unwrap_or(false)
+        && path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| {
+                EXEC_EXTS
+                    .iter()
+                    .any(|known| known.eq_ignore_ascii_case(ext))
+            })
+            .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::mpsc;
+    // Timing helpers are only used by the POSIX-shell integration tests below, which
+    // are `#[cfg(unix)]` (they spawn `sh`/`cat`); gate the import to match so a Windows
+    // build (where only the pure-logic tests run) stays warning-clean under `-D warnings`.
+    #[cfg(unix)]
     use std::time::{Duration, Instant};
 
     fn manager() -> (SessionManager, mpsc::Receiver<SessionEvent>) {
@@ -955,15 +1155,16 @@ mod tests {
         // Nothing pending → None (the worker blocks on recv, no busy-wait).
         assert_eq!(next_due_wait(&[], now), None);
         // Future deadlines → the wait to the soonest, regardless of vec order.
+        // The trailing bool is each session's `uses_claude_log` flag (#141).
         let pending = vec![
-            (now + Duration::from_millis(8_000), "b".to_string()),
-            (now + Duration::from_millis(1_500), "a".to_string()),
+            (now + Duration::from_millis(8_000), "b".to_string(), true),
+            (now + Duration::from_millis(1_500), "a".to_string(), false),
         ];
         let wait = next_due_wait(&pending, now).expect("a pending deadline");
         assert!(wait <= Duration::from_millis(1_500));
         assert!(wait > Duration::from_millis(1_000));
         // An already-due deadline → zero, so the worker processes it immediately.
-        let past = vec![(now - Duration::from_millis(10), "x".to_string())];
+        let past = vec![(now - Duration::from_millis(10), "x".to_string(), true)];
         assert_eq!(next_due_wait(&past, now), Some(Duration::ZERO));
     }
 
@@ -987,6 +1188,175 @@ mod tests {
     }
 
     #[test]
+    fn is_executable_rejects_missing_paths_and_directories() {
+        // A path that doesn't exist is never executable (both platforms).
+        assert!(!is_executable(Path::new(
+            "claudecue-nonexistent-binary-xyz-12345"
+        )));
+        // A directory is not an executable *file* (`is_file()` is false everywhere).
+        assert!(!is_executable(&tmp()));
+    }
+
+    #[test]
+    fn title_worker_gates_non_claude_sessions_without_a_glob() {
+        // A non-claude-log session (Codex, #141: uses_claude_log=false) must report
+        // `forkable: false` and emit **no** Name event — the #97/#138 globs are skipped.
+        let (title_tx, title_rx) = std::sync::mpsc::channel::<(String, bool)>();
+        let (ev_tx, ev_rx) = std::sync::mpsc::channel::<SessionEvent>();
+        let worker = std::thread::spawn(move || title_worker(title_rx, ev_tx));
+        title_tx.send(("codex-session".to_string(), false)).unwrap();
+        match ev_rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(SessionEvent::Forkable { id, forkable }) => {
+                assert_eq!(id, "codex-session");
+                assert!(!forkable, "a non-claude-log session is never forkable");
+            }
+            other => panic!("expected Forkable{{false}}, got {other:?}"),
+        }
+        // No Name event follows — auto-name is skipped for a non-claude-log agent.
+        assert!(ev_rx
+            .recv_timeout(std::time::Duration::from_millis(200))
+            .is_err());
+        drop(title_tx); // close the channel so the worker thread exits
+        let _ = worker.join();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn is_executable_honors_extension_on_windows() {
+        let dir = std::env::temp_dir();
+        let stamp = Uuid::new_v4();
+        let exe = dir.join(format!("claudecue-test-{stamp}.cmd"));
+        std::fs::write(&exe, b"@echo off\n").expect("write .cmd");
+        assert!(is_executable(&exe), "a .cmd file should read as runnable");
+        let data = dir.join(format!("claudecue-test-{stamp}.txt"));
+        std::fs::write(&data, b"hi").expect("write .txt");
+        assert!(
+            !is_executable(&data),
+            "a .txt file should not read as runnable"
+        );
+        let _ = std::fs::remove_file(&exe);
+        let _ = std::fs::remove_file(&data);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn is_executable_honors_mode_bits_on_unix() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("claudecue-test-{}", Uuid::new_v4()));
+        std::fs::write(&path, b"#!/bin/sh\n").expect("write");
+        let set_mode = |mode: u32| {
+            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(mode);
+            std::fs::set_permissions(&path, perms).unwrap();
+        };
+        set_mode(0o644);
+        assert!(!is_executable(&path), "no exec bit → not runnable");
+        set_mode(0o755);
+        assert!(is_executable(&path), "exec bit set → runnable");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn resolve_command_is_none_for_a_missing_binary() {
+        // The version/presence probe relies on this returning None when the CLI
+        // isn't on PATH (both platforms) — that's how `binary_version` reports a
+        // missing agent without spawning anything.
+        assert!(resolve_command("claudecue-does-not-exist-xyz-98765").is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_command_routes_a_cmd_shim_through_cmd_exe() {
+        // The npm-installed `claude.cmd` case (#140): resolving an extensionless path
+        // that has a `.cmd` sibling must yield `cmd.exe /C <path.cmd>`, so the
+        // `--version` probe matches what the PTY actually spawns.
+        let dir = std::env::temp_dir().join(format!("ccue-resolve-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("ccueprobe.cmd"), b"@echo off\n").unwrap();
+        let bare = dir.join("ccueprobe"); // absolute, no extension
+        let resolved = resolve_command(&bare.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&dir);
+        let (exe, args) = resolved.expect("a .cmd sibling should resolve");
+        assert!(exe.to_ascii_lowercase().contains("cmd"));
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], "/C");
+        assert!(args[1].to_ascii_lowercase().ends_with(".cmd"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_command_returns_the_bare_name_on_unix() {
+        // macOS preservation: a resolvable program yields its bare name + no prefix
+        // args, so `binary_version` runs the identical command it always did.
+        let (exe, args) = resolve_command("sh").expect("sh is on PATH");
+        assert_eq!(exe, "sh");
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn default_shell_is_nonempty() {
+        // $SHELL/zsh on unix, PowerShell/cmd on Windows — never empty (#140).
+        assert!(!default_shell().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn launch_target_runs_the_bare_program_on_unix() {
+        // macOS behavior is unchanged: launch by the bare name, no prefix args.
+        let (exe, args) = launch_target("claude", Path::new("/usr/local/bin/claude"));
+        assert_eq!(exe, "claude");
+        assert!(args.is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn launch_target_routes_batch_through_cmd_on_windows() {
+        // A `.cmd`/`.bat` shim (the npm-installed `claude` on Windows) must run via
+        // `cmd.exe /C`; a real `.exe` runs directly (#140).
+        let (exe, args) = launch_target("claude", Path::new("C:\\bin\\claude.cmd"));
+        assert!(exe.to_ascii_lowercase().contains("cmd"));
+        assert_eq!(
+            args,
+            vec!["/C".to_string(), "C:\\bin\\claude.cmd".to_string()]
+        );
+        let (exe2, args2) = launch_target("claude", Path::new("C:\\bin\\claude.exe"));
+        assert_eq!(exe2, "C:\\bin\\claude.exe");
+        assert!(args2.is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn pathext_includes_exe_and_cmd() {
+        let exts = pathext();
+        assert!(exts
+            .iter()
+            .any(|e| e.eq_ignore_ascii_case(".exe") || e.eq_ignore_ascii_case(".cmd")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn find_on_path_resolves_an_extensionless_path_via_pathext() {
+        // An explicit, extensionless path resolves to its `.cmd` sibling — the
+        // claude.cmd case (#140). Uses an explicit path (not PATH) so the test never
+        // mutates the global PATH env (which would race other parallel tests).
+        let dir = std::env::temp_dir().join(format!("ccue-pathext-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("ccueprog.cmd"), b"@echo off\n").unwrap();
+        let bare = dir.join("ccueprog"); // absolute, no extension
+        let found = find_on_path(&bare.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&dir);
+        let found = found.expect("extensionless path should resolve via PATHEXT");
+        // The resolved extension carries PATHEXT's case (e.g. ".CMD"); compare loosely.
+        let ext = found.extension().and_then(|e| e.to_str()).unwrap_or("");
+        assert!(
+            ext.eq_ignore_ascii_case("cmd"),
+            "resolved to a .cmd shim, got {ext}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn spawns_streams_output_and_reports_exit() {
         let (mgr, rx) = manager();
         mgr.spawn_program("sh", &["-c", "printf 'hello-from-pty'"], &tmp(), None)
@@ -1007,6 +1377,7 @@ mod tests {
         assert_eq!(exit, Some(0));
     }
 
+    #[cfg(unix)]
     #[test]
     fn stdin_is_echoed_back() {
         let (mgr, rx) = manager();
@@ -1032,6 +1403,7 @@ mod tests {
         mgr.kill_session(&info.id).expect("kill");
     }
 
+    #[cfg(unix)]
     #[test]
     fn resize_succeeds_for_live_session_and_errors_for_unknown() {
         let (mgr, _rx) = manager();
@@ -1046,6 +1418,7 @@ mod tests {
         mgr.kill_session(&info.id).expect("kill");
     }
 
+    #[cfg(unix)]
     #[test]
     fn kill_terminates_child_and_frees_slot() {
         let (mgr, _rx) = manager();
@@ -1061,6 +1434,7 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
     #[test]
     fn busy_state_tracks_output_then_goes_idle() {
         let (mgr, rx) = manager();
@@ -1089,6 +1463,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn startup_output_without_input_is_not_busy() {
         // A fresh interactive session's startup paint — output with no keystrokes
@@ -1116,6 +1491,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn output_after_input_reads_as_busy() {
         // Once the user has submitted input (#55/#116), autonomous output arriving
@@ -1148,6 +1524,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn scrollback_replays_recent_output() {
         let (mgr, _rx) = manager();
@@ -1165,6 +1542,7 @@ mod tests {
         let _ = mgr.kill_session(&info.id);
     }
 
+    #[cfg(unix)]
     #[test]
     fn typing_echo_does_not_read_as_busy() {
         // The PTY echoes keystrokes back as output; that echo must NOT be reported

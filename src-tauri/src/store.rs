@@ -585,8 +585,28 @@ impl Store {
         // Atomic write: temp file in the same dir, then rename over the target.
         let tmp = self.path.with_extension("tmp");
         fs::write(&tmp, &json)?;
-        fs::rename(&tmp, &self.path)?;
-        Ok(())
+        // `fs::rename` over an existing file is atomic on both platforms (Windows
+        // uses MOVEFILE_REPLACE_EXISTING). On Windows, though, the rename can
+        // transiently fail with "Access Denied" when antivirus / the Search indexer
+        // / a backup agent momentarily holds a handle on the target or temp file —
+        // a class of failure POSIX `rename(2)` never has. Since we persist often,
+        // retry a few times with a short backoff before giving up. macOS succeeds on
+        // the first attempt, so this never sleeps there — behavior is unchanged.
+        let mut attempt = 0;
+        loop {
+            match fs::rename(&tmp, &self.path) {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    attempt += 1;
+                    if attempt >= 5 {
+                        // Clean up the temp file so a failed write leaves no litter.
+                        let _ = fs::remove_file(&tmp);
+                        return Err(e);
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20 * attempt));
+                }
+            }
+        }
     }
 }
 

@@ -78,10 +78,10 @@ enum LogLocation {
 /// we never replicate claude's cwd→dir encoding (it maps `/` and `.` → `-`). The
 /// UUID makes the filename unique, so the first project dir that has it wins.
 fn locate_log(id: &str) -> LogLocation {
-    let Some(home) = std::env::var_os("HOME") else {
+    let Some(home) = crate::path_env::home_dir() else {
         return LogLocation::Unknown;
     };
-    let projects = PathBuf::from(home).join(".claude").join("projects");
+    let projects = home.join(".claude").join("projects");
     let file_name = format!("{id}.jsonl");
     let Ok(entries) = std::fs::read_dir(&projects) else {
         return LogLocation::Unknown;

@@ -24,11 +24,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { agentSupportsResume } from "../../agents";
 import { noAutoCapitalize } from "../../inputProps";
 import { overviewClusters, repoColor, useStore } from "../../store";
 import {
   effectiveRepo,
-  FORK_UNAVAILABLE_REASON,
+  forkUnavailableReason,
   repoName,
   sessionInFilter,
   sessionLabel,
@@ -243,10 +244,13 @@ function SessionCard({
       {session.forkedFrom && <span className={styles.worktreeBadge}>fork</span>}
     </span>
   );
-  // Fork is unavailable (#138) until the source has a real conversation turn — a
-  // never-prompted session / a just-created fork has no log to fork. Fail-open:
-  // undefined/true → available; only a confident `false` disables it.
-  const canFork = session.forkable !== false;
+  // Fork is unavailable when the agent can't fork at all (Codex, #142) or the source
+  // has no real conversation turn yet (#138, fail-open: only a confident reason
+  // disables it). The reason — Codex takes precedence — is the hover tooltip.
+  const forkReason = forkUnavailableReason(session);
+  const canFork = forkReason === null;
+  // Copy-resume (#28) only applies to agents that resume by id (#142).
+  const canResume = agentSupportsResume(session.agent);
   const actions = (
     <>
       {/* "Open view or start a session" in the agent's folder (#165/#213) — now for
@@ -258,7 +262,7 @@ function SessionCard({
         className={styles.action}
         iconSize={15}
       />
-      {/* Fork the conversation into a new parallel session (#126); gated (#138). */}
+      {/* Fork the conversation into a new parallel session (#126); gated (#138/#142). */}
       <button
         type="button"
         className={styles.action}
@@ -267,24 +271,25 @@ function SessionCard({
         }}
         aria-disabled={!canFork}
         title={
-          canFork
-            ? "Fork conversation into a new parallel session"
-            : FORK_UNAVAILABLE_REASON
+          canFork ? "Fork conversation into a new parallel session" : forkReason
         }
         aria-label="Fork conversation"
       >
         <GitFork size={15} strokeWidth={1.5} />
       </button>
-      {/* Copy `claude --resume <id>` (#28) — re-homed here post-Focus (#86). */}
-      <button
-        type="button"
-        className={styles.action}
-        onClick={onCopyResume}
-        title="Copy resume command (claude --resume <id>)"
-        aria-label="Copy resume command"
-      >
-        <Copy size={15} strokeWidth={1.5} />
-      </button>
+      {/* Copy `claude --resume <id>` (#28) — re-homed here post-Focus (#86);
+          hidden for non-resumable agents (Codex, #142). */}
+      {canResume && (
+        <button
+          type="button"
+          className={styles.action}
+          onClick={onCopyResume}
+          title="Copy resume command (claude --resume <id>)"
+          aria-label="Copy resume command"
+        >
+          <Copy size={15} strokeWidth={1.5} />
+        </button>
+      )}
       {/* Maximize into big mode (#157). */}
       <button
         type="button"
@@ -342,8 +347,9 @@ function panelLabel(panel: OverviewPanel): string {
   if (panel.kind === "diff") return "Diff";
   if (panel.kind === "filetree") return "File tree";
   if (panel.kind === "terminal") return "Terminal";
-  if (panel.kind === "kanban") return panel.file?.split("/").pop() || "Kanban";
-  return panel.file?.split("/").pop() || "File";
+  if (panel.kind === "kanban")
+    return panel.file?.split(/[\\/]/).pop() || "Kanban";
+  return panel.file?.split(/[\\/]/).pop() || "File";
 }
 
 interface ExtraPanelProps {

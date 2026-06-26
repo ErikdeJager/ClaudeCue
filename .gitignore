@@ -18,6 +18,10 @@ dist
 dist-ssr
 *.local
 
+# --- Coverage (vitest v8 / cargo-llvm-cov) ---
+coverage
+lcov.info
+
 # --- Rust / Tauri backend ---
 src-tauri/target
 src-tauri/gen/schemas

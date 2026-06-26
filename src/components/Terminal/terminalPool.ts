@@ -160,13 +160,13 @@ function createHost(sessionId: string): TerminalHost {
   }
 
   // Clickable http/https links (#109). Hover underlines a URL; the custom activate
-  // handler opens it only on a ⌘-click (event.metaKey) — a plain click is left to
-  // the terminal/TUI (drag-to-select, claude's own mouse handling). Opening goes
-  // through the backend `open_url`, which rejects any non-http(s) scheme, instead
-  // of the addon's default `window.open`. Shared by every terminal kind (agent +
-  // shell #72) since the pool owns them all.
+  // handler opens it only on a ⌘/Ctrl-click (`metaKey || ctrlKey`, #143 — Ctrl on
+  // Windows, ⌘ on macOS) — a plain click is left to the terminal/TUI (drag-to-select,
+  // claude's own mouse handling). Opening goes through the backend `open_url`, which
+  // rejects any non-http(s) scheme, instead of the addon's default `window.open`.
+  // Shared by every terminal kind (agent + shell #72) since the pool owns them all.
   const webLinks = new WebLinksAddon((event, uri) => {
-    if (event.metaKey) void openUrl(uri).catch(() => {});
+    if (event.metaKey || event.ctrlKey) void openUrl(uri).catch(() => {});
   });
   term.loadAddon(webLinks);
 

@@ -52,9 +52,10 @@ pub fn list_skills(cwd: impl AsRef<Path>) -> Vec<SkillInfo> {
     collect_skills(Some(project.as_path()), user.as_deref())
 }
 
-/// `~/.claude`, if `$HOME` is set. Dependency-free (mirrors the rest of the crate).
+/// `~/.claude`, if the home dir is resolvable (`HOME` on unix, `USERPROFILE` on
+/// Windows — #140). Dependency-free (mirrors the rest of the crate).
 fn home_claude_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".claude"))
+    crate::path_env::home_dir().map(|h| h.join(".claude"))
 }
 
 /// Core merge (factored out so tests can pass two temp `.claude` roots): scan

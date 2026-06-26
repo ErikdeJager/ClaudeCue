@@ -40,6 +40,19 @@ export interface SkillInfo {
   source: string;
 }
 
+/** Agent catalog metadata (#141/#142, from the `agent_info` command) — snake_case
+ * to match the Rust serialization. `version` is `null` when the CLI isn't installed,
+ * so it doubles as the presence check for the missing-binary screen. */
+export interface AgentInfo {
+  id: string;
+  display_name: string;
+  binary_name: string;
+  install_hint: string;
+  supports_resume: boolean;
+  supports_auto_name: boolean;
+  version: string | null;
+}
+
 /** Typed command error (mirrors `pty::SessionError`, serialized `{ kind, message }`). */
 export interface SessionError {
   kind:
@@ -48,7 +61,8 @@ export interface SessionError {
     | "Spawn"
     | "Io"
     | "Git"
-    | "NothingToFork";
+    | "NothingToFork"
+    | "ResumeUnsupported";
   message: string;
 }
 
@@ -220,6 +234,9 @@ export interface Settings {
    * save only (⌘S / the Save button). Governs every `useAutoSaveFile` consumer
    * (FileViewer raw/text + Kanban Board/Raw). */
   autoSave: boolean;
+  /** Coding-agent CLI for **newly created** sessions (#142). Existing sessions keep
+   * their recorded `agent` (#101). `"claude"` (default) or `"codex"`. */
+  defaultAgent: string;
 }
 
 // --- Canvas (#46): a recursive binary split-panel (BSP) layout tree ---

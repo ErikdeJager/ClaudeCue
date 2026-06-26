@@ -15,44 +15,76 @@
 //! env too, fixing the process PATH centrally fixes binary lookup *and* lets `claude`
 //! itself find `node` / `git` / `ripgrep`.
 
+#[cfg(unix)]
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::PathBuf;
+#[cfg(unix)]
 use std::time::Duration;
 
 /// Marker bracketing the printed value so shell-rc noise (login banners, `oh-my-zsh`
 /// update prompts, `direnv` chatter, …) can't corrupt the parsed PATH — we read only
 /// what sits between the two markers.
+#[cfg(unix)]
 const MARKER: &str = "__CLAUDECUE_PATH__";
 
 /// Hard cap on the login-shell probe so a pathological interactive rc file can never
 /// hang app startup; on timeout we fall back to the well-known dirs below.
+#[cfg(unix)]
 const PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Resolve the user's login-shell PATH and merge it into this process's PATH.
 ///
-/// Best-effort: any failure leaves PATH intact (augmented only with well-known bin
-/// dirs). Skipped in debug builds — `tauri dev` is launched from a terminal and
-/// already inherits the full PATH, so the probe would only add startup latency. The
-/// fix targets the bundled release app launched from Finder/Dock.
+/// **macOS only.** A Finder/Dock-launched `.app` inherits launchd's minimal PATH;
+/// this probes the login shell to restore it (best-effort — any failure leaves PATH
+/// intact, augmented with well-known bin dirs; skipped in debug builds). On
+/// **Windows** this is a **no-op**: GUI apps inherit the user/system PATH from the
+/// registry, so the problem doesn't exist (#140).
 ///
 /// Must run **before** any threads are spawned (env mutation isn't thread-safe);
 /// call it at the very top of `run()`.
 pub fn restore_user_path() {
-    if cfg!(debug_assertions) {
-        return;
+    #[cfg(unix)]
+    {
+        if cfg!(debug_assertions) {
+            return;
+        }
+
+        let current = std::env::var("PATH").unwrap_or_default();
+        let discovered = login_shell_path();
+        let merged = merge_paths(&current, discovered.as_deref(), &common_dirs());
+
+        if merged != current {
+            std::env::set_var("PATH", &merged);
+        }
     }
+}
 
-    let current = std::env::var("PATH").unwrap_or_default();
-    let discovered = login_shell_path();
-    let merged = merge_paths(&current, discovered.as_deref(), &common_dirs());
-
-    if merged != current {
-        std::env::set_var("PATH", &merged);
+/// The user's home directory, cross-platform: `HOME` on unix; `USERPROFILE` (then
+/// `HOMEDRIVE`+`HOMEPATH`) on Windows. Used to locate `~/.claude/...` — claude's
+/// session logs (#97/#134/#138) and user skills (#114) — on both OSes (#140).
+pub fn home_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        if let Some(profile) = std::env::var_os("USERPROFILE").filter(|p| !p.is_empty()) {
+            return Some(PathBuf::from(profile));
+        }
+        if let (Some(mut drive), Some(path)) =
+            (std::env::var_os("HOMEDRIVE"), std::env::var_os("HOMEPATH"))
+        {
+            drive.push(path);
+            return Some(PathBuf::from(drive));
+        }
+        None
+    }
+    #[cfg(unix)]
+    {
+        std::env::var_os("HOME").map(PathBuf::from)
     }
 }
 
 /// Ask the user's login shell for its PATH, bounded by [`PROBE_TIMEOUT`]. Returns
 /// `None` if the shell can't be run, times out, or prints nothing parseable.
+#[cfg(unix)]
 fn login_shell_path() -> Option<String> {
     let (tx, rx) = std::sync::mpsc::channel();
     // Run the (potentially slow) shell probe off-thread so a hung rc file can't wedge
@@ -69,6 +101,7 @@ fn login_shell_path() -> Option<String> {
 /// (`.zshrc`/`.bashrc`) — users set PATH in either, so both are needed. stdin is
 /// `/dev/null` so an interactive shell sees EOF and exits instead of blocking on
 /// input; stderr is discarded so rc warnings don't matter.
+#[cfg(unix)]
 fn login_shell_path_blocking() -> Option<String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     // `${PATH}` (braced) so the trailing marker can't be read as part of the variable
@@ -91,6 +124,7 @@ fn login_shell_path_blocking() -> Option<String> {
 }
 
 /// Pull the substring between the first two `marker`s out of `s` (trimmed, non-empty).
+#[cfg(unix)]
 fn extract_marked(s: &str, marker: &str) -> Option<String> {
     let start = s.find(marker)? + marker.len();
     let rest = &s[start..];
@@ -103,6 +137,7 @@ fn extract_marked(s: &str, marker: &str) -> Option<String> {
 /// dirs and order, matching what a terminal would give), then well-known fallback
 /// dirs (so a failed/empty probe still finds Homebrew/npm), then the existing
 /// (launchd/dev) PATH so nothing is ever dropped. Order-preserving, deduplicated.
+#[cfg(unix)]
 fn merge_paths(current: &str, discovered: Option<&str>, extra: &[String]) -> String {
     let mut seen: HashSet<&str> = HashSet::new();
     let mut out: Vec<&str> = Vec::new();
@@ -126,6 +161,7 @@ fn merge_paths(current: &str, discovered: Option<&str>, extra: &[String]) -> Str
 /// when the login-shell probe yields nothing. The probe is the real fix for
 /// version-pinned managers (nvm/asdf/fnm/volta) whose dirs can't be hardcoded; these
 /// cover the common Homebrew / npm-global / native-installer cases.
+#[cfg(unix)]
 fn common_dirs() -> Vec<String> {
     let mut dirs = vec![
         "/opt/homebrew/bin".to_string(),
@@ -133,8 +169,7 @@ fn common_dirs() -> Vec<String> {
         "/usr/local/bin".to_string(),
         "/usr/local/sbin".to_string(),
     ];
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = Path::new(&home);
+    if let Some(home) = home_dir() {
         for sub in [
             ".local/bin",      // Claude Code's native installer + pipx, etc.
             ".npm-global/bin", // a common `npm config set prefix` target
@@ -149,7 +184,8 @@ fn common_dirs() -> Vec<String> {
     dirs
 }
 
-#[cfg(test)]
+// These exercise the unix login-shell PATH probe helpers, which only exist on unix.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
@@ -205,8 +241,27 @@ mod tests {
     fn common_dirs_includes_homebrew_and_a_home_relative_dir() {
         let dirs = common_dirs();
         assert!(dirs.iter().any(|d| d == "/opt/homebrew/bin"));
+        // The home-relative dirs are joined with the platform path separator, so the
+        // `/`-style ending only holds on unix (this whole module is a macOS GUI-PATH
+        // fix; #140 no-ops it on Windows). Gate the separator-sensitive check to unix
+        // so the Windows test run — where Git Bash still sets HOME — stays green.
+        #[cfg(unix)]
         if std::env::var_os("HOME").is_some() {
             assert!(dirs.iter().any(|d| d.ends_with("/.local/bin")));
         }
+    }
+}
+
+// `home_dir` is cross-platform (HOME on unix, USERPROFILE on Windows), so its test
+// runs on both — unlike the unix-only PATH-probe tests above.
+#[cfg(test)]
+mod home_tests {
+    use super::*;
+
+    #[test]
+    fn home_dir_resolves_to_an_absolute_path() {
+        // CI/dev always has a home dir; the helper must surface it as an absolute path.
+        let home = home_dir().expect("a home directory (HOME / USERPROFILE)");
+        assert!(home.is_absolute());
     }
 }

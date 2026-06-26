@@ -7,6 +7,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
 import type {
+  AgentInfo,
   BranchList,
   CanvasNode,
   CanvasTemplate,
@@ -51,10 +52,16 @@ export async function pickFile(): Promise<string | null> {
 /** Spawn a new `claude` session in `cwd`. An optional `prompt` pre-seeds it
  * (positional, like a scheduled session #93) — used by Canvas template `new-agent`
  * blocks (#118). */
-export const spawnSession = (cwd: string, name?: string, prompt?: string) =>
+export const spawnSession = (
+  cwd: string,
+  name?: string,
+  prompt?: string,
+  agent?: string,
+) =>
   invoke<SessionRecord>("spawn_session", {
     cwd,
     name: name ?? null,
+    agent: agent ?? null,
     prompt: prompt ?? null,
   });
 
@@ -64,8 +71,16 @@ export const spawnTerminal = (cwd: string, id: string) =>
 
 /** Start an agent in an isolated git worktree for an existing `branch` of `repo`
  * (#74) — creates the app-managed worktree if absent, reuses it otherwise. */
-export const spawnWorktreeAgent = (repo: string, branch: string) =>
-  invoke<SessionRecord>("spawn_worktree_agent", { repo, branch });
+export const spawnWorktreeAgent = (
+  repo: string,
+  branch: string,
+  agent?: string,
+) =>
+  invoke<SessionRecord>("spawn_worktree_agent", {
+    repo,
+    branch,
+    agent: agent ?? null,
+  });
 
 /** Remove the worktree at `dest` from its `parent` repo (#74); `force` ignores a
  * dirty tree (a non-forced call fails on uncommitted changes — the dirty guard). */
@@ -318,11 +333,13 @@ export const spawnWorktreeAgentNewBranch = (
   repo: string,
   name: string,
   base: string,
+  agent?: string,
 ) =>
   invoke<SessionRecord>("spawn_worktree_agent_new_branch", {
     repo,
     name,
     base,
+    agent: agent ?? null,
   });
 
 /** Create a scheduled session (#93); `at` is the fire time in unix secs. Returns
@@ -338,6 +355,7 @@ export const createSchedule = (
   createBranch = false,
   base: string | null = null,
   worktree = false,
+  agent?: string,
 ) =>
   invoke<ScheduledSession>("create_schedule", {
     cwd,
@@ -348,6 +366,7 @@ export const createSchedule = (
     createBranch,
     base,
     worktree,
+    agent: agent ?? null,
   });
 
 /** All pending scheduled sessions (#93). */
@@ -412,6 +431,13 @@ export const revealFileInFinder = (path: string) =>
 /** ClaudeCue version, and claude's version (best-effort) (#100 Settings → About). */
 export const appVersion = () => invoke<string>("app_version");
 export const claudeVersion = () => invoke<string | null>("claude_version");
+/** The host OS family (#143) — "windows" / "macos" / "linux" — for OS-appropriate
+ * display labels (Finder vs Explorer, ⌘ vs Ctrl). */
+export const platform = () => invoke<string>("platform");
+/** Catalog metadata + live presence/version for an agent (#141/#142) — drives the
+ * generalized missing-binary screen (`version: null` ⇒ the CLI isn't installed). */
+export const agentInfo = (agent: string) =>
+  invoke<AgentInfo>("agent_info", { agent });
 
 /** 5-hour Claude session usage (#154). `usedPercent` is 0–100 (clamped in Rust);
  * `resetsAt` is the raw `resets_at` (an ISO-8601 string or a stringified unix

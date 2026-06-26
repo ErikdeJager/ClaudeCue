@@ -1,24 +1,49 @@
+import { agentCaps } from "./agents";
+
 /** Why Fork is unavailable for a source with no conversation yet (#138). Shown as
  * the Fork affordance's hover tooltip at all three sites, mirroring the backend
  * `SessionError::NothingToFork` message (#134) for a consistent explanation. */
 export const FORK_UNAVAILABLE_REASON =
   "Nothing to fork yet — send the agent a message first.";
 
+/** The reason Fork is unavailable for a session, or `null` when it can be forked.
+ * An agent that can't fork at all (Codex, #142) takes precedence over the
+ * "no history yet" reason (#138). The three Fork sites disable + show this tooltip. */
+export function forkUnavailableReason(session: {
+  agent?: string | null;
+  forkable?: boolean;
+}): string | null {
+  const caps = agentCaps(session.agent);
+  if (!caps.supportsResume) {
+    return `Fork isn't available for ${caps.displayName} sessions.`;
+  }
+  if (session.forkable === false) return FORK_UNAVAILABLE_REASON;
+  return null;
+}
+
+/** The last segment of a `/`- or `\`-separated path (cross-platform, #143) — so a
+ * Windows `repoPath` like `C:\foo\bar` renders as `bar`, not the whole string. */
+export function lastSegment(path: string): string {
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] ?? path;
+}
+
 /** The last path segment (folder name) of a path, for display. */
 export function repoName(path: string): string {
-  const parts = path.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? path;
+  return lastSegment(path);
 }
 
 /**
  * Split an absolute path into its parent `dir` and `base` filename (#163). Used to
  * open an out-of-repo file `/a/b/c.md` as `{ repoPath: "/a/b", file: "c.md" }`, so
  * the existing repo-confined read/write validates against the file's own directory.
- * A file directly at the filesystem root (`/c.md`) → `{ dir: "/", base: "c.md" }`;
- * a path with no slash → `{ dir: "", base: path }`.
+ * Cross-platform (#143): splits on `/` **or** `\`, so a Windows path
+ * `C:\a\b\c.md` → `{ dir: "C:\\a\\b", base: "c.md" }`. A file directly at a POSIX
+ * root (`/c.md`) → `{ dir: "/", base: "c.md" }`; a path with no separator →
+ * `{ dir: "", base: path }`.
  */
 export function splitPath(path: string): { dir: string; base: string } {
-  const i = path.lastIndexOf("/");
+  const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   if (i === -1) return { dir: "", base: path };
   if (i === 0) return { dir: "/", base: path.slice(1) };
   return { dir: path.slice(0, i), base: path.slice(i + 1) };

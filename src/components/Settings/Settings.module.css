@@ -121,6 +121,13 @@
   font-size: var(--fs-meta-sm);
 }
 
+/* Secondary explanatory line under a control (e.g. the #142 agent selector). */
+.fieldHelp {
+  color: var(--text-secondary);
+  font-size: var(--fs-meta-sm);
+  line-height: 1.4;
+}
+
 .checkRow {
   font-size: var(--fs-meta);
 }
