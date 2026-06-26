@@ -6,11 +6,12 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Pull action
-	In the context menu of a folder I want to be able to pull latest changes of a branch. Also for worktrees
 
 ## READY
 
+- [ ] #181 — "Pull" action in the repo + worktree context menus (ff-only)
+	Plan: TASK-181.md
+	Depends on: none
 
 ## DONE
 
