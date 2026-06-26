@@ -37,6 +37,21 @@ export function effectiveRepo(session: {
 }
 
 /**
+ * Whether a session is shown under the Overview repo filter (#34/#197). A `repo`
+ * filter matches a session's **effective repo** (so a repo filter includes its
+ * worktree agents, #96); a **worktree-folder** filter matches the session's actual
+ * `repoPath` (the worktree folder), so it narrows to that one worktree. `null` (no
+ * filter) shows everything.
+ */
+export function sessionInFilter(
+  session: { repoPath: string; worktreeParent?: string | null },
+  filter: string | null,
+): boolean {
+  if (!filter) return true;
+  return effectiveRepo(session) === filter || session.repoPath === filter;
+}
+
+/**
  * Unified session label rule (#67, extended by #97). The **primary** title is the
  * user's custom name when set (#57), else claude's auto-title (#97), else the
  * branch (or the folder name for a non-git folder). The **subtitle** (the branch /

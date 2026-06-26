@@ -878,6 +878,10 @@ function WorktreeHeader({
   const killAllAgents = useStore((s) => s.killAllAgents);
   const closeAllItems = useStore((s) => s.closeAllItems);
   const confirmDestructive = useStore((s) => s.settings.confirmDestructive);
+  // Click-to-filter Overview to just this worktree (#197), mirroring the repo name.
+  const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
+  const setView = useStore((s) => s.setView);
+  const isFiltered = useStore((s) => s.overviewRepoFilter === path);
   const { menu, openMenu, closeMenu } = useRowMenu();
   const [confirming, setConfirming] = useState(false);
   const close = () => {
@@ -890,7 +894,9 @@ function WorktreeHeader({
   };
   return (
     <div
-      className={compact ? styles.railWorktree : styles.worktreeHeader}
+      className={`${compact ? styles.railWorktree : styles.worktreeHeader} ${
+        !compact && isFiltered ? styles.worktreeActive : ""
+      }`}
       title={compact ? `${branch} · worktree` : path}
       onContextMenu={openMenu}
     >
@@ -904,7 +910,23 @@ function WorktreeHeader({
         role="img"
         aria-label="worktree"
       />
-      {!compact && <span className={styles.worktreeName}>{branch}</span>}
+      {/* Click the name to filter Overview to just this worktree (#197), toggling
+          off if already active — like the repo name (#34). Switches to Overview so
+          the narrowed wall is visible (matching the repo filter). */}
+      {!compact && (
+        <button
+          type="button"
+          className={styles.worktreeName}
+          onClick={() => {
+            setOverviewRepoFilter(path);
+            setView("overview");
+          }}
+          title={`Filter Overview to ${branch}`}
+          aria-pressed={isFiltered}
+        >
+          {branch}
+        </button>
+      )}
       {/* Inline "+" new session in this worktree (#196), mirroring the repo header's
           + (#127): reuses the app-managed worktree folder (ref-count++, #166). The
           click is contained so it never opens the row's context menu. Disabled when

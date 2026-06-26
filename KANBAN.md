@@ -8,9 +8,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #197 — Click a worktree to filter Overview to just that worktree
-	Plan: TASK-197.md
-	Depends on: #196
 - [ ] #198 — Schedule a session into a worktree (create at fire time, clean up on cancel)
 	Plan: TASK-198.md
 	Depends on: #199
@@ -32,3 +29,6 @@ kanban-plugin: board
 - [ ] #196 — Worktree header: icon-only marker + inline "new session" button
 	Plan: TASK-196.md
 	Depends on: none
+- [ ] #197 — Click a worktree to filter Overview to just that worktree
+	Plan: TASK-197.md
+	Depends on: #196

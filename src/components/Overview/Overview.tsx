@@ -30,6 +30,7 @@ import {
   effectiveRepo,
   FORK_UNAVAILABLE_REASON,
   repoName,
+  sessionInFilter,
   sessionLabel,
 } from "../../paths";
 import { formatFireTime } from "../../time";
@@ -592,10 +593,11 @@ function Overview() {
     return <EmptyState onNewSession={() => openNewSession()} />;
   }
 
-  // The sidebar repo filter (#34) narrows the wall to one repo's agents.
-  const shown = filter
-    ? sessions.filter((s) => effectiveRepo(s) === filter)
-    : sessions;
+  // The sidebar filter (#34/#197) narrows the wall to one repo's agents — or, when
+  // the filter is a worktree folder, to just that worktree's agents (matched by
+  // `repoPath`). `byKey` building drives rendering, so worktree agents must survive
+  // here even though the visible cluster keys come from `overviewClusters`.
+  const shown = sessions.filter((s) => sessionInFilter(s, filter));
 
   // Always group by repo: sidebar's alphabetical order (#20), agents contiguous
   // within a repo (stable by createdAt) — the default order before any drag.

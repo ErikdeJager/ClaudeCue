@@ -695,6 +695,19 @@ describe("overviewClusterKeys (#174)", () => {
     expect(ids).toEqual(["p-alpha", "s2", "s3", "p-wt"]);
   });
 
+  it("narrows to a single worktree's items when a worktree-folder filter is active (#197)", () => {
+    // Filtering on the worktree folder shows ONLY that worktree's agent + panel
+    // (s3, p-wt), not the parent's direct items (s2, p-alpha) or other repos.
+    const ids = overviewClusterKeys({
+      sessions,
+      overviewPanels,
+      overviewOrder: { "/work/alpha": ["p-alpha", "s2", "s3", "p-wt"] },
+      schedules,
+      filter: "/work/alpha/wt",
+    });
+    expect(ids).toEqual(["s3", "p-wt"]);
+  });
+
   it("drops empty clusters (an empty panel list adds no column)", () => {
     const ids = overviewClusterKeys({
       sessions: [s2],

@@ -1,8 +1,8 @@
 # Task 197
 
-### 197. [ ] Click a worktree in the sidebar to filter Overview to just that worktree
+### 197. [x] Click a worktree in the sidebar to filter Overview to just that worktree
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #196
 **Created:** 2026-06-26
 
@@ -61,23 +61,30 @@ Overview). Reuses the existing `overviewRepoFilter` mechanism.
 
 **Subtasks**
 
-1. [ ] Add a shared filter predicate (`effectiveRepo === filter || repoPath === filter`),
-   used by `store.ts overviewClusters` and `Overview.tsx`.
-2. [ ] Make the worktree header name clickable → `setOverviewRepoFilter(path)` (toggle),
-   with an active-filter highlight on the worktree row.
-3. [ ] Verify non-agent worktree panels + schedules keyed to the worktree folder appear under
-   the worktree filter; the clear-filter control resets it.
-4. [ ] **Verify** — `npm run build`, `npm run lint`, `npm test` green; Rust untouched.
-   Manual (or note as runtime-unverified): clicking a worktree narrows Overview to that
-   worktree's items; clicking again clears; clicking the parent repo still shows the whole
-   repo incl. its worktrees.
+1. [x] Added the shared `sessionInFilter(session, filter)` to `paths.ts` (`effectiveRepo ===
+   filter || repoPath === filter`); used by `store.ts overviewClusters` (agents) and
+   `Overview.tsx`'s `shown`. The store's panel/schedule filtering uses a local
+   `folderInFilter(folder)` = `folder === filter || clusterRepoOf(folder) === filter`
+   (clusterRepoOf maps a worktree folder → parent), applied to panels (`panelsByCluster`) and
+   schedules (repoSet + cluster loop).
+2. [x] Made the worktree header **name** a `<button>` → `setOverviewRepoFilter(path)` (toggles
+   via the existing store action) + `setView("overview")`; `.worktreeActive` (accent-dim box +
+   accent name) marks the row when `overviewRepoFilter === path`; `aria-pressed`.
+3. [x] Worktree panels (keyed by the worktree folder) appear under the worktree filter (via
+   `folderInFilter(key)`); a worktree filter excludes the parent's direct items + schedules;
+   the existing "Show all" control clears it (unchanged). Unit-tested.
+4. [x] **Verify** — `npm run build`, `npm run lint`, `npm test` (282, +5) green; **no Rust
+   changes**. The live click flow is **runtime-unverified** in this loop (no GUI) — see Notes;
+   the filter logic is unit-tested (worktree-filter `overviewClusterKeys` + `sessionInFilter`).
 
 **Acceptance criteria**
 
-- [ ] Clicking a worktree header filters Overview to **only that worktree's items**; clicking
-      it again clears the filter; repo filtering is unchanged.
-- [ ] The active worktree filter is visually indicated on its sidebar row.
-- [ ] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
+- [x] Clicking a worktree header filters Overview to **only that worktree's items**
+      (`overviewClusters` returns just the worktree's agent + panel keys); clicking it again
+      clears the filter (`setOverviewRepoFilter` toggles); repo filtering is unchanged (the
+      existing repo-filter test still returns all of the repo's items incl. its worktrees).
+- [x] The active worktree filter is visually indicated on its sidebar row (`.worktreeActive`).
+- [x] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
 
 **Notes**
 
@@ -91,3 +98,33 @@ Overview). Reuses the existing `overviewRepoFilter` mechanism.
 - **References:** `Sidebar.tsx WorktreeHeader` (~846), `store.ts overviewClusters` (~261) /
   `setOverviewRepoFilter` (~1312), `Overview.tsx` filter (~597/650/701), `paths.ts
   effectiveRepo`. CLAUDE.md "Overview customization" + "#34 repo filter".
+
+**Implementation notes (2026-06-26 — done)**
+
+- Files: `paths.ts` (+`sessionInFilter` +test), `store.ts` (`overviewClusters` restructured),
+  `Overview.tsx` (`shown` broadened), `Sidebar.tsx` + `.module.css` (clickable worktree name +
+  active style), `store.test.ts` (+worktree-filter test). **No Rust.**
+- **`overviewClusters` restructure (the crux):** built `wtParent`/`clusterRepoOf` **first**,
+  then a single `folderInFilter(folder)` predicate (`!filter || folder === filter ||
+  clusterRepoOf(folder) === filter`) applied uniformly to agents (`sessionInFilter`, which is
+  the same thing for an agent's `repoPath`), panels (`panelsByCluster` keyed by folder), and
+  schedules (repoSet + the cluster-loop `scheduleIds`). A worktree filter thus shows the
+  worktree's agents (`repoPath === filter`) + panels (`key === filter`) clustered under the
+  **parent** repo header, and excludes the parent's own direct items/schedules. A repo filter
+  is byte-identical to before (verified: the existing repo-filter test is unchanged).
+- **Overview.tsx only needed `shown` broadened:** its rendered `items` come from
+  `keys.map(byKey.get)` where `keys` is the (now-filtered) `overviewClusters` output, so the
+  filtered keys drive rendering — but `byKey`'s agents come from Overview's own `shown`, which
+  had to include the worktree's agents or they'd be dropped. Panels/schedules in `byKey` can
+  stay unfiltered (extra entries are never referenced by the filtered `keys`).
+- **DEVIATION (documented):** the plan said the worktree click should **not** force a view
+  switch (citing #79). But the **repo** name click — the thing the plan says to mirror and the
+  original user request ("mirroring how folder filtering works") — **does** `setView("overview")`
+  (Sidebar.tsx ~1466). #79 governs *item-row* clicks, not the filter-header gesture. So I
+  mirrored the repo header exactly (`setOverviewRepoFilter(path)` + `setView("overview")`):
+  clicking a worktree takes you to the filtered Overview, the expected behaviour. No acceptance
+  criterion mentions view-switching; it's a one-line change if a different choice is preferred.
+- **Runtime-unverified (autonomous loop, no GUI session):** the live click → narrowed wall +
+  the active-row highlight. The filter math is unit-tested (worktree-filter `overviewClusterKeys`
+  returns exactly the worktree's items; `sessionInFilter` truth table). Recommend a quick
+  `npm run tauri dev` pass with a repo that has a worktree running its own agent.

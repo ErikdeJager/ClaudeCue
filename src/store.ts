@@ -26,7 +26,7 @@ import { defaultBoard } from "./components/Kanban/kanbanOps";
 import { applyTerminalSettings } from "./components/Terminal/terminalPool";
 import * as ipc from "./ipc";
 import { emitSessionOutput } from "./outputBus";
-import { effectiveRepo, repoName } from "./paths";
+import { effectiveRepo, repoName, sessionInFilter } from "./paths";
 import * as updater from "./updater";
 import { DETACHED_CANVAS_ID, IS_MAIN_WINDOW } from "./windowContext";
 import type {
@@ -269,8 +269,10 @@ export function adjacentId(
  * column (diff / markdown / terminal / kanban / filetree panels and pending
  * schedule cards). Pure.
  *
- * Replicates the wall's grouping: filter to one repo when `filter` is set
- * (`effectiveRepo(s) === filter`); group sessions by `effectiveRepo` (#96) so a
+ * Replicates the wall's grouping: filter to one folder when `filter` is set — a
+ * repo (matches `effectiveRepo`, incl. its worktree items) or a single **worktree**
+ * folder (matches the item's own folder, #197); group sessions by `effectiveRepo`
+ * (#96) so a
  * worktree agent clusters under its parent repo; attribute each panel to its
  * cluster (a worktree-keyed panel → its parent, #164); include repos that have only
  * panels or only schedules; sort repos by `repoName` (lowercased) then path; and
@@ -286,10 +288,23 @@ export function overviewClusters(input: {
 }): { repo: string; keys: string[] }[] {
   const { sessions, overviewPanels, overviewOrder, schedules, filter } = input;
 
-  // The sidebar repo filter (#34) narrows the wall to one repo's agents.
-  const shown = filter
-    ? sessions.filter((s) => effectiveRepo(s) === filter)
-    : sessions;
+  // A worktree agent's panels are keyed by the worktree folder (#164) but cluster
+  // under the worktree's **parent** repo (#96). Built first so the filter predicate
+  // can map a worktree folder to its parent.
+  const wtParent = new Map<string, string>();
+  for (const s of sessions) {
+    if (s.worktreeParent) wtParent.set(s.repoPath, s.worktreeParent);
+  }
+  const clusterRepoOf = (path: string) => wtParent.get(path) ?? path;
+  // The sidebar filter (#34/#197): an item's **folder** is shown when it equals the
+  // filter (a worktree-folder filter → only that worktree) or its cluster repo does
+  // (a repo filter → that repo + its worktree items). `null` shows everything.
+  const folderInFilter = (folder: string) =>
+    !filter || folder === filter || clusterRepoOf(folder) === filter;
+
+  // Narrow agents by the filter (a worktree filter matches `repoPath`, a repo filter
+  // the effective repo, #197).
+  const shown = sessions.filter((s) => sessionInFilter(s, filter));
   // Group by effective repo (#96), agents contiguous within a repo (stable by
   // createdAt) — the default order before any drag.
   const ordered = [...shown].sort((a, b) => {
@@ -304,16 +319,9 @@ export function overviewClusters(input: {
     return a.createdAt - b.createdAt;
   });
 
-  // A worktree agent's panels are keyed by the worktree folder (#164) but cluster
-  // under the worktree's **parent** repo (#96).
-  const wtParent = new Map<string, string>();
-  for (const s of sessions) {
-    if (s.worktreeParent) wtParent.set(s.repoPath, s.worktreeParent);
-  }
-  const clusterRepoOf = (path: string) => wtParent.get(path) ?? path;
   const panelsByCluster = new Map<string, string[]>();
   for (const [key, list] of Object.entries(overviewPanels)) {
-    if (list.length === 0) continue;
+    if (list.length === 0 || !folderInFilter(key)) continue;
     const parent = clusterRepoOf(key);
     const arr = panelsByCluster.get(parent) ?? [];
     for (const p of list) arr.push(p.id);
@@ -321,14 +329,14 @@ export function overviewClusters(input: {
   }
 
   // Repos to render: those with agents, plus those with extra panels or pending
-  // schedules (respecting the filter).
+  // schedules (already filter-narrowed above / below).
   const repoSet = new Set<string>();
   for (const s of ordered) repoSet.add(effectiveRepo(s));
   for (const [parent, ids] of panelsByCluster) {
-    if (ids.length > 0 && (!filter || parent === filter)) repoSet.add(parent);
+    if (ids.length > 0) repoSet.add(parent);
   }
   for (const sc of schedules) {
-    if (!filter || sc.cwd === filter) repoSet.add(sc.cwd);
+    if (folderInFilter(sc.cwd)) repoSet.add(sc.cwd);
   }
   const repoList = [...repoSet].sort((a, b) => {
     const byName = repoName(a)
@@ -346,7 +354,7 @@ export function overviewClusters(input: {
       .map((s) => s.id);
     const panelIds = panelsByCluster.get(repo) ?? [];
     const scheduleIds = schedules
-      .filter((sc) => sc.cwd === repo)
+      .filter((sc) => sc.cwd === repo && folderInFilter(sc.cwd))
       .map((sc) => sc.id);
     const defaultKeys = [...agentIds, ...panelIds, ...scheduleIds];
     if (defaultKeys.length === 0) continue; // drop empty clusters
