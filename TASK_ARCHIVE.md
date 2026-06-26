@@ -2328,3 +2328,49 @@ Frontend-only, no Rust change, no `terminalPool.ts` / FitAddon / PTY-sizing chan
 
 ---
 
+### 179. [x] Show hidden (dot-prefixed) folders in the file tree and pickers
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+Folders whose name starts with `.` were invisible everywhere the app lists repo files — the
+**File tree** panel (#167), the searchable **File picker** (#56), the **File switcher** (#90), the
+repo **Views** menu's file listing, and the template `open-file` picker — so `.claude/` (skills,
+commands, settings), `.github/`, `.vscode/`, etc. and everything inside them never appeared and
+couldn't be browsed to or opened. The cause was a single backend filter.
+
+**What shipped** (commit `d02b437`, 2026-06-26)
+
+- **`src-tauri/src/files.rs` `collect()`:** dropped the blanket `name.starts_with('.')` directory
+  skip, keeping only the `SKIP_DIRS.contains(...)` heavy/vendored filter
+  (`node_modules`, `target`, `dist`, `build`, `vendor`, `out`, `.next`). Dot-folders — `.claude`,
+  `.github`, and **`.git`** — are now traversed and listed by the single `list_files` command.
+- **No frontend change:** every file-listing surface routes through `list_files`, and the pure
+  `buildFileTree` (`src/components/FileTree/buildFileTree.ts`) does no dotfile filtering — so the
+  one backend edit fixes all surfaces at once.
+- Doc comments (module header / `list_files` / the inline `collect` comment) updated to stop
+  claiming hidden dirs are excluded, and the `lists_text_files_excluding_heavy_dirs_and_binaries`
+  test rewritten to assert `.git/config` and `.claude/skills/foo/SKILL.md` **are** listed while
+  `node_modules/*` and `*.png` remain excluded.
+
+**Key files touched:** `src-tauri/src/files.rs` only (the `collect()` guard, doc comments, and one
+unit test). Backend-only, no frontend or other module change.
+
+**Notes**
+
+- Refine decision (2026-06-26): un-hide **all** dot-folders **including `.git`** — the user was shown
+  and accepted the tradeoff that `.git`'s internals (objects/refs/hooks) get listed and may crowd the
+  500-file `LIST_CAP`. So `.git` is intentionally **not** in `SKIP_DIRS`, and `LIST_CAP` (500) /
+  `MAX_DEPTH` (8) were left unchanged; re-excluding only `.git/objects` or raising the cap is a
+  potential follow-up, not part of this task.
+- Dot-prefixed **files** at the repo root (`.gitignore`, `.env`, `.prettierrc.json`) were already
+  listed (`is_listable()` filters only by extension), so this task was purely about dot-**directories**.
+- `cargo test` (73 tests) and `npm run lint:rust` (clippy) pass. The in-app manual check (File tree
+  showing/expanding `.claude`, opening a file under it) was **not** runtime-verified in the headless
+  loop; the backend change alone is sufficient since all surfaces share `list_files`.
+
+---
+
