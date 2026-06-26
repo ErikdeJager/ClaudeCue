@@ -3037,3 +3037,87 @@ panelTypes.ts,panelTypes.test.ts}`; `src/store.ts` (state + open/close actions);
 
 ---
 
+### 190. [x] Auto-update skeleton: gated release pipeline + in-app update UI (keys deferred)
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+Stand up the **foundation** for in-app auto-update so it's ready to switch on once a real
+Tauri signing keypair is generated (a later task) — re-introducing the mechanism **#62
+removed** (the #15 Tauri-updater), rebuilt **more completely** (gated pipeline + richer UI)
+and **without committing a real key**. This **deliberately reverses** the v1 "no in-app
+auto-update and no release pipeline" rule (#62); Apple code-signing/notarization stays out of
+scope (the updater uses **minisign**, its own deferred keypair).
+
+**What shipped** (commit `1cf9064`, 2026-06-26) — **full-stack** (frontend + Rust + CI + docs):
+
+- **Release pipeline** (`.github/workflows/release.yml`): on push to `main`, a `check` job
+  emits two outputs — a **version-bump** guard (config version > latest `v*` tag) and a
+  **signing-secret-present** guard (`has_key` from `[ -n "$SIGNING_KEY" ]`, since Actions
+  can't read `secrets.*` in a job-level `if:` and never echoes the secret). The `release` job
+  runs only when **both** are true (builds a universal macOS bundle + a **draft** release with
+  updater artifacts via `tauri-action`); otherwise it logs a `::notice::` and the run ends
+  green. So with **no key configured today the pipeline no-ops**, and adding the secret later
+  activates it with zero further code changes.
+- **Updater + process plugins re-wired** — JS `@tauri-apps/plugin-updater` +
+  `@tauri-apps/plugin-process`; Rust `tauri-plugin-updater` + `tauri-plugin-process` inited in
+  `lib.rs`; `capabilities/default.json` grants `updater:default` + `process:allow-restart`;
+  `tauri.conf.json` gets a `plugins.updater` block (GitHub `latest.json` endpoint + a
+  **placeholder pubkey** = the #15 public key, a valid minisign format so `tauri-build`
+  validates). **`createUpdaterArtifacts` stays OFF** so a local `tauri build` keeps producing
+  an unsigned `.app`/`.dmg` with no key — a hard build-safety requirement.
+- **`src/updater.ts`** wraps the plugin: `checkForUpdate()` (returns `{version}|null`, holds
+  the non-serializable `Update` module-side like the outputBus pattern) and
+  `downloadAndRelaunch(onProgress)` (forwards `Started`/`Progress`/`Finished` to a 0–100
+  callback, then `relaunch()`).
+- **Store `update` slice** (`status`/`version`/`progress`/`error`/`confirming`) +
+  `checkForUpdate`/`openUpdateConfirm`/`cancelUpdate`/`installUpdate` + a `setUpdateState`
+  escape hatch so the mock (#193) can drive every state without a real release. Boot calls
+  `checkForUpdate` best-effort (null today).
+- **UI:** `UpdateIndicator` in the sidebar footer **above the Settings gear** (hidden when
+  idle, clickable when available, collapses to its icon in the #168 rail) → `UpdateModal`
+  confirm dialog → OK → a **full-window input-blocking overlay** (`--scrim`, no dismiss) with
+  a **progress bar** bound to `update.progress` → `relaunch()`.
+- **Post-update toast:** a dedicated Rust scalar **`last_version`** (mirroring `sidebar_width`,
+  so the Settings draft can't clobber it) compared to the running `app_version()` on boot via
+  the pure unit-tested `versionIncreased()` (numeric semver; a downgrade/no-change doesn't
+  toast); a new **`"success"` toast tone** (`--status-done` green) carries "Updated to v<new>".
+- **Docs:** CLAUDE.md "Builds & distribution" + README updated to **reverse the #62 note** and
+  describe the deferred-key skeleton.
+
+**Key files touched:** new `.github/workflows/release.yml`, `src/updater.ts`,
+`src/components/Update/{UpdateIndicator.tsx,UpdateModal.tsx,Update.module.css}`; `package.json`,
+`src-tauri/Cargo.toml`, `src-tauri/src/{lib.rs,commands.rs,store.rs}`,
+`src-tauri/capabilities/default.json`, `src-tauri/tauri.conf.json`; `src/store.ts` (+ slice,
+`last_version`, boot toast) + `src/store.test.ts`, `src/ipc.ts`, `src/App.tsx`,
+`src/components/Sidebar/Sidebar.tsx`, `src/components/Toaster/*`, `src/types/index.ts`;
+`CLAUDE.md`, `README.md`.
+
+**Dependencies:** none — this is the **foundation** of the auto-update group; #191 (settings
+Updates section), #192 (patch notes), and #193 (dev mock) all depend on it. Reference: git
+`24791c4` (#15 add) / `11559ec`,`0e828c2` (#62 removal).
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** the user wasn't responding; decisions logged in
+  `ASSUMPTIONS.md` — reuse #15's removed impl as the base, rebuilt richer; keys deferred →
+  placeholder pubkey + `createUpdaterArtifacts` off (local unsigned builds keep working); the
+  pipeline guards on **both** a version bump and the signing secret; a later "provide signing
+  key" task only needs to generate the keypair, bake the real pubkey, flip
+  `createUpdaterArtifacts`, and add the `TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]` secrets — no
+  other code change.
+- **Inert today, mock-drivable:** `checkForUpdate` returns null (placeholder pubkey, no signed
+  release) so the indicator stays hidden; #193's mock uses `setUpdateState` to exercise
+  indicator → confirm → install/progress → error.
+- **Runtime-unverified** in this loop: a full `npm run tauri build` release bundle (heavy +
+  headless — `cargo build` already parses/validates the updater config via `tauri-build`, and
+  `createUpdaterArtifacts` is off so the unsigned build is safe), plus the live indicator/modal
+  render + real download/relaunch (no signed release exists — that's #193 / a real release).
+  `npm run build`, `npm run lint`, `npm test` (262), `cargo build`, `cargo test` (83), clippy,
+  `cargo fmt`, prettier all green.
+
+---
+
