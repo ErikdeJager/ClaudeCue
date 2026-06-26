@@ -162,12 +162,15 @@ function SortableCard({
         >
           <GripVertical size={13} strokeWidth={1.5} />
         </button>
-        <Checkbox
-          checked={card.checked}
-          onChange={onToggle}
-          ariaLabel="Card done"
-          className={styles.cardCheck}
-        />
+        {/* A plain-bullet card (#194, `checked === null`) renders no checkbox. */}
+        {card.checked !== null && (
+          <Checkbox
+            checked={card.checked}
+            onChange={onToggle}
+            ariaLabel="Card done"
+            className={styles.cardCheck}
+          />
+        )}
         {editing ? (
           <input
             className={styles.cardTitleInput}
@@ -271,12 +274,15 @@ function CardPreview({ card }: { card: Card }) {
         <span className={styles.cardGrip} aria-hidden>
           <GripVertical size={13} strokeWidth={1.5} />
         </span>
-        <Checkbox
-          checked={card.checked}
-          onChange={() => {}}
-          ariaLabel="Card done"
-          className={styles.cardCheck}
-        />
+        {/* A plain-bullet card (#194, `checked === null`) renders no checkbox. */}
+        {card.checked !== null && (
+          <Checkbox
+            checked={card.checked}
+            onChange={() => {}}
+            ariaLabel="Card done"
+            className={styles.cardCheck}
+          />
+        )}
         <span className={styles.cardTitle}>
           {card.title.trim() || (
             <span className={styles.untitled}>Untitled</span>

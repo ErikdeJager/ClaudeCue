@@ -142,6 +142,61 @@ describe("kanban parseBoard / serializeBoard (#141)", () => {
     expect(parseBoard(serializeBoard(board))).toEqual(board);
   });
 
+  it("parses a plain `- bullet` as a no-checkbox card (#194)", () => {
+    const board = parseBoard(
+      "## C\n\n- plain bullet\n- [ ] open\n- [x] done\n",
+    );
+    expect(board.columns[0]?.cards).toEqual([
+      { title: "plain bullet", body: "", checked: null },
+      { title: "open", body: "", checked: false },
+      { title: "done", body: "", checked: true },
+    ]);
+  });
+
+  it("keeps a plain bullet's indented body (#194)", () => {
+    const board = parseBoard("## C\n\n- plain\n\tbody line\n\t#tag\n");
+    expect(board.columns[0]?.cards[0]).toEqual({
+      title: "plain",
+      body: "body line\n#tag",
+      checked: null,
+    });
+  });
+
+  it("round-trips plain bullets byte-for-byte, mixed with checkbox cards (#194)", () => {
+    // `- title` ⇄ {checked:null}; alongside `- [ ]`/`- [x]`, with bodies and a bare
+    // `- ` empty-title bullet — the serialized text must be a fixed point.
+    const md =
+      "## C\n\n- plain\n- [ ] open\n- [x] done\n- with body\n\tdetails #tag\n- \n";
+    expect(serializeBoard(parseBoard(md))).toBe(md);
+    // And the model is exactly what we expect.
+    expect(parseBoard(md).columns[0]?.cards).toEqual([
+      { title: "plain", body: "", checked: null },
+      { title: "open", body: "", checked: false },
+      { title: "done", body: "", checked: true },
+      { title: "with body", body: "details #tag", checked: null },
+      { title: "", body: "", checked: null }, // bare `- ` → empty plain card
+    ]);
+  });
+
+  it("model with null-checked cards round-trips deep-equal (#194)", () => {
+    const board: Board = {
+      frontmatter: FM,
+      columns: [
+        {
+          name: "Mixed",
+          complete: false,
+          cards: [
+            { title: "plain", body: "", checked: null },
+            { title: "open", body: "x\ny", checked: false },
+            { title: "done", body: "", checked: true },
+          ],
+        },
+      ],
+      settingsBlock: null,
+    };
+    expect(parseBoard(serializeBoard(board))).toEqual(board);
+  });
+
   it("serializes a board with no frontmatter or settings block", () => {
     const md = serializeBoard({
       frontmatter: null,

@@ -1,8 +1,8 @@
 # Task 194
 
-### 194. [ ] Kanban: optional card checkbox — render plain `- bullet` lines as cards
+### 194. [x] Kanban: optional card checkbox — render plain `- bullet` lines as cards
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 
@@ -70,29 +70,35 @@ plain bullets as cards.
 
 **Subtasks**
 
-1. [ ] `kanban.ts`: `Card.checked: boolean | null`; add `PLAIN_CARD_RE` + the plain-bullet
-   branch in `parseBoard` (after `CARD_RE`); serialize `null` → `- title`.
-2. [ ] `kanban.test.ts`: parse `- plain` → a card with `checked: null`; **round-trip**
-   `- plain` (and a mix of `- [ ]`, `- [x]`, `- plain` in one column, with bodies) is
-   byte-stable; a plain bullet with an indented body keeps its body.
-3. [ ] `KanbanPanel.tsx`: render a `checked === null` card **without** a checkbox and without
-   `cardDone`, at both render sites; verify it's still draggable/editable/deletable.
-4. [ ] `kanbanOps.ts`: confirm `addCard` defaults to `false`; move/edit/delete preserve
-   `checked` (incl. `null`); add/adjust `kanbanOps.test.ts` as needed.
-5. [ ] **Verify** — `npm run build`, `npm run lint`, `npm test` (incl. the new round-trip
-   tests) green; Rust untouched. Manual (or note): a `.md` board with a plain `- bullet`
-   under a column shows it as a card; editing other cards and saving doesn't drop it; the raw
-   round-trip is unchanged.
+1. [x] `kanban.ts`: `Card.checked: boolean | null` (+ doc); `PLAIN_CARD_RE = /^- (.*)$/` + a
+   plain-bullet branch in `parseBoard` **after** `CARD_RE`; `serializeBoard` emits `null` →
+   `- ${title}` (else `- [ ] `/`- [x] `).
+2. [x] `kanban.test.ts` (+4 tests): parse `- plain` → `checked: null`; a plain bullet keeps an
+   indented body; **byte-stable round-trip** of a column mixing `- plain`, `- [ ]`, `- [x]`, a
+   bodied plain bullet, and a bare `- ` empty-title card; a null-checked model round-trips
+   deep-equal.
+3. [x] `KanbanPanel.tsx`: both render sites omit `<Checkbox>` when `checked === null` (the
+   `cardDone` class already no-ops on the falsy `null`); the grip/drag listeners, title edit,
+   and delete button are untouched, so a plain card stays draggable/editable/deletable.
+4. [x] `kanbanOps.ts`: `newCard` still defaults `checked: false`; `toggleCard` guards `null`
+   (stays `null`, never `true`); `move`/`update`/`delete` already preserve `checked` as-is.
+   `kanbanOps.test.ts` +3 tests (newCard default, toggle-null no-op, move preserves null).
+5. [x] **Verify** — `npm run build`, `npm run lint`, `npm test` (277, +7) green; **no Rust
+   changes**. The live `.md`-board render is **runtime-unverified** in this loop (no GUI), but
+   the lossless round-trip — the disappearing-card bug's fix — is unit-tested; see Notes.
 
 **Acceptance criteria**
 
-- [ ] A plain `- bullet` line under a column **renders as a card** (no checkbox) instead of
-      disappearing.
-- [ ] `parseBoard` → `serializeBoard` **round-trips a plain bullet byte-for-byte** as
-      `- title` (covered by a unit test), alongside `- [ ]`/`- [x]` cards.
-- [ ] A no-checkbox card is draggable / editable / deletable like any other; UI-created cards
-      still get a `- [ ]` checkbox.
-- [ ] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
+- [x] A plain `- bullet` line under a column **renders as a card** (no checkbox) instead of
+      disappearing — `parseBoard` now keeps it (`checked: null`) and `KanbanPanel` renders it
+      without a checkbox.
+- [x] `parseBoard` → `serializeBoard` **round-trips a plain bullet byte-for-byte** as
+      `- title` (unit-tested), alongside `- [ ]`/`- [x]` cards (existing round-trips
+      unaffected — checkbox serialization is byte-identical).
+- [x] A no-checkbox card is draggable / editable / deletable like any other (only the checkbox
+      is omitted; all other card chrome is unchanged); UI-created cards still get a `- [ ]`
+      checkbox (`newCard` → `checked: false`).
+- [x] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
 
 **Notes**
 
@@ -112,3 +118,23 @@ plain bullets as cards.
   ~145–163, `Card` ~20); `KanbanPanel.tsx` (`<Checkbox checked={card.checked}>` ~165/274,
   `cardDone` ~149/267); `kanbanOps.ts` (`addCard`/`toggleCard`/`moveCard`). CLAUDE.md
   "markdown Kanban board (#141…)".
+
+**Implementation notes (2026-06-26 — done)**
+
+- Implemented exactly as the tri-state plan: `Card.checked: boolean | null` (`null` = plain
+  bullet). Files: `kanban.ts`, `kanban.test.ts`, `kanbanOps.ts`, `kanbanOps.test.ts`,
+  `KanbanPanel.tsx`. **No Rust changes.**
+- **`cardDone` needed no change:** `card.checked ? styles.cardDone : ""` already evaluates
+  `null` as falsy → no `cardDone`, exactly the desired behaviour; only the `<Checkbox>` (whose
+  prop is strictly `boolean`) had to be conditionally omitted (`{card.checked !== null && …}`).
+- **Bare `- ` round-trips:** a dash-space-only line parses to `{title:"", checked:null}` and
+  serializes back to `- ` — covered in the mixed round-trip test, so even an empty plain
+  bullet is lossless.
+- **`toggleCard` null guard** is defensive only (a `null` card renders no checkbox, so the
+  toggle is UI-unreachable) — but it keeps `null` as `null` rather than `!null === true`,
+  preventing a future bug if a caller ever toggles one.
+- **Runtime-unverified (autonomous loop, no GUI session):** the live render of a plain-bullet
+  card and its drag/edit/delete. The fix's core — the parse/serialize round-trip that stops
+  the card from being dropped — is unit-tested (7 new cases); the render change is a minimal,
+  type-checked checkbox omission that leaves the grip/edit/delete chrome intact. Recommend a
+  quick `npm run tauri dev` pass opening a `.md` board with a `- plain` bullet.

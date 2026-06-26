@@ -77,8 +77,12 @@ export function toggleCard(
 ): Board {
   return replaceColumn(board, colIdx, (c) => ({
     ...c,
+    // A plain-bullet card (#194, `checked === null`) renders no checkbox, so it's
+    // unreachable from the UI; guard anyway so `null` stays `null` (never `true`).
     cards: c.cards.map((cd, i) =>
-      i === cardIdx ? { ...cd, checked: !cd.checked } : cd,
+      i === cardIdx
+        ? { ...cd, checked: cd.checked === null ? null : !cd.checked }
+        : cd,
     ),
   }));
 }

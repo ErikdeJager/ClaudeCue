@@ -66,6 +66,31 @@ describe("kanbanOps card mutations (#143)", () => {
     expect(toggleCard(board(), 1, 0).columns[1]?.cards[0]?.checked).toBe(false);
   });
 
+  it("addCard (newCard) defaults to a `- [ ]` checkbox card (#194)", () => {
+    expect(newCard("X").checked).toBe(false);
+  });
+
+  it("toggleCard leaves a plain-bullet card unchecked-less (#194)", () => {
+    // A `checked: null` card has no checkbox in the UI, so this is unreachable —
+    // but the guard keeps `null` as `null` rather than turning it into `true`.
+    const b = addCard(board(), 0, { title: "P", body: "", checked: null });
+    const plainIdx = 2;
+    expect(
+      toggleCard(b, 0, plainIdx).columns[0]?.cards[plainIdx]?.checked,
+    ).toBeNull();
+  });
+
+  it("moveCard preserves a plain-bullet card's null checked (#194)", () => {
+    const b = addCard(board(), 0, { title: "P", body: "", checked: null });
+    // Move the plain card (index 2) from To Do → Done.
+    const moved = moveCard(b, 0, 2, 1, 0);
+    expect(moved.columns[1]?.cards[0]).toEqual({
+      title: "P",
+      body: "",
+      checked: null,
+    });
+  });
+
   it("moveCard reorders within a column (arrayMove semantics)", () => {
     expect(titles(moveCard(board(), 0, 0, 0, 1), 0)).toEqual(["B", "A"]);
   });

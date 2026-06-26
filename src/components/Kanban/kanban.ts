@@ -16,13 +16,14 @@
 //! markdown (tags / dates / links / any formatting the user writes); the engine
 //! does NOT model those as structured fields, it preserves them verbatim.
 
-/** A single card — a checklist item plus its raw markdown body. */
+/** A single card — a list item plus its raw markdown body. */
 export interface Card {
   title: string;
   /** Raw markdown under the card (verbatim, dedented one level). May be empty. */
   body: string;
-  /** `- [x]` (done) vs `- [ ]`. */
-  checked: boolean;
+  /** Checkbox state (#194): `null` = a plain bullet (`- title`, no checkbox),
+   * `false` = `- [ ]` (open), `true` = `- [x]` (done). */
+  checked: boolean | null;
 }
 
 /** A column (status lane) — a `## Heading` and its cards. */
@@ -47,6 +48,9 @@ const SETTINGS_MARKER = "%% kanban:settings";
 
 /** `- [ ] title` / `- [x] title` (one optional space after the bracket). */
 const CARD_RE = /^- \[([ xX])\] ?(.*)$/;
+/** A plain `- bullet` card with no checkbox (#194) — tried **after** `CARD_RE`, so
+ * `- [ ]`/`- [x]` still parse as checkbox cards. A bare `- ` → an empty-title card. */
+const PLAIN_CARD_RE = /^- (.*)$/;
 /** `## Column name`. */
 const HEADING_RE = /^##\s+(.+?)\s*$/;
 
@@ -80,8 +84,11 @@ export function parseBoard(md: string): Board {
   // 3) Columns + cards.
   const columns: Column[] = [];
   let col: Column | null = null;
-  let card: { title: string; bodyLines: string[]; checked: boolean } | null =
-    null;
+  let card: {
+    title: string;
+    bodyLines: string[];
+    checked: boolean | null;
+  } | null = null;
 
   const flushCard = () => {
     if (col && card) {
@@ -128,6 +135,15 @@ export function parseBoard(md: string): Board {
       };
       continue;
     }
+    // A plain `- bullet` (no checkbox, #194) is a card with `checked: null`. Tried
+    // after CARD_RE so `- [ ]`/`- [x]` stay checkbox cards; its body attaches the
+    // same way (indented continuation lines), so it's lossless on round-trip.
+    const p = line.match(PLAIN_CARD_RE);
+    if (p) {
+      flushCard();
+      card = { title: p[1] ?? "", bodyLines: [], checked: null };
+      continue;
+    }
     // Blank line or unrecognized content ends the current card's body grouping.
     flushCard();
   }
@@ -150,7 +166,10 @@ export function serializeBoard(board: Board): string {
     const lines: string[] = [`## ${col.name}`, ""];
     if (col.complete) lines.push("**Complete**", "");
     for (const card of col.cards) {
-      lines.push(`- [${card.checked ? "x" : " "}] ${card.title}`);
+      // `null` → a plain `- title` bullet (no checkbox, #194); else `- [ ] `/`- [x] `.
+      const prefix =
+        card.checked === null ? "- " : `- [${card.checked ? "x" : " "}] `;
+      lines.push(`${prefix}${card.title}`);
       if (card.body) {
         for (const bl of card.body.split("\n")) lines.push(`\t${bl}`);
       }
