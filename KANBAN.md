@@ -6,11 +6,14 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Remote branches not visable
-	Inside the modal to start a new agent, branches on the remote are not visable. You have to ensure that remote branches are shown at a seperate header, selecting one will pull it locally
+- [ ] Pull action
+	In the context menu of a folder I want to be able to pull latest changes of a branch. Also for worktrees
 
 ## READY
 
+- [ ] #180 — Show remote branches in the new-agent branch picker (auto-fetch + pull-on-select)
+	Plan: TASK-180.md
+	Depends on: none
 
 ## DONE
 
