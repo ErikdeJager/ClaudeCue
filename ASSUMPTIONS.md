@@ -44,3 +44,28 @@ judgment with "see if this … has good UX"):
 - **10% min-size floor accepted as-is:** equal area past ~10 panels in one nesting chain
   can't dip below each Panel's `minSize="10%"`; the library clamps. No special handling —
   fine for typical 2–6 panel canvases.
+
+---
+
+## TASK-187 — "Save current canvas as template"
+
+- **Trigger = a new item in the existing ▾ Templates menu** ("Save current canvas as
+  template…"), not a separate toolbar button. Most consistent with "New template…".
+- **Live→block mapping reuses the registry's `liveKind`** (reverse lookup, single source of
+  truth) and **reuses each leaf's existing id** so the mapper stays pure/deterministic (no
+  `crypto.randomUUID`; the editor deep-clones on open and instantiation reassigns ids).
+  Split `dir` + `sizes` preserved.
+- **Agent blocks carry the custom session name only** — not the auto-title (#97, not a
+  deliberate label) and **not a prompt** (a live agent has a conversation, not a single
+  recoverable initial prompt). The user can add a prompt in the editor before saving.
+- **`repoPath` dropped** from file/kanban blocks (templates are folder-agnostic; the repo is
+  chosen at use time). Only the relative `file` path travels.
+- **`diff` → `open-diff` is working-tree only**; a branch-compare (#81) panel is not
+  preserved as a compare.
+- **`scheduled`/`pending` panels are dropped** (split collapses like `removeLeaf`); a canvas
+  with nothing templatable → toast + no-op (don't open an empty editor).
+- **Default template name = the active canvas's tab name** (editable before Save).
+- **Seeding via new `templateEditorSeed`/`templateEditorSeedName` store fields**, cleared in
+  `closeTemplateEditor` (mirrors the mounted-only-while-open editor). The draft is unsaved
+  until the user hits Save (consistent with "New template…").
+- **Depends on: none** — the whole template system (#117/#118) is already shipped.
