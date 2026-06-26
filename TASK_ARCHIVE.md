@@ -2622,3 +2622,50 @@ don't apply) is unchanged; no `.gitignore`'d files, no index/working-tree mutati
 
 ---
 
+### 184. [x] File tree context menu: offer both "Copy absolute path" and "Copy relative path"
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+In the repo **file tree** (#167), right-clicking a file showed a single ambiguous **"Copy path"**
+item that copied the **absolute** path (`${repoPath}/${menu.file}`). The user wanted **both** a
+"Copy absolute path" and a "Copy relative path" option — the established convention already present in
+the sidebar **file-row** menu (#171 `filePathMenuItems`), which the FileTree's bespoke menu had never
+picked up. This task brings the FileTree menu in line.
+
+**What shipped** (commit `0d3dceb`, 2026-06-26) — **frontend-only**
+(`src/components/FileTree/FileTree.tsx`):
+
+- **Relabeled** the existing "Copy path" item to **"Copy absolute path"** (behavior unchanged — still
+  copies `${repoPath}/${menu.file}` via `copyToClipboard(abs, "path")`).
+- **Added** a **"Copy relative path"** item immediately after it, copying the repo-relative path
+  (`menu.file`) via `copyToClipboard(menu.file, "path")` — same `role="menuitem"` markup as its
+  siblings. Both route through the existing store action that toasts "Copied path"; the order/labels/
+  semantics mirror #171's `filePathMenuItems` so the two menus read identically.
+- **Raised the context-menu bottom-edge clamp** (`window.innerHeight - 160` → `- 200`) so the
+  now-taller menu (up to 5 items for a `.md` file: Open / Open as Kanban / Reveal / Copy absolute /
+  Copy relative) stays fully on-screen when opened near the viewport bottom.
+- One component covers all surfaces it renders in (sidebar, Overview column, Canvas panel).
+
+**Key files touched:** `src/components/FileTree/FileTree.tsx` only (menu item relabel + new item +
+position clamp). No backend, no new clipboard plumbing, no `CLAUDE.md` change.
+
+**Dependencies:** none (reuses the existing `copyToClipboard(text, "path")` action; mirrors the #171
+sidebar file-row menu convention).
+
+**Notes**
+
+- User decision (refine Q&A, 2026-06-26): the two options are **absolute path + relative path** (the
+  existing app convention); the card's "absolute path (not entire path)" wording resolved "not entire
+  path" to the repo-relative path. Folders still have no context menu (left as-is); left-click (open)
+  unchanged.
+- `npm run build` / `npm run lint` / `npm test` pass. The in-app manual check (right-clicking a
+  file-tree file, both copies working + the menu staying on-screen near the bottom edge) was **not**
+  runtime-verified in the headless loop; the change is a small relabel + added item reusing the
+  established `copyToClipboard` path.
+
+---
+
