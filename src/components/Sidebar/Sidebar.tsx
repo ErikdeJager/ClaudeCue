@@ -872,6 +872,7 @@ function WorktreeHeader({
   compact?: boolean;
 }) {
   const copyToClipboard = useStore((s) => s.copyToClipboard);
+  const pullFolder = useStore((s) => s.pullFolder);
   const spawnWorktreeSession = useStore((s) => s.spawnWorktreeSession);
   const killAllAgents = useStore((s) => s.killAllAgents);
   const closeAllItems = useStore((s) => s.closeAllItems);
@@ -976,6 +977,23 @@ function WorktreeHeader({
                 >
                   Copy absolute path
                 </button>
+                {/* Pull (#181): fast-forward this worktree's current branch
+                    (`git pull --ff-only`); result is toasted. A worktree always has
+                    a checked-out branch, so it's always shown here. */}
+                {branch && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuItem}
+                    title="git pull --ff-only"
+                    onClick={() => {
+                      void pullFolder(path);
+                      close();
+                    }}
+                  >
+                    Pull
+                  </button>
+                )}
                 <div className={styles.menuSeparator} role="separator" />
                 {/* Close the worktree entirely (#166): kill its agents (ref-counted
                     `git worktree remove`, dirty kept) + close its items. Confirm-gated. */}
@@ -1019,6 +1037,7 @@ function Sidebar() {
   const openNewSession = useStore((s) => s.openNewSession);
   const startRepoSession = useStore((s) => s.startRepoSession);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
+  const pullFolder = useStore((s) => s.pullFolder);
   const openSchedule = useStore((s) => s.openSchedule);
   const addFolder = useStore((s) => s.addFolder);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
@@ -1744,6 +1763,23 @@ function Sidebar() {
                 >
                   Copy path
                 </button>
+                {/* Pull (#181): fast-forward this folder's current branch
+                    (`git pull --ff-only`); result is toasted. Shown only when a
+                    current branch is known (hidden for non-git folders). */}
+                {branches[menu.repo] && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuItem}
+                    title="git pull --ff-only"
+                    onClick={() => {
+                      void pullFolder(menu.repo);
+                      closeMenu();
+                    }}
+                  >
+                    Pull
+                  </button>
+                )}
                 <div className={styles.menuSeparator} role="separator" />
                 <button
                   type="button"

@@ -1,8 +1,8 @@
 # TASK-181
 
-### 181. [ ] "Pull" action in the repo + worktree context menus (ff-only)
+### 181. [x] "Pull" action in the repo + worktree context menus (ff-only)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 
@@ -101,16 +101,16 @@ Docs:
 
 **Subtasks**
 
-1. [ ] `git.rs`: add `pull_ff(cwd) -> Result<String, String>` (`git pull --ff-only`,
+1. [x] `git.rs`: add `pull_ff(cwd) -> Result<String, String>` (`git pull --ff-only`,
    `GIT_TERMINAL_PROMPT=0`, trimmed stdout on success / stderr on failure), modeled on
    `fetch_remotes`.
-2. [ ] `commands.rs` + `lib.rs`: add + register `pull_branch(cwd) -> Result<String,
+2. [x] `commands.rs` + `lib.rs`: add + register `pull_branch(cwd) -> Result<String,
    SessionError>`.
-3. [ ] `ipc.ts`: add `pull(cwd)`.
-4. [ ] `store.ts`: add `pullFolder(cwd)` (toast success summary / error).
-5. [ ] `Sidebar.tsx`: add the "Pull" item to the repo menu and the worktree header
+3. [x] `ipc.ts`: add `pull(cwd)`.
+4. [x] `store.ts`: add `pullFolder(cwd)` (toast success summary / error).
+5. [x] `Sidebar.tsx`: add the "Pull" item to the repo menu and the worktree header
    menu, gated on a known current branch; wire to `pullFolder`.
-6. [ ] Rust tests (`git.rs` tests module, `init_repo`/`git_in`/`commit_all`, skip if
+6. [x] Rust tests (`git.rs` tests module, `init_repo`/`git_in`/`commit_all`, skip if
    git unavailable):
    - **fast-forward success:** create an `origin` repo with a commit; `git clone` it
      into a second dir; add another commit in `origin`; `pull_ff(clone)` → `Ok`, the
@@ -119,22 +119,30 @@ Docs:
      commit in `origin`; `pull_ff(clone)` → `Err` (not fast-forwardable).
    - **no upstream → error:** a fresh `init_repo` with a commit and no remote;
      `pull_ff(dir)` → `Err`.
-7. [ ] Update CLAUDE.md (git scope note + sidebar context-menu line).
-8. [ ] `npm run build`, `npm test`, `npm run lint`, `cargo test`, `npm run lint:rust`
+7. [x] Update CLAUDE.md (git scope note + sidebar context-menu line).
+8. [x] `npm run build`, `npm test`, `npm run lint`, `cargo test`, `npm run lint:rust`
    green.
 
 **Acceptance criteria**
 
-- [ ] Right-clicking a repo folder in the sidebar shows a "Pull" item; clicking it
+- [x] Right-clicking a repo folder in the sidebar shows a "Pull" item; clicking it
   runs `git pull --ff-only` in that folder and shows a toast with the result
-  ("Already up to date", a fast-forward summary, or the git error).
-- [ ] Right-clicking a worktree header shows the same "Pull" item, scoped to the
+  ("Already up to date", a fast-forward summary, or the git error). _(Wired via
+  `pullFolder`; toast logic covered by code, backend by Rust tests.)_
+- [x] Right-clicking a worktree header shows the same "Pull" item, scoped to the
   worktree's path, with the same behavior.
-- [ ] A diverged or upstream-less branch produces a clear error toast and makes **no**
-  changes (no merge commit, no partial merge state).
-- [ ] The Pull item is hidden for a folder with no known current branch (non-git).
-- [ ] Rust tests cover ff success, divergence error, and no-upstream error;
-  `cargo test` + `cargo clippy` green; frontend type-checks, lints, unit tests pass.
+- [x] A diverged or upstream-less branch produces a clear error toast and makes **no**
+  changes (no merge commit, no partial merge state). _(Rust tests assert `pull_ff`
+  errors and the divergent remote file is not pulled in.)_
+- [x] The Pull item is hidden for a folder with no known current branch (non-git).
+  _(Repo menu gated on `branches[menu.repo]`; worktree always has a branch.)_
+- [x] Rust tests cover ff success, divergence error, and no-upstream error;
+  `cargo test` (78) + `cargo clippy` green; frontend type-checks, lints, unit tests
+  (248) pass.
+- [~] Manual GUI verification of the live right-click menus (clicking Pull, seeing the
+  toast) was **not** runtime-tested in the autonomous loop (no GUI); the backend is
+  covered by the three Rust tests, the wiring type-checks, and the menu reuses the
+  existing `menuItem` machinery.
 
 **Notes**
 

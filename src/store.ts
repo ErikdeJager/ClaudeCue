@@ -915,6 +915,10 @@ export interface AppState {
     at: number,
   ) => Promise<void>;
   copyToClipboard: (text: string, label?: string) => Promise<void>;
+  /** Fast-forward `cwd`'s current branch to its upstream — `git pull --ff-only`
+   * (#181, sidebar repo / worktree "Pull"). Toasts the result (summary or git
+   * error); never merges or leaves a partial state. */
+  pullFolder: (cwd: string) => Promise<void>;
 }
 
 /**
@@ -3041,6 +3045,23 @@ export const useStore = create<AppState>()((set, get) => ({
       get().pushToast(label ? `Copied ${label}` : "Copied");
     } catch {
       get().pushToast("Copy failed", "error");
+    }
+  },
+
+  pullFolder: async (cwd) => {
+    // `git pull --ff-only` (#181): toast git's summary on success, its error on
+    // failure (diverged / no upstream). `--ff-only` never leaves a partial state.
+    try {
+      const summary = await ipc.pull(cwd);
+      const upToDate = /already up to date/i.test(summary);
+      get().pushToast(
+        upToDate
+          ? `${repoName(cwd)} already up to date`
+          : `Pulled ${repoName(cwd)}`,
+      );
+    } catch (err) {
+      const message = isSessionError(err) ? err.message : "Pull failed";
+      get().pushToast(`Pull failed: ${message}`, "error");
     }
   },
 }));

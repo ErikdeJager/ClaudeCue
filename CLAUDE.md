@@ -136,8 +136,10 @@ even though it works in `tauri dev`.
   file/diff/terminal/**kanban-board** panels (#82/#145; the single "Kanban board" entry
   opens a `.md`-scoped `FilePicker` with an in-picker create-or-open flow #151),
   non-destructive **Reveal in Finder** / **Copy path**
-  utilities (#130 — `reveal_path` shells out to macOS `open`, no shell), repo color
-  (#35), and destructive actions —
+  utilities (#130 — `reveal_path` shells out to macOS `open`, no shell) + a **Pull**
+  item (#181 — `git pull --ff-only` on the folder's current branch, toasted; shown
+  only when a current branch is known; mirrored in the worktree header menu), repo
+  color (#35), and destructive actions —
   **Kill all agents** / **Close all items** (#91) and **Forget folder** (#31), the
   latter two also tearing down the folder's non-agent items (killing their PTYs) and
   pending schedules (#106); each destructive step is confirm-gated unless turned off
@@ -350,7 +352,7 @@ even though it works in `tauri dev`.
 │   ├── src/title.rs        # Best-effort reader for claude's own ai-title (#97)
 │   ├── src/commands.rs     # Tauri command surface + event payloads
 │   ├── src/store.rs        # JSON persistence (sessions, recents, canvases, canvas templates, schedules, settings, sidebar width)
-│   ├── src/git.rs          # Git: branch + diff + compare (#81) + list (local+remote #180) + checkout + worktree (#74) + fetch (#180)
+│   ├── src/git.rs          # Git: branch + diff + compare (#81) + list (local+remote #180) + checkout + worktree (#74) + fetch (#180) + pull --ff-only (#181)
 │   ├── src/files.rs        # Repo file access (list/read text + write_text_file #141, path-validated)
 │   ├── src/skills.rs        # Read-only scan of .claude skills/commands for prompt autocomplete (#114)
 │   ├── Info.plist          # Partial plist (mic + speech-recognition usage strings), merged into the bundle
@@ -405,7 +407,13 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   #124 create-branch write** — a new local tracking branch named `<short>` based on
   `<remote-ref>` (`git checkout -b` in-folder, or `git worktree add -b` on **⌘⏎**),
   with `validate_new_branch` widened to accept a remote-tracking ref as the base. No
-  new pull/checkout command, and no commits.
+  new pull/checkout command, and no commits. Finally, (5) **`git pull --ff-only`**
+  (#181, `pull_branch`/`git::pull_ff`) — a **Pull** item in the sidebar **repo** and
+  **worktree** context menus fast-forwards that folder's current branch to its
+  upstream (same `GIT_TERMINAL_PROMPT=0` network guard), toasting git's summary or its
+  error. `--ff-only` only ever fast-forwards (never a merge commit / partial-merge
+  state in a folder an agent may be using); a diverged or upstream-less branch fails
+  cleanly with an error toast. No confirm gate; still no commits / push.
 - **File access is read-mostly, with one deliberate write** — `files.rs` lists +
   reads repo text files for the viewer (#40/#44) and, since **#141**, writes a repo
   text file (`write_text_file`) — the app's **first arbitrary file write**, backing

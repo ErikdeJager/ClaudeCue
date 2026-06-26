@@ -845,6 +845,15 @@ pub fn fetch_remotes(cwd: String) -> Result<(), SessionError> {
     git::fetch_remotes(&cwd).map_err(SessionError::Git)
 }
 
+/// Fast-forward the current branch of `cwd` to its upstream — `git pull --ff-only`
+/// (#181), the sidebar repo / worktree "Pull" item. On success returns git's stdout
+/// summary for the toast; a diverged / upstream-less / non-repo folder surfaces as a
+/// typed `SessionError::Git { message }` shown as an error toast (no merge happens).
+#[tauri::command]
+pub fn pull_branch(cwd: String) -> Result<String, SessionError> {
+    git::pull_ff(&cwd).map_err(SessionError::Git)
+}
+
 /// Check out a branch in `cwd` (the first git write — see #27). Errors surface as
 /// a typed `SessionError::Git { message }` carrying git's explanation.
 #[tauri::command]

@@ -272,6 +272,38 @@ pub fn fetch_remotes(cwd: impl AsRef<Path>) -> Result<(), String> {
     }
 }
 
+/// Fast-forward the current branch of `cwd` to its upstream — `git pull --ff-only`
+/// (#181). A new deliberate git **network** write invoked from the sidebar repo /
+/// worktree context menus. `--ff-only` advances the branch when possible and refuses
+/// (clean error, no merge commit / no half-finished merge) when it has diverged or
+/// has uncommitted changes — safe for a folder an agent may be using.
+/// `GIT_TERMINAL_PROMPT=0` (+ SSH `BatchMode`) makes a private remote fail fast
+/// instead of hanging on a credential prompt. On success returns git's **trimmed
+/// stdout** (e.g. `"Already up to date."` or the fast-forward summary) for the toast;
+/// on failure returns the **trimmed stderr** (diverged / no upstream / not a repo).
+/// Never panics. (`--ff-only` fetches then fast-forwards, so no separate fetch.)
+pub fn pull_ff(cwd: impl AsRef<Path>) -> Result<String, String> {
+    let cwd = cwd.as_ref();
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(["pull", "--ff-only"])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes")
+        .output()
+        .map_err(|e| e.to_string())?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if stderr.is_empty() {
+            "git pull failed".to_string()
+        } else {
+            stderr
+        })
+    }
+}
+
 /// Check out an existing local branch in `cwd` — the first intentional git
 /// *write* (see CLAUDE.md). The branch must already exist locally (we validate
 /// against `list_branches`, which also blocks flag-like / arbitrary refspecs from
@@ -804,6 +836,27 @@ index 0..1
         git_in(dir, &["add", "-A"]) && git_in(dir, &["commit", "-q", "--no-verify", "-m", msg])
     }
 
+    /// `git clone <origin> <dest>` into a fresh temp dir, with a test identity set
+    /// so the clone can commit. None if git/clone is unavailable.
+    fn clone_repo(origin: &Path, tag: &str) -> Option<PathBuf> {
+        let dest = unique_dir(tag);
+        let ok = Command::new("git")
+            .args(["clone", "-q"])
+            .arg(origin)
+            .arg(&dest)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !ok {
+            let _ = fs::remove_dir_all(&dest);
+            return None;
+        }
+        git_in(&dest, &["config", "user.email", "t@test.dev"]);
+        git_in(&dest, &["config", "user.name", "Test"]);
+        git_in(&dest, &["config", "commit.gpgsign", "false"]);
+        Some(dest)
+    }
+
     #[test]
     fn is_git_repo_distinguishes_git_and_plain_folders() {
         // A plain (non-git) folder is not a repo.
@@ -1040,6 +1093,65 @@ index 0..1
         // A still-unknown base is rejected.
         assert!(create_branch(&dir, "other", "origin/nope").is_err());
 
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pull_ff_fast_forwards_a_clone_from_its_origin() {
+        let Some(origin) = init_repo("pull-origin") else {
+            return;
+        };
+        fs::write(origin.join("a.txt"), "1\n").unwrap();
+        assert!(commit_all(&origin, "init"));
+        let Some(clone) = clone_repo(&origin, "pull-clone") else {
+            let _ = fs::remove_dir_all(&origin);
+            return;
+        };
+        // Advance origin, then the clone fast-forwards to it.
+        fs::write(origin.join("b.txt"), "2\n").unwrap();
+        assert!(commit_all(&origin, "second"));
+
+        assert!(pull_ff(&clone).is_ok());
+        assert!(clone.join("b.txt").exists());
+
+        let _ = fs::remove_dir_all(&clone);
+        let _ = fs::remove_dir_all(&origin);
+    }
+
+    #[test]
+    fn pull_ff_errors_on_a_diverged_branch() {
+        let Some(origin) = init_repo("pull-div-origin") else {
+            return;
+        };
+        fs::write(origin.join("a.txt"), "1\n").unwrap();
+        assert!(commit_all(&origin, "init"));
+        let Some(clone) = clone_repo(&origin, "pull-div-clone") else {
+            let _ = fs::remove_dir_all(&origin);
+            return;
+        };
+        // Both sides advance independently → the branches diverge → ff-only fails.
+        fs::write(clone.join("local.txt"), "local\n").unwrap();
+        assert!(commit_all(&clone, "local commit"));
+        fs::write(origin.join("remote.txt"), "remote\n").unwrap();
+        assert!(commit_all(&origin, "remote commit"));
+
+        assert!(pull_ff(&clone).is_err());
+        // No merge happened: the divergent remote file was not pulled in.
+        assert!(!clone.join("remote.txt").exists());
+
+        let _ = fs::remove_dir_all(&clone);
+        let _ = fs::remove_dir_all(&origin);
+    }
+
+    #[test]
+    fn pull_ff_errors_without_an_upstream() {
+        let Some(dir) = init_repo("pull-no-upstream") else {
+            return;
+        };
+        fs::write(dir.join("a.txt"), "x\n").unwrap();
+        assert!(commit_all(&dir, "init"));
+        // No remote / tracking branch configured → pull has nothing to fast-forward.
+        assert!(pull_ff(&dir).is_err());
         let _ = fs::remove_dir_all(&dir);
     }
 }

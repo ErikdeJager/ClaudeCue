@@ -234,6 +234,11 @@ export const listBranches = (cwd: string) =>
 export const fetchRemotes = (cwd: string) =>
   invoke<void>("fetch_remotes", { cwd });
 
+/** Fast-forward the current branch of `cwd` to its upstream — `git pull --ff-only`
+ * (#181, sidebar repo / worktree "Pull"). Resolves with git's summary; rejects with
+ * the git error (diverged / no upstream / not a repo) for an error toast. */
+export const pull = (cwd: string) => invoke<string>("pull_branch", { cwd });
+
 /** Check out an existing local branch in `cwd` (the first git write — #27). */
 export const checkoutBranch = (cwd: string, branch: string) =>
   invoke<void>("checkout_branch", { cwd, branch });
