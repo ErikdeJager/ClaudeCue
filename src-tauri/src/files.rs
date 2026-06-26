@@ -32,8 +32,9 @@ const LIST_CAP: usize = 500;
 const MAX_DEPTH: usize = 8;
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 
-/// Repo viewable files as repo-relative paths (sorted), excluding hidden + heavy
-/// dirs and binary extensions, capped. A non-readable dir yields an empty list.
+/// Repo viewable files as repo-relative paths (sorted), excluding heavy/vendored
+/// dirs (`SKIP_DIRS`) and binary extensions, capped. Dot-folders (`.claude`,
+/// `.github`, `.git`, …) are listed (#179). A non-readable dir yields an empty list.
 pub fn list_files(repo: impl AsRef<Path>) -> Vec<String> {
     let repo = repo.as_ref();
     let mut out = Vec::new();
@@ -57,8 +58,9 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<String>, depth: usize) {
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if path.is_dir() {
-            // Skip hidden (.git, .github, …) and heavy build/dep dirs.
-            if name.starts_with('.') || SKIP_DIRS.contains(&name.as_ref()) {
+            // Skip only heavy build/dep dirs (node_modules, target, …). Dot-folders
+            // like .claude / .github / .git are listed (#179).
+            if SKIP_DIRS.contains(&name.as_ref()) {
                 continue;
             }
             collect(root, &path, out, depth + 1);
@@ -176,8 +178,11 @@ mod tests {
         fs::write(dir.join("src/lib.ts"), "export {}").unwrap();
         fs::create_dir_all(dir.join("node_modules/pkg")).unwrap();
         fs::write(dir.join("node_modules/pkg/x.js"), "skip").unwrap();
+        // Dot-folders are now listed (#179): .git internals and .claude content.
         fs::create_dir_all(dir.join(".git")).unwrap();
-        fs::write(dir.join(".git/config"), "skip").unwrap();
+        fs::write(dir.join(".git/config"), "[core]").unwrap();
+        fs::create_dir_all(dir.join(".claude/skills/foo")).unwrap();
+        fs::write(dir.join(".claude/skills/foo/SKILL.md"), "# skill").unwrap();
 
         let files = list_files(&dir);
         assert!(files.contains(&"README.md".to_string()));
@@ -185,9 +190,11 @@ mod tests {
         assert!(files.contains(&"notes.txt".to_string()));
         assert!(files.contains(&"LICENSE".to_string()));
         assert!(files.contains(&"src/lib.ts".to_string()));
+        // Dot-folders (incl. .git) are included (#179).
+        assert!(files.contains(&".git/config".to_string()));
+        assert!(files.contains(&".claude/skills/foo/SKILL.md".to_string()));
         assert!(!files.iter().any(|f| f.ends_with(".png")));
         assert!(!files.iter().any(|f| f.contains("node_modules")));
-        assert!(!files.iter().any(|f| f.contains(".git")));
         let _ = fs::remove_dir_all(&dir);
     }
 

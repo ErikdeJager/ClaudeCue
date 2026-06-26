@@ -11,8 +11,9 @@ kanban-plugin: board
 
 ## READY
 
+
+## DONE
+
 - [ ] #179 — Show hidden dot-folders in the file tree and pickers
 	Plan: TASK-179.md
 	Depends on: none
-
-## DONE

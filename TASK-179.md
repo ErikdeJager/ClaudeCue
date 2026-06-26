@@ -1,8 +1,8 @@
 # TASK-179
 
-### 179. [ ] Show hidden (dot-prefixed) folders in the file tree and pickers
+### 179. [x] Show hidden (dot-prefixed) folders in the file tree and pickers
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 
@@ -78,15 +78,15 @@ extension, never by a leading dot — so this task is purely about dot-**directo
 
 **Subtasks**
 
-1. [ ] In `src-tauri/src/files.rs` `collect()`, change the directory guard from
+1. [x] In `src-tauri/src/files.rs` `collect()`, change the directory guard from
    `if name.starts_with('.') || SKIP_DIRS.contains(&name.as_ref())` to
    `if SKIP_DIRS.contains(&name.as_ref())` so only the heavy/vendored content list
    is skipped; dot-folders (incl. `.git`) are now traversed.
-2. [ ] Update the doc comments to match: the module header / `list_files` doc
+2. [x] Update the doc comments to match: the module header / `list_files` doc
    (line ~35, "excluding hidden + heavy dirs") and the inline `// Skip hidden
    (.git, .github, …) and heavy build/dep dirs.` comment — they should no longer
    claim hidden dirs are excluded.
-3. [ ] Update the `lists_text_files_excluding_heavy_dirs_and_binaries` test:
+3. [x] Update the `lists_text_files_excluding_heavy_dirs_and_binaries` test:
    - Replace the `assert!(!files.iter().any(|f| f.contains(".git")));` exclusion
      assertion with one asserting a `.git` file **is** listed (e.g. the
      `.git/config` it already creates: `assert!(files.contains(&".git/config".to_string()))`).
@@ -95,19 +95,22 @@ extension, never by a leading dot — so this task is purely about dot-**directo
      `files.contains(&".claude/skills/foo/SKILL.md".to_string())`.
    - Keep the existing `node_modules` and `.png` exclusion assertions intact (those
      still must be filtered).
-4. [ ] Run the Rust tests and clippy; confirm green.
+4. [x] Run the Rust tests and clippy; confirm green.
 
 **Acceptance criteria**
 
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml` passes, with the updated
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml` passes, with the updated
   test proving `.git/config` and a `.claude/...` file are now returned by
-  `list_files`, while `node_modules/*` and `*.png` remain excluded.
-- [ ] `npm run lint:rust` (clippy) is clean for `files.rs`.
-- [ ] Manual: in the running app, a repo's **File tree** panel shows a `.claude`
+  `list_files`, while `node_modules/*` and `*.png` remain excluded. (73 tests pass.)
+- [x] `npm run lint:rust` (clippy) is clean for `files.rs`.
+- [~] Manual: in the running app, a repo's **File tree** panel shows a `.claude`
   folder that expands to its files; the **File picker** / **File switcher** can find
   and open a file under `.claude` (e.g. `.claude/skills/<x>/SKILL.md`); `.git`
   entries also appear (accepted). `node_modules`/`target`/`.next` still do not.
-- [ ] No frontend files were modified.
+  _Not runtime-verified in the autonomous loop (no GUI). Covered by the plan's
+  grounding: every surface routes through the single `list_files` command and
+  `buildFileTree` does no dotfile filtering, so the backend change alone is sufficient._
+- [x] No frontend files were modified.
 
 **Notes**
 
