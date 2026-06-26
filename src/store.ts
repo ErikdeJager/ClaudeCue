@@ -1116,8 +1116,11 @@ async function killAgentsInRepo(repoPath: string): Promise<number> {
     };
   });
   // Ref-counted worktree cleanup (#74): keep a dirty worktree rather than force it.
+  // Fire-and-forget (#200): the FS delete runs off the main thread (async backend),
+  // so this bulk action returns and toasts immediately instead of blocking on a
+  // large worktree delete; the dir is removed in the background.
   for (const dest of worktreeDests) {
-    await useStore.getState().cleanupWorktreeIfEmpty(repoPath, dest);
+    void useStore.getState().cleanupWorktreeIfEmpty(repoPath, dest);
   }
   return ids.length;
 }
@@ -1274,8 +1277,11 @@ async function closeCanvasContents(layout: CanvasNode): Promise<void> {
   }
 
   // Ref-counted worktree cleanup (#74): keep a dirty worktree rather than force it.
+  // Fire-and-forget (#200): the FS delete runs off the main thread (async backend),
+  // so this bulk action returns and toasts immediately instead of blocking on a
+  // large worktree delete; the dir is removed in the background.
   for (const { parent, dest } of worktreeDests) {
-    await useStore.getState().cleanupWorktreeIfEmpty(parent, dest);
+    void useStore.getState().cleanupWorktreeIfEmpty(parent, dest);
   }
 
   // One summary toast (#83), not per-item spam.

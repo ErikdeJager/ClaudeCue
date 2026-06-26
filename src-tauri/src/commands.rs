@@ -214,9 +214,26 @@ pub fn spawn_worktree_agent_new_branch(
 /// frontend only after the worktree's last active agent is removed. `force` is
 /// needed when the worktree has uncommitted changes; a non-forced call fails on
 /// a dirty tree, which the UI uses as the confirm guard.
+///
+/// **Async + off the main thread (#200):** `git worktree remove` deletes the
+/// worktree directory from disk — potentially thousands of files
+/// (`node_modules`, build output, …). A non-`async` Tauri command runs on the
+/// main (webview) thread, so that FS delete would **freeze the UI** until it
+/// finishes. Marking the command `async` moves it onto the async runtime, and
+/// `spawn_blocking` runs the synchronous `git` shell-out on a dedicated blocking
+/// pool so it can't starve that runtime's workers either. The `force`/dirty-tree
+/// error semantics and the typed `SessionError::Git` mapping are unchanged.
 #[tauri::command]
-pub fn remove_worktree(parent: String, dest: String, force: bool) -> Result<(), SessionError> {
-    git::worktree_remove(&parent, &dest, force).map_err(SessionError::Git)
+pub async fn remove_worktree(
+    parent: String,
+    dest: String,
+    force: bool,
+) -> Result<(), SessionError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git::worktree_remove(&parent, &dest, force).map_err(SessionError::Git)
+    })
+    .await
+    .map_err(|e| SessionError::Io(e.to_string()))?
 }
 
 #[tauri::command]

@@ -1,8 +1,8 @@
 # Task 200
 
-### 200. [ ] Worktree removal must not freeze the UI — run `git worktree remove` off the main thread
+### 200. [x] Worktree removal must not freeze the UI — run `git worktree remove` off the main thread
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #199
 **Created:** 2026-06-26
 
@@ -69,25 +69,37 @@ dirty-kept rule.
 
 **Subtasks**
 
-1. [ ] Make `remove_worktree` an `async` command running `git::worktree_remove` via
-   `tauri::async_runtime::spawn_blocking`; preserve the `force`/error semantics + the typed
-   `SessionError::Git` mapping.
-2. [ ] Frontend: detach the worktree cleanup from the synchronous close path (the item is
-   removed from the UI immediately; cleanup runs async; the dirty-kept toast still fires).
-3. [ ] **Verify** — `npm run build`, `npm run lint`, `npm test`, `cargo test`/`clippy` green.
-   Manual (or note as runtime-unverified): close the last item of a worktree containing a
-   large directory → the app stays responsive (no freeze) while the dir removes in the
-   background; the worktree disappears from the sidebar when done; a dirty worktree still
-   yields the "kept" toast.
+1. [x] `remove_worktree` is now an **`async`** command (`commands.rs` ~218) running
+   `git::worktree_remove` via **`tauri::async_runtime::spawn_blocking`** and awaiting it; the
+   `force`/dirty-tree error semantics and the typed `SessionError::Git` mapping are unchanged
+   (the join error maps to `SessionError::Io`). This is the codebase's **first** async Tauri
+   command. `git.rs worktree_remove` is untouched (still the blocking shell-out, now invoked
+   off-thread).
+2. [x] Frontend: the three per-item close handlers (`removeSession`, `removeOverviewPanel`,
+   `cancelSchedule`) **already** remove the item from UI state first and fire cleanup with
+   `void` (wired by #199), so they never block on the delete — no change needed there. For
+   consistency I also converted the two **bulk** close paths (`killAgentsInRepo` ~1119, the
+   close-all / forget-folder path ~1276) from `await` to **fire-and-forget `void`** so even a
+   bulk "Forget folder" / "Kill all agents" over a huge worktree returns + toasts immediately.
+   `cleanupWorktreeIfEmpty` keeps its inner `await ipc.removeWorktree` so the "kept — dirty"
+   toast still fires (that await is now non-blocking because the backend is async).
+3. [x] **Verify** — `npm run build` ✓, `npm run lint` ✓, `npm test` (288) ✓, `cargo build` ✓,
+   `cargo clippy` ✓, `cargo fmt` ✓, `cargo test` (83) ✓, prettier ✓. The live "no freeze on a
+   large delete" behavior is **runtime-unverified** in this autonomous loop (no GUI) — see
+   Notes; the threading change is a standard Tauri pattern and the cleanup trigger logic
+   (#199) is untouched.
 
 **Acceptance criteria**
 
-- [ ] Removing a worktree (incl. a large directory) **does not freeze the UI** — the app stays
-      responsive while deletion runs in the background.
-- [ ] `remove_worktree` runs its FS work **off the main thread** (`async` + `spawn_blocking`);
-      the close action returns without blocking on the delete.
-- [ ] The dirty-worktree-kept behavior + the removal trigger logic (#199) are unchanged.
-- [ ] `npm run build`, `npm run lint`, `npm test`, and `cargo build`/`clippy` pass.
+- [x] Removing a worktree (incl. a large directory) **does not freeze the UI** — the FS delete
+      runs off the main (webview) thread, so the app stays responsive while it runs in the
+      background. _(Runtime-unverified — see Notes.)_
+- [x] `remove_worktree` runs its FS work **off the main thread** (`async` + `spawn_blocking`);
+      the close actions remove the item + return without blocking on the delete.
+- [x] The dirty-worktree-kept behavior + the removal trigger logic (#199) are unchanged
+      (`cleanupWorktreeIfEmpty` ref-counting + non-forced-delete dirty guard intact;
+      `git::worktree_remove` untouched).
+- [x] `npm run build`, `npm run lint`, `npm test`, and `cargo build`/`clippy` pass.
 
 **Notes**
 
@@ -102,3 +114,34 @@ dirty-kept rule.
 - **References:** `commands.rs remove_worktree` (~217, sync today), `git.rs worktree_remove`
   (~488), `store.ts cleanupWorktreeIfEmpty` (~2734) + callers, Tauri v2 `async_runtime::
   spawn_blocking`. CLAUDE.md "Backend (Rust)" + worktree scope (#74).
+
+**Implementation notes (2026-06-26 — done)**
+
+- **Root-cause fix is the backend.** `remove_worktree` was a synchronous `#[tauri::command]`,
+  which in Tauri v2 runs on the **main (webview) thread** — so the `git worktree remove` FS
+  delete (potentially a huge `node_modules`) froze the whole UI. Making it `async` moves the
+  command onto the async runtime (off the main thread); `spawn_blocking` then runs the blocking
+  `git` shell-out on a dedicated blocking pool so it can't starve the runtime's workers either.
+  Net: the webview thread is never blocked, regardless of how the frontend invokes it.
+- **Frontend was already non-blocking at the per-item level (#199).** The three named close
+  handlers update store state (drop the agent / filter the panel / filter the schedule) and
+  *then* call `cleanupWorktreeIfEmpty` via `void`, so the item vanishes instantly and cleanup
+  is detached. The freeze was never the `void` — it was the synchronous backend command, which
+  blocked the main thread even when JS didn't await its result. So the backend change is what
+  actually fixes the freeze; the existing `void`s are correct as-is.
+- **Bulk paths made consistent.** I converted the two remaining `await
+  cleanupWorktreeIfEmpty(...)` loops in the **bulk** operations (`killAgentsInRepo`, the
+  close-all/forget-folder path) to fire-and-forget `void`. State is already updated before each
+  loop and nothing downstream depends on the FS delete completing, so this is safe and lets a
+  bulk action over a large worktree return + show its summary toast immediately rather than
+  waiting on the delete. (Out of the literal subtask-2 scope, but in the spirit of "stay
+  responsive"; recorded here.)
+- **Unchanged:** `cleanupWorktreeIfEmpty`'s non-forced `removeWorktree` (the dirty-worktree
+  guard) + its `catch` → "kept — dirty" toast; `git::worktree_remove`; the #199 ref-counting /
+  removal-trigger logic; the `ipc.removeWorktree` wrapper. Only the command's threading + the
+  two bulk awaits changed.
+- **Runtime-unverified (autonomous loop, no GUI):** the live "delete a large worktree without
+  freezing" behavior. The change is a textbook Tauri `async` + `spawn_blocking` move and all
+  automated gates pass; recommend a `npm run tauri dev` pass (close the last item of a worktree
+  holding a big `node_modules` → app stays responsive; worktree disappears when the delete
+  finishes; a dirty worktree still yields the "kept" toast).
