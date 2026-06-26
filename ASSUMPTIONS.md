@@ -225,3 +225,18 @@ judgment with "see if this … has good UX"):
 - **Must render #194's `null` (no-checkbox) card** (title flush-left, no gap) — hence the dep.
 - **Depends on: #194** — building before it would conflict on `KanbanPanel`'s checkbox render;
   lowest-number-first implements #194 first.
+
+---
+
+## TASK-196 — Worktree header: icon marker + inline new-session button
+
+- **Drop the literal "worktree" text badge**; keep the existing `GitBranch` icon (already
+  distinguishes a worktree from the repo's `Folder` icon #128) + an accessible "worktree"
+  title. `FolderGit2` noted as a clearer alternative; minimal change keeps `GitBranch`.
+- **Inline "+" mirrors the repo header's `+`** → `spawnWorktreeSession(parent, branch)` (a
+  session, like the repo `+` does `startRepoSession`); disabled when the parent is unknown.
+  Other panel types stay in the worktree's right-click `ViewsMenu` (#164), exactly as for repos.
+- **Layout-only** beyond that; compact rail unchanged; right-click menu intact.
+- **Depends on: none** — reuses shipped `spawnWorktreeSession` (#166) + the repo `+` pattern.
+  Sibling worktree cards (filter-on-click, schedule-into-worktree, auto-delete guard) touch the
+  same component but aren't prerequisites.
