@@ -3667,3 +3667,53 @@ builds on shipped schedule (#93/#125) + worktree (#74/#124) machinery.
 
 ---
 
+### 200. [x] Worktree removal must not freeze the UI — run `git worktree remove` off the main thread
+
+**Status:** Done
+**Depends on:** #199
+**Created:** 2026-06-26
+
+**Description**
+
+When the last item in a worktree closes, it's deleted via the Rust `remove_worktree` command →
+`git::worktree_remove` (a filesystem delete of potentially thousands of files — `node_modules`,
+build output). That command was a **synchronous** `#[tauri::command]`, which in Tauri v2 runs
+on the **main (webview) thread** — so the FS delete **froze the whole UI** until it finished.
+This makes worktree deletion non-blocking so the app stays responsive.
+
+**What shipped** (commit `907afdf`, 2026-06-26) — **backend threading + frontend fire-and-forget**:
+
+- **Root-cause fix (backend):** `remove_worktree` is now an **`async`** command (the codebase's
+  first) that runs `git::worktree_remove` via **`tauri::async_runtime::spawn_blocking`** and
+  awaits it — moving the command off the main thread (async runtime) and the blocking `git`
+  shell-out onto a dedicated blocking pool so it can't starve the runtime. The `force`/dirty
+  semantics + typed `SessionError::Git` mapping are unchanged (the join error maps to
+  `SessionError::Io`); `git.rs worktree_remove` is untouched.
+- **Frontend already non-blocking per-item (#199):** the three close handlers update store
+  state first and fire `cleanupWorktreeIfEmpty` via `void`, so the item vanishes instantly — the
+  freeze was never the `void`, it was the synchronous backend command, which is what the async
+  change actually fixes. For consistency, the two **bulk** paths (`killAgentsInRepo`, the
+  close-all/forget-folder loop) were also converted from `await` to fire-and-forget `void` so a
+  bulk action over a huge worktree returns + toasts immediately.
+- **Unchanged:** `cleanupWorktreeIfEmpty`'s non-forced removal (dirty-kept guard) + its "kept —
+  dirty" toast, the #199 ref-counting/trigger logic, and the `ipc.removeWorktree` wrapper.
+
+**Key files touched:** `src-tauri/src/commands.rs` (`remove_worktree` → async + `spawn_blocking`),
+`src/store.ts` (two bulk awaits → `void`).
+
+**Dependencies:** #199 (both touch the worktree-cleanup path; sequenced after the corrected
+guard so this builds on the right trigger logic).
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** decisions in `ASSUMPTIONS.md` — root cause is the sync
+  command on the main thread; fix = `async` + `spawn_blocking`; frontend cleanup fire-and-forget
+  so the item removes instantly and the dir deletes in the background (dirty-kept toast still
+  fires).
+- **Runtime-unverified** in this autonomous loop (no GUI session): the live "delete a large
+  worktree without freezing" behavior. The change is a textbook Tauri `async` + `spawn_blocking`
+  move and the #199 trigger logic is untouched. `npm run build` / `npm run lint` / `npm test`
+  (288), `cargo build`, `cargo test` (83), clippy, fmt, prettier all green.
+
+---
+

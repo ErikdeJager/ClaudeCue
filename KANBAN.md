@@ -14,9 +14,6 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #200 — Worktree removal must not freeze the UI (run git worktree remove off-thread)
-	Plan: TASK-200.md
-	Depends on: #199
 - [ ] #201 — Folder/worktree context menu: collapse the two "New session" items into one
 	Plan: TASK-201.md
 	Depends on: none
