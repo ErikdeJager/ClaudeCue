@@ -3,16 +3,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collectLeaves } from "./components/Canvas/canvasTree";
 import {
   accentCompanions,
+  adjacentId,
   adjacentSessionId,
   dedupeBranchLabels,
   isCleanExit,
   mergeRepoOrder,
+  overviewClusterKeys,
   REPO_PALETTE,
   repoColor,
   repoOrder,
   useStore,
 } from "./store";
-import type { CanvasContent, CanvasNode, SessionView } from "./types";
+import type {
+  CanvasContent,
+  CanvasNode,
+  OverviewPanel,
+  ScheduledSession,
+  SessionView,
+} from "./types";
 
 function session(id: string): SessionView {
   return {
@@ -21,6 +29,23 @@ function session(id: string): SessionView {
     repoPath: `/repo/${id}`,
     name: null,
     createdAt: 0,
+  };
+}
+
+/** A session with explicit repo / createdAt / worktree parent for ordering tests. */
+function ovSession(
+  id: string,
+  repoPath: string,
+  createdAt: number,
+  worktreeParent?: string,
+): SessionView {
+  return {
+    id,
+    claudeSessionId: id,
+    repoPath,
+    name: null,
+    createdAt,
+    ...(worktreeParent ? { worktreeParent } : {}),
   };
 }
 
@@ -515,6 +540,95 @@ describe("adjacentSessionId", () => {
   it("stays on the only session when there is one", () => {
     expect(adjacentSessionId([session("solo")], "solo", 1)).toBe("solo");
     expect(adjacentSessionId([session("solo")], "solo", -1)).toBe("solo");
+  });
+});
+
+describe("adjacentId (#174)", () => {
+  const ids = ["a", "b", "c"];
+
+  it("returns null for an empty list", () => {
+    expect(adjacentId([], null, 1)).toBeNull();
+    expect(adjacentId([], "a", -1)).toBeNull();
+  });
+
+  it("selects the first when nothing is selected or the id is unknown", () => {
+    expect(adjacentId(ids, null, 1)).toBe("a");
+    expect(adjacentId(ids, null, -1)).toBe("a");
+    expect(adjacentId(ids, "zzz", 1)).toBe("a");
+  });
+
+  it("moves to the next / previous in order", () => {
+    expect(adjacentId(ids, "a", 1)).toBe("b");
+    expect(adjacentId(ids, "b", 1)).toBe("c");
+    expect(adjacentId(ids, "b", -1)).toBe("a");
+  });
+
+  it("wraps around at the ends", () => {
+    expect(adjacentId(ids, "c", 1)).toBe("a"); // last -> first
+    expect(adjacentId(ids, "a", -1)).toBe("c"); // first -> last
+  });
+});
+
+describe("overviewClusterKeys (#174)", () => {
+  // Two repos (alpha, beta) with a mix of agent, panel, worktree-panel and
+  // schedule columns. s3 is a worktree agent of alpha; p-wt is a panel keyed by
+  // the worktree folder that must cluster under the parent repo (#164).
+  const s1 = ovSession("s1", "/work/beta", 1);
+  const s2 = ovSession("s2", "/work/alpha", 2);
+  const s3 = ovSession("s3", "/work/alpha/wt", 3, "/work/alpha");
+  const sessions = [s1, s2, s3];
+  const overviewPanels: Record<string, OverviewPanel[]> = {
+    "/work/alpha": [{ id: "p-alpha", kind: "diff" }],
+    "/work/alpha/wt": [{ id: "p-wt", kind: "markdown" }],
+  };
+  const schedules: ScheduledSession[] = [
+    { id: "sc-beta", cwd: "/work/beta", fire_at: 0, created_at: 0 },
+  ];
+
+  it("orders repos alphabetically with the default per-repo order (agents, panels, schedules)", () => {
+    const ids = overviewClusterKeys({
+      sessions,
+      overviewPanels,
+      overviewOrder: {},
+      schedules,
+      filter: null,
+    });
+    // alpha (agents s2,s3 then panels p-alpha,p-wt) then beta (agent s1, schedule).
+    // p-wt clusters under alpha despite its worktree key.
+    expect(ids).toEqual(["s2", "s3", "p-alpha", "p-wt", "s1", "sc-beta"]);
+  });
+
+  it("interleaves every column kind per the persisted overviewOrder", () => {
+    const ids = overviewClusterKeys({
+      sessions,
+      overviewPanels,
+      overviewOrder: { "/work/alpha": ["p-alpha", "s2", "s3", "p-wt"] },
+      schedules,
+      filter: null,
+    });
+    expect(ids).toEqual(["p-alpha", "s2", "s3", "p-wt", "s1", "sc-beta"]);
+  });
+
+  it("confines navigation to the visible cluster when a repo filter is active", () => {
+    const ids = overviewClusterKeys({
+      sessions,
+      overviewPanels,
+      overviewOrder: { "/work/alpha": ["p-alpha", "s2", "s3", "p-wt"] },
+      schedules,
+      filter: "/work/alpha",
+    });
+    expect(ids).toEqual(["p-alpha", "s2", "s3", "p-wt"]);
+  });
+
+  it("drops empty clusters (an empty panel list adds no column)", () => {
+    const ids = overviewClusterKeys({
+      sessions: [s2],
+      overviewPanels: { "/work/alpha": [], "/work/gamma": [] },
+      overviewOrder: {},
+      schedules: [],
+      filter: null,
+    });
+    expect(ids).toEqual(["s2"]);
   });
 });
 

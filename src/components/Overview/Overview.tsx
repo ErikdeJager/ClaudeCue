@@ -18,7 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { mergeRepoOrder, repoColor, useStore } from "../../store";
+import { overviewClusters, repoColor, useStore } from "../../store";
 import {
   effectiveRepo,
   FORK_UNAVAILABLE_REASON,
@@ -562,59 +562,39 @@ function Overview() {
     panelsByCluster.set(parent, arr);
   }
 
-  // Repos to render: those with agents, plus those with extra panels (respecting
-  // the filter) — so a diff/markdown panel shows even with no agent in the repo.
-  const repoSet = new Set<string>();
-  // Worktree agents group under their parent repo (#96), not their own folder.
-  for (const s of ordered) repoSet.add(effectiveRepo(s));
-  for (const [parent, entries] of panelsByCluster) {
-    if (entries.length > 0 && (!filter || parent === filter)) {
-      repoSet.add(parent);
+  // The rendered column order — repos to show, sorted, then each repo's
+  // drag-reordered item list with empty clusters dropped — comes from the shared
+  // pure `overviewClusters` helper (#174), so the wall and the Shift+←/→ keyboard
+  // nav (`useKeyboardNav`) consume one source of truth and can never drift. The
+  // component still builds its own `byKey`/`items` for rendering; only the
+  // ordering/keys are shared.
+  const clusters = overviewClusters({
+    sessions,
+    overviewPanels,
+    overviewOrder,
+    schedules,
+    filter,
+  }).map(({ repo, keys }) => {
+    const agents = ordered.filter((s) => effectiveRepo(s) === repo);
+    const extras = panelsByCluster.get(repo) ?? [];
+    const repoSchedules = schedules.filter((sc) => sc.cwd === repo);
+    const byKey = new Map<string, ColumnItem>();
+    for (const s of agents) byKey.set(s.id, { kind: "agent", session: s });
+    for (const e of extras) {
+      byKey.set(e.panel.id, {
+        kind: "panel",
+        panel: e.panel,
+        repoKey: e.repoKey,
+      });
     }
-  }
-  // Repos with only pending schedules show too (#94).
-  for (const sc of schedules) {
-    if (!filter || sc.cwd === filter) repoSet.add(sc.cwd);
-  }
-  const repoList = [...repoSet].sort((a, b) => {
-    const byName = repoName(a)
-      .toLowerCase()
-      .localeCompare(repoName(b).toLowerCase());
-    return byName !== 0 ? byName : a.localeCompare(b);
+    for (const sc of repoSchedules) {
+      byKey.set(sc.id, { kind: "schedule", schedule: sc });
+    }
+    const items = keys
+      .map((k) => byKey.get(k))
+      .filter((x): x is ColumnItem => x !== undefined);
+    return { repo, keys, items };
   });
-
-  // Per repo: the drag-reordered item list (#43). The saved order is merged with
-  // the live items (agents by createdAt, then panels) so a spawn appends and an
-  // exit drops out without scrambling the rest.
-  const clusters = repoList
-    .map((repo) => {
-      const agents = ordered.filter((s) => effectiveRepo(s) === repo);
-      const extras = panelsByCluster.get(repo) ?? [];
-      const repoSchedules = schedules.filter((sc) => sc.cwd === repo);
-      const defaultKeys = [
-        ...agents.map((s) => s.id),
-        ...extras.map((e) => e.panel.id),
-        ...repoSchedules.map((sc) => sc.id),
-      ];
-      const keys = mergeRepoOrder(overviewOrder[repo] ?? [], defaultKeys);
-      const byKey = new Map<string, ColumnItem>();
-      for (const s of agents) byKey.set(s.id, { kind: "agent", session: s });
-      for (const e of extras) {
-        byKey.set(e.panel.id, {
-          kind: "panel",
-          panel: e.panel,
-          repoKey: e.repoKey,
-        });
-      }
-      for (const sc of repoSchedules) {
-        byKey.set(sc.id, { kind: "schedule", schedule: sc });
-      }
-      const items = keys
-        .map((k) => byKey.get(k))
-        .filter((x): x is ColumnItem => x !== undefined);
-      return { repo, keys, items };
-    })
-    .filter((c) => c.items.length > 0);
 
   // Map every item key → its repo, so a drag can be constrained to its cluster.
   const keyToRepo = new Map<string, string>();

@@ -1,8 +1,8 @@
 # TASK-174
 
-### 174. [ ] Shift+arrow Overview navigation selects every panel kind, not just agents
+### 174. [x] Shift+arrow Overview navigation selects every panel kind, not just agents
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 

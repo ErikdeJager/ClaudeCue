@@ -23,7 +23,7 @@ import { defaultBoard } from "./components/Kanban/kanbanOps";
 import { applyTerminalSettings } from "./components/Terminal/terminalPool";
 import * as ipc from "./ipc";
 import { emitSessionOutput } from "./outputBus";
-import { repoName } from "./paths";
+import { effectiveRepo, repoName } from "./paths";
 import { DETACHED_CANVAS_ID, IS_MAIN_WINDOW } from "./windowContext";
 import type {
   BranchList,
@@ -206,6 +206,135 @@ export function adjacentSessionId(
   if (i === -1) return sessions[0]?.id ?? null;
   const next = (((i + delta) % n) + n) % n;
   return sessions[next]?.id ?? null;
+}
+
+/**
+ * Generic flat-list adjacency: the id to select when moving `delta` (+1 next / -1
+ * prev) through `ids` in displayed order, with wrap-around at the ends. Empty list
+ * → null; a `selectedId` that is null or not in the list → the first id. Mirrors
+ * `adjacentSessionId`'s semantics on a plain id array — drives Shift+←/→ Overview
+ * nav across **every** column kind, not just agents (#174). Pure.
+ */
+export function adjacentId(
+  ids: string[],
+  selectedId: string | null,
+  delta: number,
+): string | null {
+  const n = ids.length;
+  if (n === 0) return null;
+  const i = selectedId === null ? -1 : ids.indexOf(selectedId);
+  if (i === -1) return ids[0] ?? null;
+  const next = (((i + delta) % n) + n) % n;
+  return ids[next] ?? null;
+}
+
+/**
+ * The Overview wall's columns, grouped per repo, in exactly the order they render
+ * (#174) — the single source of truth shared by `Overview.tsx` (rendering) and the
+ * Shift+←/→ keyboard nav (`useKeyboardNav.ts`), so the two can never drift. Each
+ * cluster's `keys` lists its column ids — agent terminals **and** every non-agent
+ * column (diff / markdown / terminal / kanban / filetree panels and pending
+ * schedule cards). Pure.
+ *
+ * Replicates the wall's grouping: filter to one repo when `filter` is set
+ * (`effectiveRepo(s) === filter`); group sessions by `effectiveRepo` (#96) so a
+ * worktree agent clusters under its parent repo; attribute each panel to its
+ * cluster (a worktree-keyed panel → its parent, #164); include repos that have only
+ * panels or only schedules; sort repos by `repoName` (lowercased) then path; and
+ * within each repo apply the persisted drag order (`mergeRepoOrder(overviewOrder[
+ * repo], [...agentIds, ...panelIds, ...scheduleIds])`). Empty clusters are dropped.
+ */
+export function overviewClusters(input: {
+  sessions: SessionView[];
+  overviewPanels: Record<string, OverviewPanel[]>;
+  overviewOrder: Record<string, string[]>;
+  schedules: ScheduledSession[];
+  filter: string | null;
+}): { repo: string; keys: string[] }[] {
+  const { sessions, overviewPanels, overviewOrder, schedules, filter } = input;
+
+  // The sidebar repo filter (#34) narrows the wall to one repo's agents.
+  const shown = filter
+    ? sessions.filter((s) => effectiveRepo(s) === filter)
+    : sessions;
+  // Group by effective repo (#96), agents contiguous within a repo (stable by
+  // createdAt) — the default order before any drag.
+  const ordered = [...shown].sort((a, b) => {
+    const aRepo = effectiveRepo(a);
+    const bRepo = effectiveRepo(b);
+    const byName = repoName(aRepo)
+      .toLowerCase()
+      .localeCompare(repoName(bRepo).toLowerCase());
+    if (byName !== 0) return byName;
+    const byPath = aRepo.localeCompare(bRepo);
+    if (byPath !== 0) return byPath;
+    return a.createdAt - b.createdAt;
+  });
+
+  // A worktree agent's panels are keyed by the worktree folder (#164) but cluster
+  // under the worktree's **parent** repo (#96).
+  const wtParent = new Map<string, string>();
+  for (const s of sessions) {
+    if (s.worktreeParent) wtParent.set(s.repoPath, s.worktreeParent);
+  }
+  const clusterRepoOf = (path: string) => wtParent.get(path) ?? path;
+  const panelsByCluster = new Map<string, string[]>();
+  for (const [key, list] of Object.entries(overviewPanels)) {
+    if (list.length === 0) continue;
+    const parent = clusterRepoOf(key);
+    const arr = panelsByCluster.get(parent) ?? [];
+    for (const p of list) arr.push(p.id);
+    panelsByCluster.set(parent, arr);
+  }
+
+  // Repos to render: those with agents, plus those with extra panels or pending
+  // schedules (respecting the filter).
+  const repoSet = new Set<string>();
+  for (const s of ordered) repoSet.add(effectiveRepo(s));
+  for (const [parent, ids] of panelsByCluster) {
+    if (ids.length > 0 && (!filter || parent === filter)) repoSet.add(parent);
+  }
+  for (const sc of schedules) {
+    if (!filter || sc.cwd === filter) repoSet.add(sc.cwd);
+  }
+  const repoList = [...repoSet].sort((a, b) => {
+    const byName = repoName(a)
+      .toLowerCase()
+      .localeCompare(repoName(b).toLowerCase());
+    return byName !== 0 ? byName : a.localeCompare(b);
+  });
+
+  // Per repo: the drag-reordered item list (#43), merged with the live items so a
+  // spawn appends and an exit drops out without scrambling the rest.
+  const clusters: { repo: string; keys: string[] }[] = [];
+  for (const repo of repoList) {
+    const agentIds = ordered
+      .filter((s) => effectiveRepo(s) === repo)
+      .map((s) => s.id);
+    const panelIds = panelsByCluster.get(repo) ?? [];
+    const scheduleIds = schedules
+      .filter((sc) => sc.cwd === repo)
+      .map((sc) => sc.id);
+    const defaultKeys = [...agentIds, ...panelIds, ...scheduleIds];
+    if (defaultKeys.length === 0) continue; // drop empty clusters
+    const keys = mergeRepoOrder(overviewOrder[repo] ?? [], defaultKeys);
+    clusters.push({ repo, keys });
+  }
+  return clusters;
+}
+
+/**
+ * The flat, left-to-right list of Overview column ids in rendered order (#174) —
+ * `overviewClusters` flattened. What Shift+←/→ walks. Pure.
+ */
+export function overviewClusterKeys(input: {
+  sessions: SessionView[];
+  overviewPanels: Record<string, OverviewPanel[]>;
+  overviewOrder: Record<string, string[]>;
+  schedules: ScheduledSession[];
+  filter: string | null;
+}): string[] {
+  return overviewClusters(input).flatMap((c) => c.keys);
 }
 
 /**

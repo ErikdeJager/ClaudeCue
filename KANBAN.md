@@ -15,9 +15,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #174 — Shift+arrow Overview navigation selects every panel kind, not just agents
-	Plan: TASK-174.md
-	Depends on: none
 
 ## DONE
 
@@ -38,4 +35,7 @@ kanban-plugin: board
 	Depends on: #168
 - [ ] #173 — Clickable task-list checkboxes in rendered markdown (FileViewer + Kanban card bodies)
 	Plan: TASK-173.md
+	Depends on: none
+- [ ] #174 — Shift+arrow Overview navigation selects every panel kind, not just agents
+	Plan: TASK-174.md
 	Depends on: none

@@ -1,6 +1,6 @@
 // Global keyboard shortcuts.
 //
-//   Shift+← / Shift+→  select prev/next agent in Overview                 (#24)
+//   Shift+← / Shift+→  select prev/next column in Overview (any kind)     (#24/#174)
 //   Shift+arrows       move the focused panel spatially in Canvas         (#76)
 //   ⌘1 … ⌘9            jump to canvas N (Canvas view only)                (#76)
 //   ⌘\                 toggle the main view (Overview ↔ Canvas)           (#77)
@@ -18,7 +18,7 @@
 import { useEffect } from "react";
 
 import { saveFocused } from "./saverRegistry";
-import { adjacentSessionId, useStore } from "./store";
+import { adjacentId, overviewClusterKeys, useStore } from "./store";
 import { IS_MAIN_WINDOW } from "./windowContext";
 
 export function useKeyboardNav(): void {
@@ -176,13 +176,25 @@ export function useKeyboardNav(): void {
         return;
       }
 
-      // Overview: only ←/→ navigate agents (#24); ↑/↓ pass through.
+      // Overview: ←/→ step the full flat list of columns in rendered order —
+      // agents **and** every non-agent column (file / diff / terminal / kanban /
+      // filetree panels and pending schedule cards), #174. ↑/↓ keep passing
+      // through to a focused terminal (#24).
       if (key === "ArrowLeft" || key === "ArrowRight") {
         // Intercept before xterm forwards the key to the PTY.
         e.preventDefault();
         e.stopPropagation();
-        const id = adjacentSessionId(
-          state.sessions,
+        // The same ordering the wall renders (Overview consumes the sibling
+        // `overviewClusters`), so nav can never land on a hidden/missing column.
+        const ids = overviewClusterKeys({
+          sessions: state.sessions,
+          overviewPanels: state.overviewPanels,
+          overviewOrder: state.overviewOrder,
+          schedules: state.schedules,
+          filter: state.overviewRepoFilter,
+        });
+        const id = adjacentId(
+          ids,
           state.selectedId,
           key === "ArrowRight" ? 1 : -1,
         );
