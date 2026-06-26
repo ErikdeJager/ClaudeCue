@@ -6,10 +6,11 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] File tree absolute path
-	Inside a file tree I want to be able to click on a file and copy the absolute path (not entire path). Both options should be available.
-
 ## READY
+
+- [ ] #184 — File tree context menu: offer both "Copy absolute path" and "Copy relative path"
+	Plan: TASK-184.md
+	Depends on: none
 
 ## DONE
 
