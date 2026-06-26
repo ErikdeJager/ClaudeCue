@@ -91,3 +91,28 @@ judgment with "see if this … has good UX"):
   double-click = rename. No conflict.
 - **Depends on: none** — `renameSession`, draggable headers (#70/#144), and the inline-rename
   pattern are all shipped.
+
+---
+
+## TASK-189 — Keyboard-driven panel-creation modal
+
+- **The user's literal "Cmd+1 = session" is impossible**: ⌘1–9 are already global
+  canvas-jump (#76), and ⌘⇧+digit clashes with macOS screenshots (⌘⇧3/4/5). Resolution:
+  - **Opener = ⌘K** (free; command-palette convention) → opens the modal at the type step.
+  - **In-modal digits 1–6** select the type (primary, discoverable realization of "1=session,
+    2=file…").
+  - **Global ⌘⌥1–6** open the modal at the folder step for that type (the literal "individual
+    panel keybind" with a free modifier; ⌘-combos never reach the PTY).
+- **Type order:** 1 Session · 2 File · 3 Diff · 4 Terminal · 5 Kanban · 6 File tree — reuses
+  the `ViewsMenu`/block-registry set so it stays in sync with addable types (adds **no** new
+  view type, so the #82 Views-menu dependency rule is unaffected).
+- **The modal orchestrates existing actions** — session → `startRepoSession(folder)` (reuses
+  the #127 branch/worktree flow); file/kanban → `FilePicker` → `addOverviewPanel`/
+  `createKanbanBoard`; diff/terminal/filetree → `addOverviewPanel`. No new creation logic.
+- **Target step = folder**: open repos + their worktrees + recents + Browse… (reuses the
+  new-session folder UX). This is the "repo or repo-worktree selection".
+- **New panels land in sidebar + Overview** (Views path), draggable into Canvas; **not**
+  auto-inserted into the active Canvas BSP layout (deferred to avoid a split-target decision).
+- **Main-window only; inert while another modal is open.** Existing ⌘1–9 canvas-jump
+  unchanged.
+- **Depends on: none** — all underlying machinery is shipped.
