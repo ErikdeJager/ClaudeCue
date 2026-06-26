@@ -1,8 +1,8 @@
 # TASK-178
 
-### 1. [ ] Terminal panel: add a little vertical margin so the bottom row isn't cut off
+### 1. [x] Terminal panel: add a little vertical margin so the bottom row isn't cut off
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 
@@ -77,29 +77,39 @@ each side (≈10–12px) gives comfortable, balanced breathing room.
 
 **Subtasks**
 
-1. [ ] In `src/components/Terminal/Terminal.module.css`, change `.terminal`'s
+1. [x] In `src/components/Terminal/Terminal.module.css`, change `.terminal`'s
    `padding` so the **vertical** value increases (keep horizontal at
-   `var(--space-8)`): e.g. `padding: var(--space-12) var(--space-8);`.
-2. [ ] Run the app (`npm run tauri dev`) and confirm in a real `claude` session that
+   `var(--space-8)`): e.g. `padding: var(--space-12) var(--space-8);`. — Done:
+   `padding: var(--space-12) var(--space-8);` (vertical 6px→12px, horizontal unchanged).
+2. [~] Run the app (`npm run tauri dev`) and confirm in a real `claude` session that
    the bottom row / input line is fully visible with a small margin below it — in an
    **Overview card**, a **Canvas panel**, and a **shell terminal** (#72). Tune the
    vertical token up or down so the gap looks balanced top and bottom and no row is
-   clipped.
-3. [ ] Confirm the terminal still refits correctly on resize / view switch / Canvas
-   re-tile (no garbled redraw, no off-by-one row mismatch with the PTY).
-4. [ ] `npm run build` (type-check) and `npm run lint` pass.
+   clipped. — Implemented at the plan's endorsed value (`var(--space-12)`); GUI visual
+   tuning was **not runtime-verified** (headless implementation environment — no
+   display). See Notes.
+3. [~] Confirm the terminal still refits correctly on resize / view switch / Canvas
+   re-tile (no garbled redraw, no off-by-one row mismatch with the PTY). — Not
+   runtime-verified (headless). Structurally sound: CSS-only padding change; FitAddon
+   measures the content box, so refit math is unchanged in mechanism (see Notes).
+4. [x] `npm run build` (type-check) and `npm run lint` pass. — Build, lint, and the
+   Vitest suite (248 tests) all pass.
 
 **Acceptance criteria**
 
-- [ ] In a live `claude` terminal, the bottom row (prompt / input line) is rendered
+- [~] In a live `claude` terminal, the bottom row (prompt / input line) is rendered
       in full with a small visible margin beneath it — no clipped or half-hidden
-      bottom row — in Overview cards, Canvas panels, and shell terminals.
-- [ ] The added breathing room is balanced top **and** bottom (the terminal stays
-      visually centered), achieved purely via the `.terminal` vertical padding.
-- [ ] Horizontal padding is unchanged; the value uses an existing `--space-*` token,
-      not a raw pixel literal.
-- [ ] Only `src/components/Terminal/Terminal.module.css` is modified.
-- [ ] `npm run build` and `npm run lint` pass.
+      bottom row — in Overview cards, Canvas panels, and shell terminals. — Addressed
+      via the shared `.terminal` padding bump (one node covers all three contexts);
+      not runtime-verified in the headless implementation environment.
+- [x] The added breathing room is balanced top **and** bottom (the terminal stays
+      visually centered), achieved purely via the `.terminal` vertical padding. —
+      `var(--space-12)` applied symmetrically (top + bottom); horizontal untouched.
+- [x] Horizontal padding is unchanged; the value uses an existing `--space-*` token,
+      not a raw pixel literal. — `var(--space-12)` (12px) for vertical, `var(--space-8)`
+      retained for horizontal.
+- [x] Only `src/components/Terminal/Terminal.module.css` is modified.
+- [x] `npm run build` and `npm run lint` pass.
 
 **Notes**
 
@@ -119,3 +129,14 @@ each side (≈10–12px) gives comfortable, balanced breathing room.
   content box, larger vertical padding *reduces* the computed `rows`, so the fix is
   both visual and structural — the terminal won't ask the PTY for a row that doesn't
   fit. This is why a pure CSS change resolves the clipping.
+- **Implementation (2026-06-26):** changed `.terminal`'s padding from
+  `var(--space-6) var(--space-8)` to `var(--space-12) var(--space-8)` — vertical 6px→12px
+  (the plan's endorsed value; no `--space-10` token exists, so `--space-12` is the
+  nearest balanced choice), horizontal unchanged. `npm run build`, `npm run lint`, and
+  `npm test` (248 tests) all pass. **Runtime caveat:** the GUI visual tuning steps
+  (subtasks 2–3 — running `npm run tauri dev` and eyeballing the bottom-row clearance /
+  resize refit across Overview, Canvas, and shell contexts) were **not** performed —
+  this was implemented headlessly with no display. The value follows the plan's
+  recommended starting point and FitAddon analysis; if the bottom row still clips or
+  the gap looks unbalanced when run interactively, nudge the vertical token (e.g. up to
+  `--space-16` or down to `--space-8`) — it's a one-line CSS tweak in this same file.

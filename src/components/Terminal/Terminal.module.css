@@ -22,7 +22,13 @@
 .terminal {
   position: absolute;
   inset: 0;
-  padding: var(--space-6) var(--space-8);
+  /* Balanced vertical breathing room (12px top + bottom) so claude's last row —
+     its prompt / input line — clears the panel's bottom edge instead of reading as
+     half a clipped row (#178). FitAddon measures this element's content box, so the
+     larger vertical padding also makes it claim one fewer row when the last would be
+     cut off — a fix that's both visual and structurally correct. Horizontal padding
+     unchanged. */
+  padding: var(--space-12) var(--space-8);
 }
 
 .exitOverlay {
