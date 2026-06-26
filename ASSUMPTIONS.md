@@ -141,3 +141,21 @@ judgment with "see if this … has good UX"):
   build/lint/test + workflow-guard review + idle UI rendering.
 - **Depends on: none** — it is the **foundation**; the other 3 update cards (settings update
   screen, patchnotes, mock) depend on #190.
+
+---
+
+## TASK-191 — Settings → "Updates" section
+
+- **"Alternative settings screen" = a new "Updates" section in the existing Settings modal**
+  (not a separate window), following the modal's `SECTIONS` pattern.
+- **Reuses #190 entirely** (the `update` slice, `checkForUpdate`/`installUpdate`, freeze/
+  progress/restart) — adds only UI + a deep-link. No new updater logic.
+- **The #190 indicator deep-links here** (`setSettingsOpen(true, "updates")`), making the
+  Updates pane the primary "review what will be installed → install" surface; #190's minimal
+  confirm modal becomes redundant for that path (implementer reconciles — don't build two
+  competing confirm surfaces).
+- **"What will be installed" = a labelled slot** in this pane; the patch-notes content is
+  **#192** (which renders into it).
+- **Update actions are immediate** (not draft-staged), like Data & About's actions.
+- **Depends on: #190.** #192 (patchnotes) depends on this #191; #193 (mock) is how these panes
+  get exercised before a real signed release exists.

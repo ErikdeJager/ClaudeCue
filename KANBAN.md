@@ -6,12 +6,14 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Alternative settings screen for updating
-	An alternative settings screen for updating, with a button to check for updates. This settings screen is opened when the user wants to update, to see what will be installed.
 - [ ] Patchnotes JSON baked into app + settings patch-notes view
 	Patchnotes JSON baked into the app, and settings displaying patch notes. The JSON structure must be updated with every version bump; the pipeline should check if the version is still up to date — if not, the GitHub pipeline ends early. The patchnotes JSON is a simple structure containing a list of bullet-point changes grouped by category (e.g. feature, fix). Separate JSON file for each update, and the UI loads them and shows them in the settings screen for updating. The patchnotes should be part of the release in some way: the user should be able to read the patchnotes of a new update that has not been installed yet. Think of a smart solution for this.
 - [ ] Mock update (dev testing)
 	In dev runs, be able to insert a command to mock an available update. Mocking this will change the UI and show a fake update status, allowing testing of the UI.
+- [ ] Optional card checkbox — render plain `- bullet` lines as cards
+	A plain `- bullet` (no `[ ]`/`[x]`) is currently dropped by the parser, so the card disappears. Let a card optionally have no checkbox: a plain bullet shows as a card and round-trips back unchanged.
+- [ ] Clean up Kanban card UI — reposition checkbox + action icons
+	The edit (pen) and delete icons crowd the card title, and the overall card layout looks bad. Redesign for a cleaner look with the checkbox and action icons in better positions. Whoever refines this should search the internet for examples of good-looking Kanban cards first.
 
 ## READY
 
@@ -30,6 +32,9 @@ kanban-plugin: board
 - [ ] #190 — Auto-update skeleton: gated release pipeline + in-app update UI (keys deferred)
 	Plan: TASK-190.md
 	Depends on: none
+- [ ] #191 — Settings → "Updates" section: check for updates + review what will be installed
+	Plan: TASK-191.md
+	Depends on: #190
 
 ## DONE
 
