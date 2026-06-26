@@ -1693,3 +1693,64 @@ render-site prop threading.
 
 ---
 
+### 167. [x] File tree viewer — a collapsible repo file tree as a first-class view type
+
+**Status:** Done
+**Depends on:** none · _(reuses the already-shipped flat `list_files`; the only other open item at
+authoring time was the "left panel collapse" Refine card, which produces nothing this needs.)_
+**Created:** 2026-06-25
+
+**Description**
+
+Added a **File tree viewer**: a new first-class, **repo-scoped** content kind `"filetree"` that shows a
+collapsible tree of a repo's files. Folders expand/collapse on click; clicking a file opens it in the
+file viewer; right-clicking a file offers **Open in file viewer** / **Open as Kanban board** (`.md`
+only) / **Reveal in Finder** / **Copy path** (folders have no menu). Like the **diff** panel it
+mirrors, it is opened from the repo right-click **Views** menu (and the #164 worktree-badge popover),
+deduped one-per-repo, and rendered identically in all three view surfaces — a **sidebar row**, an
+**Overview column**, and a **Canvas panel** — plus a Canvas-template **"Open file tree"** block.
+
+The tree is built **client-side** from the existing flat, sorted, filtered `list_files(repo)` (hidden/
+heavy/binary excluded, capped 500 files / depth 8) — **no backend change**. The accepted consequence:
+empty folders, binary-only folders, hidden dirs, and anything past the cap don't appear (matching the
+existing `FilePicker`).
+
+**What shipped** (commit `6a5d46d`, 2026-06-25)
+
+- **New content kind `"filetree"`** threaded through `OverviewPanel["kind"]` (`src/types/index.ts`),
+  `SidebarItem["kind"]` (`src/store.ts`), the panel↔content mapping (`canvasDrop.ts`), and the
+  template-block registry.
+- **Pure tree builder + tests:** `src/components/FileTree/buildFileTree.ts` (`buildFileTree(paths) →
+  FileTreeNode[]`, folders-before-files, each alphabetical) with `buildFileTree.test.ts` (nesting,
+  mixed levels, ordering, deep paths, empty list).
+- **`FileTree` component** (`FileTree.tsx` + `.module.css`): loads `listFiles(repoPath)` on mount,
+  Loading/empty states, recursive chevron+folder / file-leaf rendering with local expanded-set state,
+  click-to-open via `addOverviewPanel`, an inline cursor-positioned right-click context menu, and an
+  optional manual **refresh** button.
+- **Wiring** mirroring the diff panel everywhere: `ItemContent` render branch, `canvasDrop`
+  (`overviewPanelToContent` / `payloadToContent` / `sameItem` dedupe by `repoPath`) + tests, store
+  (`panelLabel`, `addOverviewPanel` one-per-repo dedupe, `matchesCanvasItem`, `resolveTemplateBlock`),
+  the `ViewsMenu` entry (`FolderTree` icon), a `FileTreeRow` draggable sidebar row + `renderPanelRows`
+  branch, the Overview `panelLabel`, and the `templateBlocks` `"open-filetree"` block + test.
+
+**Key files touched:** `src/components/FileTree/` (new: `FileTree.tsx`, `FileTree.module.css`,
+`buildFileTree.ts`, `buildFileTree.test.ts`), `src/components/Canvas/canvasDrop.ts` (+`.test.ts`),
+`src/components/Canvas/templateBlocks.ts` (+`.test.ts`), `src/components/ItemContent/ItemContent.tsx`,
+`src/components/Overview/Overview.tsx`, `src/components/Sidebar/Sidebar.tsx`,
+`src/components/ViewsMenu/ViewsMenu.tsx`, `src/store.ts`, `src/types/index.ts`. **No backend change.**
+
+**Notes / deviations from the plan**
+
+- The pure helper was named **`buildFileTree.ts`** (not the planned `fileTree.ts`) — `fileTree.ts` vs
+  the component `FileTree.tsx` differ only in case and collide on macOS's case-insensitive filesystem
+  (TS `TS1261`/`TS1192`). Export surface (`buildFileTree` + `FileTreeNode`) and behavior unchanged.
+- The `FileTree` component **reimplements** the small cursor-positioned context menu inline (local
+  `menu-in` keyframe, since CSS Modules scope `@keyframes`) rather than lifting `RowContextMenu` out of
+  `Sidebar.tsx`.
+- The plan's `canvasDrop.ts` "content→label helper" sub-bullet was a **no-op** — diff/filetree carry no
+  `label` in the current file; filetree matches diff everywhere (dedupe by `repoPath`).
+- All green: `npm run build`, `npm test` (220), `npm run lint`, `npm run format:check`, `cargo test`
+  (72).
+
+---
+

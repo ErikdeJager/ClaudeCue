@@ -6,15 +6,16 @@ kanban-plugin: board
 
 ## Refine
 
+- [ ] shift arrows selection refactor
+	The shift arrow keys are used to jump between panel elements. However, it never selects files. I want the shift + arrow keys to select all kinds of panels. No mattwe what kind of panel, I should be able to select it with the shift + arrow keys
+- [ ] Filetree open double
+	Clciking a file inside the filetree panel that is already open; it should jump to and show that file if in overview mode. Or open the file in the canvas if not present
 
 ## READY
 
 
 ## DONE
 
-- [ ] #167 — File tree viewer
-	Plan: TASK-167.md
-	Depends on: none
 - [ ] #168 — Collapsible left panel (sidebar minimize to an icon rail)
 	Plan: TASK-168.md
 	Depends on: none
