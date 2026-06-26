@@ -1971,3 +1971,54 @@ for out-of-repo files — the intended meaning in both cases).
 
 ---
 
+### 172. [x] Empty-area (background) context menu for the left sidebar — add folder without an agent
+
+**Status:** Done
+**Depends on:** #168 _(the menu must also open from the collapsed icon rail, so the #168 rail render had
+to exist to wire the handler onto it)_
+**Created:** 2026-06-25
+
+**Description**
+
+Added a **background context menu** to the left sidebar. Previously only items (agent/file/diff/
+terminal/kanban/scheduled rows, worktree headers, repo headers) had right-click menus — right-clicking
+the **empty space** below the repo list (or the whole panel when no repos exist) did nothing. The new
+non-repo-scoped menu offers, in order: **New folder…**, **New session**, **Schedule session**,
+**Collapse/Expand sidebar** (label reflects `sidebarCollapsed`), and **Clear Overview filter** (shown
+only when `overviewRepoFilter` is active). The user explicitly excluded Settings / Open-data-folder
+entries.
+
+Its headline capability is **New folder…**: open the native directory picker and add the chosen
+**existing** folder to the persisted `recents` — so it appears as a (greyed, agent-less, coral-`+`)
+folder group immediately and survives restart, **without** spawning an agent, changing the selection,
+or switching the view (a folder already listed just moves to the top; cancel is a no-op). This does
+**not** create a directory on disk. Closing a backend gap: `Store::touch_recent` existed but had no
+standalone Tauri command (only spawn/schedule called it internally), so an `add_recent` command was
+added.
+
+**What shipped** (commit `ebb6d68`, 2026-06-25)
+
+- **Backend:** `add_recent(path)` command reusing `Store::touch_recent` (deduped/capped/persisted),
+  registered in `lib.rs`'s `invoke_handler`.
+- **IPC + store:** `addRecent` wrapper; an `addFolder()` store action — `pickDirectory()` → `addRecent`
+  → move-to-top `recents` dedupe (no toast, no select, no view switch).
+- **Sidebar:** a second `useRowMenu()` instance (`bgMenu`) rendered via the shared `RowContextMenu`,
+  with a `bgMenuItems` array built conditionally. A guarded `openBgMenu`
+  (`event.target === event.currentTarget`) is wired onto the expanded `.repos` container **and** the
+  collapsed-rail `.rail`/`.railRepos` containers, plus a direct handler on the zero-repo `emptyHint` so
+  a folder-less sidebar is still right-clickable. The self-guard means repo-header / item-row
+  right-clicks still open only their own menus (bubbled events are rejected).
+
+**Key files touched:** `src-tauri/src/commands.rs`, `src-tauri/src/lib.rs`, `src/ipc.ts`,
+`src/store.ts`, `src/components/Sidebar/Sidebar.tsx`.
+
+**Notes**
+
+- "New folder…" keeps the user's wording but *adds an existing* folder (the native picker title
+  "Choose a working directory" makes that clear) — it never creates a directory.
+- All green: `npm run build`, `npm run lint`, `npm test` (221), `npm run format:check`; `cargo test`
+  (73), clippy, `cargo fmt`. **Caveat:** the live picker/Finder flow was **not** runtime-verified in the
+  autonomous loop — it reuses the proven `pickDirectory` + `touch_recent` paths.
+
+---
+
