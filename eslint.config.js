@@ -39,5 +39,14 @@ export default tseslint.config(
       "@typescript-eslint/triple-slash-reference": "off",
     },
   },
+  {
+    // Node CI/build helper scripts (#192 patchnotes-to-md) — Node globals, not browser.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: globals.node,
+    },
+  },
   prettier,
 );

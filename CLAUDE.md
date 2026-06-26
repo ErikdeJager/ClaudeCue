@@ -551,12 +551,25 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
     `UpdateModal` → a **full-window input-blocking install overlay with a progress
     bar** → relaunch. A persisted **`last_version`** (Rust scalar, like `sidebar_width`)
     is compared to `app_version()` on boot to show a one-time **"Updated to v…" toast**
-    (#190 — the post-update step; also the mock's hook).
-  - **Pipeline:** `.github/workflows/release.yml` on push to `main` gates on **BOTH** a
-    version bump (config version > latest `v*` tag) **and** the
-    `TAURI_SIGNING_PRIVATE_KEY` secret being present; either missing → the build job is
-    skipped and the run ends green with a notice. When both hold it builds a universal
-    macOS bundle + a **draft** GitHub release via `tauri-action`.
+    (#190 — the post-update step; also the mock's hook). The Settings → **Updates**
+    pane (#191) is the manual review-then-install surface (Check for updates / current
+    version / status / Update now); the sidebar indicator deep-links to it.
+  - **Patch notes (#192):** per-version notes are authored in-repo as
+    `src/patchnotes/<version>.json` (`{version,date,changes:[{category,items[]}]}`),
+    loaded + normalized by the pure `src/patchnotes.ts` (`import.meta.glob` eager,
+    `patchnotesFor`/`latestPatchnotes`/`patchnotesToMarkdown`) and rendered by
+    `components/PatchNotes` in the Updates pane for the **current** version. For a
+    **not-yet-installed** update, the notes ride **inside the release**: the pipeline
+    generates the release body from the new version's JSON (`scripts/patchnotes-to-md.mjs`),
+    `tauri-action` writes it into `latest.json`'s `notes`, `check()` returns it as
+    `update.body`, and the store keeps it as `update.notes` — rendered (markdown) in the
+    Updates pane's "What's new" slot so an older client reads them before installing.
+  - **Pipeline:** `.github/workflows/release.yml` on push to `main` gates on a
+    version bump (config version > latest `v*` tag), a **matching `src/patchnotes/
+    <version>.json`** (#192 — else end early), **and** the `TAURI_SIGNING_PRIVATE_KEY`
+    secret being present; any missing → the build job is skipped and the run ends green
+    with a notice. When all hold it builds a universal macOS bundle + a **draft** GitHub
+    release via `tauri-action`, its body generated from the version's patch notes.
   - **Today it no-ops:** no signed release exists and the pubkey is a placeholder, so
     `checkForUpdate` returns null and the indicator stays hidden. **Activation** later
     needs only the deferred "provide signing key" task: generate the minisign keypair,

@@ -1,8 +1,8 @@
 # Task 192
 
-### 192. [ ] Patch notes: baked-in per-version JSON, release-carried notes, settings view
+### 192. [x] Patch notes: baked-in per-version JSON, release-carried notes, settings view
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #190, #191
 **Created:** 2026-06-26
 
@@ -106,32 +106,41 @@ and #191 (Updates pane/slot).
 
 **Subtasks**
 
-1. [ ] `PatchNotes` type + `src/patchnotes/0.0.1.json` (seed) + `src/patchnotes.ts`
-   (glob-load, normalize, `patchnotesFor`/`latestPatchnotes`/`patchnotesToMarkdown`) +
-   `patchnotes.test.ts`.
-2. [ ] `PatchNotes` render component (grouped categories + bullets).
-3. [ ] Extend #190's `update` slice with `notes`; populate from `update.body` in
-   `checkForUpdate`.
-4. [ ] In #191's Updates pane: render `update.notes` (available update) in the "What's new"
-   slot + the current version's baked-in notes.
-5. [ ] `scripts/patchnotes-to-md.mjs`; wire `release.yml` to (a) **guard** the version has a
-   matching patch-notes file (else end early) and (b) set `releaseBody` from it.
-6. [ ] **Verify** — `npm run build`, `npm run lint`, `npm test` (incl. `patchnotes.test.ts`)
-   green; Rust untouched; review the `release.yml` guard logic. Manual (or via #193 mock):
-   Settings → Updates shows the current version's notes; with a mocked available update +
-   `notes`, the "What's new" slot renders them.
+1. [x] `PatchNotes`/`PatchNotesChange` types + `src/patchnotes/0.0.1.json` (seed) +
+   `src/patchnotes.ts` (`import.meta.glob` eager-load, `normalizePatchNotes` best-effort,
+   `compareVersions`, `categoryLabel`, `allPatchnotes` (newest-first), `patchnotesFor`/
+   `latestPatchnotes`/`patchnotesToMarkdown`) + `patchnotes.test.ts` (6 tests).
+2. [x] `components/PatchNotes/PatchNotes.tsx` (+ CSS) — grouped category headings + bullet
+   lists, item text via react-markdown (inline, `<p>` unwrapped) reusing the #182
+   external-link components.
+3. [x] Extended #190's `update` slice with `notes: string | null` (default null); `updater.ts`
+   returns `notes` from `update.body`; `checkForUpdate` populates it.
+4. [x] #191 Updates pane: the "What's new in v<version>" slot renders `update.notes` as
+   markdown (release-carried, readable before installing); a "What's new in this version"
+   block renders the **current** version's baked-in `patchnotesFor(appVer)` via `PatchNotes`.
+5. [x] `scripts/patchnotes-to-md.mjs` (version → release-body markdown, mirrors
+   `patchnotesToMarkdown`); `release.yml` now (a) **guards** that `src/patchnotes/<version>.json`
+   exists **and** its `version` matches (else `has_notes=false` → release job skipped) and
+   (b) generates the body from it (`releaseBody: steps.body.outputs.md`). Added an eslint
+   block giving `scripts/**/*.mjs` Node globals.
+6. [x] **Verify** — `npm run build`, `npm run lint`, `npm test` (269, +6) green; **no Rust
+   changes**; `release.yml` parses (YAML-validated) with the 3-guard `if:`; the script runs
+   (`node scripts/patchnotes-to-md.mjs 0.0.1` → grouped markdown, exits 1 on a missing
+   version). The live update path is **runtime-unverified** (needs a real release/key — via
+   the #193 mock's `update.notes`); see Notes.
 
 **Acceptance criteria**
 
-- [ ] Per-version patch-notes JSON lives under `src/patchnotes/` and is loaded + rendered
-      (grouped feature/fix/… bullets) for the **current** version in the Settings Updates
-      pane.
-- [ ] An **available update's** notes (carried in the release via `latest.json`/`update.body`)
-      render in #191's "What's new" slot — so a **not-yet-installed** update's notes are
-      readable before installing.
-- [ ] The release pipeline **ends early if the bumped version has no matching patch-notes
-      file**, and otherwise sets the release body from that file.
-- [ ] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
+- [x] Per-version patch-notes JSON lives under `src/patchnotes/` (`0.0.1.json` seed) and is
+      loaded + rendered (grouped feature/fix/… bullets) for the **current** version in the
+      Settings Updates pane (`PatchNotes` + `patchnotesFor(appVer)`).
+- [x] An **available update's** notes (carried in the release via `latest.json` →
+      `update.body` → `update.notes`) render as markdown in #191's "What's new" slot — so a
+      **not-yet-installed** update's notes are readable before installing.
+- [x] The release pipeline **ends early if the bumped version has no matching patch-notes
+      file** (or its `version` mismatches) — the `notes` guard sets `has_notes=false` and the
+      `release` job's `if:` requires it — and otherwise sets the release body from that file.
+- [x] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
 
 **Notes**
 
@@ -157,3 +166,34 @@ and #191 (Updates pane/slot).
 - **References:** TASK-190.md (`update` slice, `release.yml`, updater `body`), TASK-191.md
   (Updates pane + "What's new" slot); `FileViewer.tsx` / `KanbanPanel.tsx` (react-markdown
   usage). CLAUDE.md "react-markdown + remark-gfm" + "Builds & distribution".
+
+**Implementation notes (2026-06-26 — done)**
+
+- New: `src/patchnotes/0.0.1.json`, `src/patchnotes.ts` (+`.test.ts`),
+  `components/PatchNotes/{PatchNotes.tsx,.module.css}`, `scripts/patchnotes-to-md.mjs`.
+  Edited: `types` (PatchNotes), `store.ts` + `updater.ts` (`update.notes`), `Settings.tsx`
+  + `.module.css` (#191 pane), `release.yml`, `eslint.config.js`, CLAUDE.md. **No Rust
+  changes.**
+- **"Read not-yet-installed notes" solution (the smart requirement):** the running (older)
+  app can't read version Y's baked JSON, so Y's notes ride **in the release** — the pipeline
+  renders Y's `src/patchnotes/Y.json` → the GitHub release body, `tauri-action` writes it
+  into `latest.json`'s `notes`, `check()` surfaces it as `update.body`, the store keeps it as
+  `update.notes`, and #191's slot renders it. The baked-in JSON is the authored **source**
+  and the in-app **current-version** changelog.
+- **Render reuse:** patch-note item text uses the existing react-markdown + remark-gfm stack
+  with the shared `markdownLinkComponents` (#182 external links); a `p`-unwrap component
+  renders each bullet inline. No new markdown dep.
+- **Dual rendering source:** `patchnotesToMarkdown` (TS) for in-app/fallback and
+  `scripts/patchnotes-to-md.mjs` (Node, can't import TS) for the release body — kept in sync
+  by mirroring the same category-label + `### heading` / `- bullet` shape. The script is
+  unit-exercised by hand (`node scripts/patchnotes-to-md.mjs 0.0.1`); ESLint now treats
+  `scripts/**/*.mjs` as Node (globals) so `process`/`console` lint clean.
+- **Pipeline guard:** GitHub Actions can't read a file's contents in a job `if:`, so the
+  `check` job exposes a `has_notes` output (file exists + `version` matches) and the
+  `release` job gates on `should_release && has_notes && has_key`. The multiline release body
+  flows through a `md<<EOF` `$GITHUB_OUTPUT` heredoc → `releaseBody`.
+- **Runtime-unverified (autonomous loop, no GUI session + no signed release):** the live
+  Updates-pane render and a real release's `update.body`. The pure loader/markdown is
+  unit-tested (6 cases), the script runs locally, and the workflow YAML parses with the
+  3-guard `if:`. The #193 mock can set `update.notes` to exercise the slot; recommend a pass
+  once it lands.

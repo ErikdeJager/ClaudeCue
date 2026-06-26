@@ -669,6 +669,10 @@ export interface AppState {
     progress: number;
     error?: string;
     confirming: boolean;
+    /** The available update's release notes (#192) — markdown carried in the
+     * release's `latest.json` (`update.body`), so a not-yet-installed version's
+     * notes are readable before installing. `null` when none / up to date. */
+    notes: string | null;
   };
   /** Pending scheduled sessions (#93), newest-first; main window only. */
   schedules: ScheduledSession[];
@@ -1327,6 +1331,7 @@ export const useStore = create<AppState>()((set, get) => ({
     version: null,
     progress: 0,
     confirming: false,
+    notes: null,
   },
   schedules: [],
   settings: DEFAULT_SETTINGS,
@@ -1537,7 +1542,14 @@ export const useStore = create<AppState>()((set, get) => ({
       const info = await updater.checkForUpdate();
       set((s) => ({
         update: info
-          ? { ...s.update, status: "available", version: info.version }
+          ? {
+              ...s.update,
+              status: "available",
+              version: info.version,
+              // Release-carried notes (#192) so the not-yet-installed version's
+              // notes render in the Updates pane's "What's new" slot.
+              notes: info.notes,
+            }
           : { ...s.update, status: "idle" },
       }));
     } catch {

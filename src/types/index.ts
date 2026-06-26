@@ -304,6 +304,23 @@ export interface Toast {
   tone: ToastTone;
 }
 
+/** One grouped block of patch-notes (#192): a category + its bullet items. */
+export interface PatchNotesChange {
+  /** A small known set (`feature` / `fix` / `improvement` / `other`),
+   * case-insensitive + extensible — unknown values render under their own heading. */
+  category: string;
+  /** Short bullet strings; may contain inline markdown (links/bold). */
+  items: string[];
+}
+
+/** Per-version patch notes (#192), authored in-repo as `src/patchnotes/<version>.json`
+ * and rendered in the Settings → Updates pane (#191). */
+export interface PatchNotes {
+  version: string;
+  date: string;
+  changes: PatchNotesChange[];
+}
+
 /** UI-facing session (camelCase, augmented with derived/live fields). */
 export interface SessionView {
   id: string;

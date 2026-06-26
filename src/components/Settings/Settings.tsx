@@ -17,10 +17,16 @@ import {
   Trash2,
 } from "lucide-react";
 
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
 import * as ipc from "../../ipc";
+import { patchnotesFor } from "../../patchnotes";
 import { DEFAULT_SETTINGS, REPO_PALETTE, useStore } from "../../store";
 import type { Settings as SettingsType } from "../../types";
 import Checkbox from "../Checkbox/Checkbox";
+import { markdownLinkComponents } from "../markdownCheckboxes";
+import PatchNotes from "../PatchNotes/PatchNotes";
 import Slider from "../Slider/Slider";
 import styles from "./Settings.module.css";
 
@@ -101,6 +107,8 @@ function SettingsModal() {
   );
   const [appVer, setAppVer] = useState("");
   const [claudeVer, setClaudeVer] = useState<string | null>(null);
+  // The running version's baked-in patch notes (#192), shown in the Updates pane.
+  const currentNotes = appVer ? patchnotesFor(appVer) : null;
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -409,19 +417,31 @@ function SettingsModal() {
                         </span>
                       </span>
 
-                      {/* "What will be installed" — a labelled slot the patch-notes
-                          view (#192) fills; empty placeholder for now. */}
+                      {/* "What will be installed" (#192): the release-carried notes
+                          (markdown from latest.json → update.body), so a
+                          not-yet-installed version's notes are readable here. */}
                       <div className={styles.whatsNew}>
                         <span className={styles.whatsNewLabel}>
-                          What&rsquo;s new
+                          What&rsquo;s new in v{updateState.version}
                         </span>
                         <div
                           className={styles.whatsNewSlot}
                           data-update-version={updateState.version}
                         >
-                          <p className={styles.whatsNewEmpty}>
-                            Release notes will appear here.
-                          </p>
+                          {updateState.notes ? (
+                            <div className={styles.markdownNotes}>
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={markdownLinkComponents}
+                              >
+                                {updateState.notes}
+                              </ReactMarkdown>
+                            </div>
+                          ) : (
+                            <p className={styles.whatsNewEmpty}>
+                              No release notes provided.
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -449,6 +469,17 @@ function SettingsModal() {
                       )}
                     </div>
                   )}
+
+                {/* The running version's baked-in notes (#192) — an in-app
+                    changelog of what's already installed. */}
+                {currentNotes && (
+                  <div className={styles.field}>
+                    <span className={styles.fieldLabel}>
+                      What&rsquo;s new in this version
+                    </span>
+                    <PatchNotes notes={currentNotes} />
+                  </div>
+                )}
               </div>
             )}
 

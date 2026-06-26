@@ -315,6 +315,45 @@
   font-style: italic;
 }
 
+/* Release-carried notes (#192) rendered as markdown in the "What's new" slot. */
+.markdownNotes {
+  color: var(--text-secondary);
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+}
+
+.markdownNotes :first-child {
+  margin-top: 0;
+}
+
+.markdownNotes :last-child {
+  margin-bottom: 0;
+}
+
+.markdownNotes h3,
+.markdownNotes h4 {
+  margin: var(--space-12) 0 var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--fs-meta-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.markdownNotes ul {
+  margin: 0;
+  padding-left: var(--space-16);
+}
+
+.markdownNotes a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.markdownNotes a:hover {
+  text-decoration: underline;
+}
+
 .updateProgress {
   display: flex;
   width: 100%;

@@ -1,16 +1,18 @@
 name: Release
 
-# On every push to main, release ONLY when BOTH guards pass (#190, re-introducing
-# #15's pipeline removed by #62):
-#   1. the app version was bumped past the latest v* tag, AND
-#   2. a signing key secret (TAURI_SIGNING_PRIVATE_KEY) is configured.
+# On every push to main, release ONLY when ALL guards pass (#190 + #192):
+#   1. the app version was bumped past the latest v* tag,
+#   2. a matching src/patchnotes/<version>.json exists (#192), AND
+#   3. a signing key secret (TAURI_SIGNING_PRIVATE_KEY) is configured.
 # With no key configured (today — the updater is a deferred-key skeleton) the build
 # job is skipped and the workflow no-ops with a clear notice. Adding the secret + a
-# version bump later activates it with no further code changes.
+# version bump (with patch notes) later activates it with no further code changes.
 #
-# When both hold, build a universal macOS bundle and create a DRAFT GitHub release
+# When all hold, build a universal macOS bundle and create a DRAFT GitHub release
 # carrying the .dmg + the Tauri updater artifacts (.app.tar.gz, .sig, latest.json).
-# A maintainer then publishes the draft for clients to auto-update to.
+# The release body is generated from the version's patch notes (#192), which flows
+# into latest.json's `notes` → the app's `update.body`, so an older client can read a
+# not-yet-installed update's notes. A maintainer then publishes the draft.
 
 on:
   push:
@@ -26,6 +28,7 @@ jobs:
     outputs:
       should_release: ${{ steps.guard.outputs.should_release }}
       has_key: ${{ steps.secret.outputs.has_key }}
+      has_notes: ${{ steps.notes.outputs.has_notes }}
       version: ${{ steps.guard.outputs.version }}
     steps:
       - uses: actions/checkout@v4
@@ -65,12 +68,33 @@ jobs:
             echo "has_key=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - id: notes
+        name: Require matching patch notes (#192)
+        run: |
+          # Force per-version patch notes: the release body / latest.json notes come
+          # from src/patchnotes/<version>.json, so a missing/mismatched file ends the
+          # release early (the card's "check the version is up to date — if not, end").
+          version="${{ steps.guard.outputs.version }}"
+          file="src/patchnotes/${version}.json"
+          if [ ! -f "$file" ]; then
+            echo "::notice::No patch notes ($file) for v$version — skipping release."
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+          elif [ "$(node -p "require('./${file}').version")" != "$version" ]; then
+            echo "::notice::Patch-notes version in $file does not match v$version — skipping release."
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_notes=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
     name: Build + draft release
     needs: check
-    # Both guards: a version bump AND a configured signing key. Either missing ->
-    # this job is skipped and the workflow ends green.
-    if: needs.check.outputs.should_release == 'true' && needs.check.outputs.has_key == 'true'
+    # All guards: a version bump, matching patch notes (#192), AND a configured
+    # signing key. Any missing -> this job is skipped and the workflow ends green.
+    if: >-
+      needs.check.outputs.should_release == 'true' &&
+      needs.check.outputs.has_notes == 'true' &&
+      needs.check.outputs.has_key == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,6 +117,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - id: body
+        name: Generate release notes from patch notes (#192)
+        run: |
+          # The version's patch notes → the release body, which tauri-action also
+          # writes into latest.json's `notes` → the app's `update.body`.
+          {
+            echo "md<<PATCHNOTES_EOF"
+            node scripts/patchnotes-to-md.mjs "${{ needs.check.outputs.version }}"
+            echo "PATCHNOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build universal bundle + draft release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -103,5 +138,6 @@ jobs:
           args: --target universal-apple-darwin
           tagName: v${{ needs.check.outputs.version }}
           releaseName: ClaudeCue v${{ needs.check.outputs.version }}
+          releaseBody: ${{ steps.body.outputs.md }}
           releaseDraft: true
           prerelease: false

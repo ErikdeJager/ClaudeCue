@@ -15,15 +15,20 @@ let pending: Update | null = null;
 
 export interface UpdateInfo {
   version: string;
+  /** Release notes carried in `latest.json` (`update.body`, #192) — markdown, or
+   * null when the release provides none. */
+  notes: string | null;
 }
 
 /** Check the configured endpoint for a newer published release. Returns the new
- *  version (and stashes the pending `Update`), or null when up to date / offline /
- *  outside Tauri / no signed release. */
+ *  version + notes (and stashes the pending `Update`), or null when up to date /
+ *  offline / outside Tauri / no signed release. */
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
   const update = await check();
   pending = update;
-  return update ? { version: update.version } : null;
+  return update
+    ? { version: update.version, notes: update.body ?? null }
+    : null;
 }
 
 /**
