@@ -200,39 +200,43 @@ function SortableCard({
             )}
           </button>
         )}
-        <span className={styles.cardActions}>
-          {editing ? (
-            <button
-              type="button"
-              className={styles.cardBtn}
-              onClick={onStopEdit}
-              title="Done editing"
-              aria-label="Done editing"
-            >
-              <Check size={13} strokeWidth={1.5} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={styles.cardBtn}
-              onClick={onStartEdit}
-              title="Edit card"
-              aria-label="Edit card"
-            >
-              <Pencil size={12} strokeWidth={1.5} />
-            </button>
-          )}
+      </div>
+      {/* Actions live in a hover/focus-revealed cluster absolutely positioned in the
+          card's top-right (#195), out of the title's flex flow so the title gets the
+          full row width. Revealed on `.card:hover`/`:focus-within` (so while editing
+          the focused input keeps Done visible, and keyboard users reach them). */}
+      <span className={styles.cardActions}>
+        {editing ? (
           <button
             type="button"
             className={styles.cardBtn}
-            onClick={onDelete}
-            title="Delete card"
-            aria-label="Delete card"
+            onClick={onStopEdit}
+            title="Done editing"
+            aria-label="Done editing"
           >
-            <Trash2 size={12} strokeWidth={1.5} />
+            <Check size={13} strokeWidth={1.5} />
           </button>
-        </span>
-      </div>
+        ) : (
+          <button
+            type="button"
+            className={styles.cardBtn}
+            onClick={onStartEdit}
+            title="Edit card"
+            aria-label="Edit card"
+          >
+            <Pencil size={12} strokeWidth={1.5} />
+          </button>
+        )}
+        <button
+          type="button"
+          className={styles.cardBtn}
+          onClick={onDelete}
+          title="Delete card"
+          aria-label="Delete card"
+        >
+          <Trash2 size={12} strokeWidth={1.5} />
+        </button>
+      </span>
       {editing ? (
         <textarea
           className={styles.cardBodyInput}

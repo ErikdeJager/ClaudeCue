@@ -1,8 +1,8 @@
 # Task 195
 
-### 195. [ ] Clean up Kanban card UI — hover-revealed actions, declutter the title row
+### 195. [x] Clean up Kanban card UI — hover-revealed actions, declutter the title row
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #194
 **Created:** 2026-06-26
 
@@ -68,29 +68,38 @@ title width). Visual/structural only.
 
 **Subtasks**
 
-1. [ ] Restructure the `Card` markup so the title occupies the full row; move the edit/delete
-   (and edit-mode Done) buttons into a top-right `.cardActions` cluster outside the title's
-   flex flow.
-2. [ ] CSS: `position: relative` card; `.cardActions` absolutely top-right, hidden at rest,
-   revealed on `.card:hover, .card:focus-within` with a short opacity transition (respect
-   `prefers-reduced-motion`); title right-padding so revealed buttons don't overlap text;
-   quiet checkbox + subtle/hover grip.
-3. [ ] Render **no checkbox** when `card.checked === null` (#194), title flush-left.
-4. [ ] Keep `CardPreview` consistent with the new resting layout.
-5. [ ] **Verify** — `npm run build`, `npm run lint`, `npm test` green; Rust untouched.
-   Manual (or note as runtime-unverified): cards look uncluttered at rest; hovering/focusing a
-   card reveals edit + delete top-right; title no longer crowded; a no-checkbox card renders
-   cleanly; toggle/edit/delete/drag and body checkboxes still work.
+1. [x] Restructured the `Card` markup: the edit/delete (+ edit-mode Done) `.cardActions`
+   `<span>` moved **out** of `.cardTop` to be a direct child of the `.card` article, so the
+   title's flex row is just `[grip] [checkbox?] [title]`.
+2. [x] CSS: `.card { position: relative }`; `.cardActions` `position: absolute` top-right,
+   `opacity: 0` + `pointer-events: none` at rest, revealed (opacity 1 + pointer-events auto)
+   on `.card:hover, .card:focus-within` with the existing short opacity transition (the
+   global `prefers-reduced-motion` killswitch drops it); a left→right card-colored
+   **gradient backdrop** so a long title fades cleanly under the buttons; title
+   `padding-right` (and a larger one on the editing input so its text clears Done). The grip
+   stays the existing subtle hover/focus-revealed affordance (#161).
+3. [x] No checkbox when `card.checked === null` (#194, already gated by the conditional
+   `<Checkbox>`); with the actions out of flow the title now spans the row.
+4. [x] `CardPreview` is consistent — it already omits the actions and shares `.cardTop` /
+   `.cardTitle`, so the new resting layout (full-width title, no action icons) applies to it
+   unchanged.
+5. [x] **Verify** — `npm run build`, `npm run lint`, `npm test` (277) green; **no Rust
+   changes**; both files prettier-clean. The live hover/focus reveal is **runtime-unverified**
+   in this loop (no GUI) — see Notes.
 
 **Acceptance criteria**
 
-- [ ] The edit + delete icons are **not shown at rest**; they appear on card **hover or
-      focus-within** (keyboard-reachable) in the top-right, and no longer crowd the title.
-- [ ] The title spans the full card width at rest; a card with **no checkbox** (#194 `null`)
-      renders flush-left with no empty checkbox gap.
-- [ ] All existing behavior is intact — toggle, click-to-edit, edit Done, delete, drag/reorder
-      (incl. `CardPreview` overlay), and body task-list checkboxes (#173).
-- [ ] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
+- [x] The edit + delete icons are **not shown at rest** (`opacity:0`/`pointer-events:none`);
+      they appear on card **hover or focus-within** (keyboard-reachable) in the top-right, and
+      no longer crowd the title (they're out of its flex flow). _(Live reveal
+      runtime-unverified — see Notes.)_
+- [x] The title spans the full card width at rest (actions absolute, not reserving flex
+      space — only a small right-padding buffer); a card with **no checkbox** (#194 `null`)
+      renders with no empty checkbox gap (the `<Checkbox>` is omitted).
+- [x] All existing behavior is intact — only DOM position/CSS changed: toggle, click-to-edit,
+      edit Done, delete, drag/reorder (incl. `CardPreview` overlay), and body task-list
+      checkboxes (#173) keep their handlers/markup.
+- [x] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
 
 **Notes**
 
@@ -114,3 +123,30 @@ title width). Visual/structural only.
 - **References:** `KanbanPanel.tsx` (`Card` ~145–257, `CardPreview` ~263–298),
   `KanbanPanel.module.css` (`.cardTop`/`.cardActions`/`.cardBtn`/`.cardTitle`/`.cardCheck`);
   TASK-194.md (optional checkbox). CLAUDE.md "markdown Kanban board (#141…)".
+
+**Implementation notes (2026-06-26 — done)**
+
+- **The premise was already partly true:** a prior refinement (#161) had *already* made the
+  grip **and** the actions hover/focus-revealed (`opacity:0` → revealed on
+  `.card:hover, .card:focus-within`). So the residual problem wasn't "always-visible" icons —
+  it was that the `.cardActions` cluster still sat **in the flex flow** (reserving ~50px of
+  horizontal space even while invisible), so the title never got that width. The fix moves
+  `.cardActions` out of `.cardTop` (absolute top-right), freeing the title to span the row.
+- **Overlap handled two ways:** a left→right card-colored gradient on the actions cluster
+  (`linear-gradient(transparent → --bg-elevated)`) fades a long title under the buttons, plus
+  a `padding-right` buffer on the title (and a larger one on the editing input so typed text
+  clears the Done button). `pointer-events: none` at rest lets clicks/hover pass through the
+  hidden cluster to the title beneath; `auto` once revealed.
+- **Layout/CSS only — no behavior change:** the edit/delete/Done buttons keep their exact
+  handlers; only their DOM position (out of `.cardTop`) and the CSS changed. dnd wiring is
+  untouched (grip still holds `{...attributes}{...listeners}`). The `#194` null-checkbox path
+  is unchanged (conditional `<Checkbox>`). 277 engine/ops tests still pass.
+- **Grip kept as-is:** the plan allowed "restyle/reposition... rather than a permanent column"
+  but warned against re-architecting dnd. The grip is already a subtle hover/focus-revealed
+  affordance (#161); the remaining ~13px it reserves is the drag handle's slot, separate from
+  the "checkbox gap" AC2 targets (which #194 already removed). Left it to avoid a hover
+  layout-shift and to honor "don't re-architect the dnd wiring".
+- **Runtime-unverified (autonomous loop, no GUI session):** the live look of the resting card
+  + the hover/focus reveal + the gradient fade. The change is pure layout/CSS, type-checks,
+  lints, and leaves every handler/markup intact; recommend a quick `npm run tauri dev` pass on
+  a Kanban board (hover a card; check a no-checkbox card; edit/delete/drag still work).

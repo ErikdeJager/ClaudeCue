@@ -283,6 +283,8 @@
 }
 
 .card {
+  /* Positioning context for the hover/focus-revealed top-right actions (#195). */
+  position: relative;
   background: var(--bg-elevated);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-chip);
@@ -361,7 +363,9 @@
   appearance: none;
   background: none;
   border: none;
-  padding: 0;
+  /* A little right room so a long title's first line doesn't sit under the
+     hover-revealed top-right actions (#195); the gradient backdrop covers the rest. */
+  padding: 0 var(--space-20) 0 0;
   text-align: left;
   cursor: text;
   font-size: var(--fs-meta);
@@ -376,7 +380,8 @@
   background: var(--bg-base);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-chip);
-  padding: var(--space-2) var(--space-6);
+  /* Extra right padding so the editing input's text clears the Done button (#195). */
+  padding: var(--space-2) var(--space-24) var(--space-2) var(--space-6);
   color: var(--text-primary);
   font-size: var(--fs-meta);
 }
@@ -391,20 +396,34 @@
   color: var(--text-muted);
 }
 
-/* Edit/Delete reveal on card hover / focus-within (#161) — uncluttered by default,
-   always shown while editing (the focused input keeps the card `:focus-within`). */
+/* Edit/Delete in a hover/focus-revealed cluster, absolutely positioned in the
+   card's top-right (#195) — out of the title's flex flow so the title spans the
+   full row at rest. Uncluttered by default; always shown while editing (the focused
+   input keeps the card `:focus-within`) and reachable by keyboard (`:focus-within`).
+   A left→right card-colored gradient fades a long title cleanly under the buttons
+   instead of hard-clipping it. */
 .cardActions {
-  flex: 0 0 auto;
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-6);
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  padding-left: var(--space-16);
+  background: linear-gradient(
+    to right,
+    transparent 0,
+    var(--bg-elevated) var(--space-16)
+  );
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .card:hover .cardActions,
 .card:focus-within .cardActions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .cardBtn {
