@@ -3765,3 +3765,64 @@ gate), `src/components/Sidebar/Sidebar.tsx` (repo context menu + `WorktreeHeader
 
 ---
 
+### 202. [x] File-tree search: filename + content matches with inline snippet preview, in-panel
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+The file-tree panel (the lazy `list_dir` tree #167) had **no search**. This adds a search input
+**inside the panel** (no separate panel): as the user types, matching files appear — matched by
+**filename** and by **file contents** — with content hits shown as an inline snippet "mini
+viewer" and per-result **Reveal in tree** / **Open** actions. A lightweight in-app "find in
+files."
+
+**What shipped** (commit `bdfe42a`, 2026-06-26) — **full-stack** (Rust + frontend + a CLAUDE.md
+line):
+
+- **New backend content-search command** `search_file_contents(repo, query, limit)` (`files.rs`)
+  + `ContentMatch { path, line, snippet }` / `ContentSearchResult { matches, truncated }`:
+  mirrors `search_files`' sorted/deterministic walk (same `SKIP_DIRS` incl. `.git`, `SKIP_EXTS`,
+  path-confinement) but reads contents, with content-specific bounds — a **2 MB per-file size
+  cap** (`MAX_CONTENT_SEARCH_BYTES`, tighter than the viewer's 5 MB since search is hot), a
+  **3-matches-per-file cap**, the total `limit`, and a `truncated` flag set when any cap is hit
+  (no silent truncation, per #179). Non-UTF-8 files are skipped; `make_snippet` is char-based
+  (panic-safe) and windows long lines (>200 chars) around the match with `…`. 4 Rust unit tests.
+- **Command + IPC:** `search_file_contents` Tauri command (clamped limit) registered in
+  `lib.rs`; `searchFileContents` wrapper + `ContentMatch`/`ContentSearchResult` types in
+  `ipc.ts` (beside `DirEntry`).
+- **In-panel search UI** (`FileTree.tsx` + `.module.css`): a debounced (200 ms) toolbar input;
+  a non-empty query replaces the tree with a results view (latest-wins cancel guard). **Files**
+  (filename, `searchFiles`) and **In files** (content) searches run **in parallel**, rendering
+  as each resolves. Content hits show `path:line` + a mono snippet with the match
+  `<mark>`-highlighted (case-insensitive re-find), a result count, per-group "more not shown"
+  cap notes, and "No matches."/"Searching…" states.
+- **Per-result actions:** **Reveal in tree** (`revealInTree` — lazy-`listDir`s every ancestor
+  level so the row mounts, expands them, exits results, scrolls the row in + flashes a highlight
+  — a new in-panel expand-to-path, distinct from the OS `revealPath` #130) and **Open**
+  (row-click → `openFileFromTree`, the same path a tree file-click uses).
+
+**Key files touched:** `src-tauri/src/files.rs` (+ `search_file_contents`, structs, 4 tests),
+`src-tauri/src/commands.rs`, `src-tauri/src/lib.rs`; `src/ipc.ts`,
+`src/components/FileTree/FileTree.tsx` (+ `.module.css`); `CLAUDE.md`.
+
+**Dependencies:** none — reuses the `files.rs` walk patterns, the lazy tree (#167), and existing
+file-open actions.
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** decisions in `ASSUMPTIONS.md` — a new `search_file_contents`
+  command (content search was absent); plain case-insensitive substring (no regex, parity with
+  `search_files`); in-panel tree↔results toggle; Open reuses the existing file-open action;
+  Reveal is a new in-tree expand-to-path. Documented sub-decisions: no ±1 context lines (cleaner
+  highlight, smaller payload); content "Open" can't jump to the matched line (the viewer has no
+  line-jump API — the `:line` is shown for reference); filename results display-capped at 100.
+- **Runtime-unverified** in this autonomous loop (no GUI session): the live typing →
+  dual-results → reveal/open flow. The backend walk + snippet windowing are unit-tested (87 Rust
+  tests, +4) and the UI reuses the established lazy-tree + file-open machinery. `npm run build` /
+  `npm run lint` / `npm test` (288), `cargo test` (87), clippy, fmt, prettier all green.
+
+---
+
