@@ -2503,3 +2503,60 @@ network git write's `GIT_TERMINAL_PROMPT=0` env guard + best-effort error handli
 
 ---
 
+### 182. [x] Markdown links must open in the external browser, never inside the app window
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+Clicking a link inside **rendered markdown** navigated the Tauri **webview itself** — the React app
+was replaced by the linked page, stranding the user on a web page inside ClaudeCue with no back button
+or chrome. The cause: the app renders markdown with react-markdown + remark-gfm and (since #173) a
+custom `components` map (`makeCheckboxComponents`) that only overrode the `input` element, so links
+fell through to react-markdown's default plain `<a href>` — which in a Tauri webview performs an
+in-place SPA-destroying navigation. This task routes rendered-markdown links to the system browser
+(reusing the #109 `openUrl` path) and neutralizes any non-web link so the app can never be navigated
+away.
+
+**What shipped** (commit `affaf6d`, 2026-06-26)
+
+- **`src/components/markdownCheckboxes.tsx`:** added a pure, unit-testable
+  `isExternalHref(href)` helper (true only for `http(s)://…`, `/^https?:\/\//i`), a reusable
+  `markdownLinkComponents` map whose `a` override always `preventDefault()`s and — only for an
+  external href — calls `void openUrl(href).catch(() => {})` (imported from `../ipc`, the same
+  dependency-free Rust `open_url` the #109 terminal links use); non-http(s) schemes (relative paths,
+  `mailto:`, `tel:`, `#anchor`) become no-ops. The `a` override is **merged into**
+  `makeCheckboxComponents`'s returned map, so it coexists with the existing `input` checkbox override.
+- **Coverage of all three render sites:** because both the **FileViewer** rendered-markdown view and
+  the **Kanban card body** build their components map from `makeCheckboxComponents`, they pick up the
+  link handling for free; the third site, **`CardPreview`** (KanbanPanel's drag overlay, which built
+  no map before), gets `components={markdownLinkComponents}` passed explicitly.
+- **No backend change:** `open_url` keeps its existing http(s)-only guard; `mailto:`/`tel:` are
+  deliberately not routed to the system handler. No new IPC surface, dependency, or capability change.
+- The react-markdown v9 `node` prop is **not** spread onto the DOM `<a>` (avoids the invalid-attribute
+  warning), matching the existing `input` override.
+
+**Key files touched:** `src/components/markdownCheckboxes.tsx` (`isExternalHref`,
+`markdownLinkComponents`, merge into `makeCheckboxComponents`),
+`src/components/markdownCheckboxes.test.ts` (new `isExternalHref` unit test),
+`src/components/Kanban/KanbanPanel.tsx` (`CardPreview` link override). No backend / `CLAUDE.md` change.
+
+**Dependencies:** none (reuses the #109 `openUrl` → Rust `open_url` primitive and the #173 shared
+markdown-`components` factory, both already shipped).
+
+**Notes**
+
+- User decisions (refine Q&A, 2026-06-26): **all markdown sites** (FileViewer view + Kanban card bodies
+  + `CardPreview`) via the shared factory; **neutralize non-http(s)** (no nav, no backend widening).
+- `CardPreview` is a drag overlay (pointer events usually suppressed mid-drag), so its links are rarely
+  clickable in practice; the override is added there for consistency / defense-in-depth.
+- `npm run build`, `npm run lint`, and `npm test` (with the new `isExternalHref` test) pass. Manual
+  in-app verification (clicking an http link in a rendered `.md` / Kanban card opening the system
+  browser while the window stays on the app; a relative/`mailto` link doing nothing) was **not**
+  runtime-tested in the headless loop; the classification is unit-tested and the click handling reuses
+  the established #109 path.
+
+---
+
