@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Updating setup (skeleton for future auto-update)
-	Set up the update feature in its first setup for later. We'll need tauri keys for this, but that's deferred and generated later. For now set up everything for future deployment: a GitHub pipeline that makes a draft release per version of the app, but it checks if the secret key is present in GitHub secrets — if not present the workflow ends early. The UI has an update indicator in the left panel, in a little box at the bottom (box above the settings). A modal appears asking if the user is sure; clicking OK freezes the app (block user input) and shows a progress bar for downloads etc. App restarts updated and shows a toast with the new version. This skeleton needs to be ready to go once a full tauri signing key is provided in a later task.
 - [ ] Alternative settings screen for updating
 	An alternative settings screen for updating, with a button to check for updates. This settings screen is opened when the user wants to update, to see what will be installed.
 - [ ] Patchnotes JSON baked into app + settings patch-notes view
@@ -28,6 +26,9 @@ kanban-plugin: board
 	Depends on: none
 - [ ] #189 — Keyboard-driven panel-creation modal (⌘K) + per-type shortcuts
 	Plan: TASK-189.md
+	Depends on: none
+- [ ] #190 — Auto-update skeleton: gated release pipeline + in-app update UI (keys deferred)
+	Plan: TASK-190.md
 	Depends on: none
 
 ## DONE

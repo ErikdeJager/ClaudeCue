@@ -116,3 +116,28 @@ judgment with "see if this … has good UX"):
 - **Main-window only; inert while another modal is open.** Existing ⌘1–9 canvas-jump
   unchanged.
 - **Depends on: none** — all underlying machinery is shipped.
+
+---
+
+## TASK-190 — Auto-update skeleton (keys deferred)
+
+- **Reverses #62 + reuses #15.** Rebuild the removed #15 updater (git `24791c4`) as the base,
+  richer (gated pipeline + sidebar box + confirm/freeze/progress + post-update toast). The
+  implementer updates CLAUDE.md/README to undo the #62 "no auto-update / no pipeline" note.
+- **Keys deferred → placeholder pubkey + `createUpdaterArtifacts` OFF**, so local
+  `tauri build` keeps producing an **unsigned** bundle with no key (build-safety is a hard
+  requirement). A later "provide signing key" task bakes the real pubkey, flips
+  `createUpdaterArtifacts`, and adds the GitHub secrets — no other code change ("ready to go").
+- **Pipeline guards on BOTH a version bump (from #15) AND the signing-secret presence**; ends
+  early otherwise (the card's "ends early if the secret isn't present"). Draft release per
+  version via `tauri-action`.
+- **Indicator = a box in the sidebar footer above the Settings gear** (per the card). **Freeze
+  = a full-window input-blocking `--scrim` overlay** + progress bar bound to the updater's
+  download events; then `relaunch()`.
+- **Post-update toast** via a persisted `lastVersion` compared to Tauri `getVersion()` on boot
+  — also the hook the mock (#193) reuses.
+- **Testability:** with no key/release the live download can't run; the store `update` state
+  machine is shaped so the **mock task (#193) drives every state**. #190's own verification is
+  build/lint/test + workflow-guard review + idle UI rendering.
+- **Depends on: none** — it is the **foundation**; the other 3 update cards (settings update
+  screen, patchnotes, mock) depend on #190.
