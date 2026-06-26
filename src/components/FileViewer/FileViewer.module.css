@@ -373,10 +373,12 @@
   max-width: 100%;
 }
 
-/* GFM task-list checkboxes (#52): read-only rendered file content (react-markdown
-   renders them `disabled`), restyled to match the app Checkbox — never editable.
-   The accent fill + CSS checkmark mirror `Checkbox`; if `::after` isn't supported
-   the filled accent box still reads as checked. */
+/* GFM task-list checkboxes, restyled to match the app Checkbox: the accent fill +
+   CSS checkmark mirror `Checkbox`; if `::after` isn't supported the filled accent
+   box still reads as checked. Originally read-only (#52), they are now **clickable**
+   in rendered markdown (#173) — a click flips the underlying `- [ ]` ⇄ `- [x]`
+   source marker — hence the pointer cursor. (Large files stay raw, so no markdown
+   checkbox renders there.) */
 .markdown input[type="checkbox"] {
   appearance: none;
   position: relative;
@@ -387,7 +389,7 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-chip);
   background: var(--bg-base);
-  cursor: default;
+  cursor: pointer;
 }
 
 .markdown input[type="checkbox"]:checked {

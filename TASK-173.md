@@ -2,9 +2,9 @@
 
 ---
 
-### 173. [ ] Clickable task-list checkboxes in rendered markdown (FileViewer + Kanban card bodies)
+### 173. [x] Clickable task-list checkboxes in rendered markdown (FileViewer + Kanban card bodies)
 
-**Status:** Not started · _(Not started | In progress | Done)_
+**Status:** Done · _(Not started | In progress | Done)_
 **Depends on:** none · _(independent — builds only on already-shipped code)_
 **Created:** 2026-06-25
 
@@ -102,7 +102,7 @@ hast `node` to every component override, so reading `node.properties` works.
 
 **Subtasks**
 
-1. [ ] **Shared module** — create `src/components/markdownCheckboxes.tsx` (colocated, since
+1. [x] **Shared module** — create `src/components/markdownCheckboxes.tsx` (colocated, since
    it returns a react-markdown `components` map) exporting:
    - `rehypeTaskListPositions` — a rehype plugin `() => (tree) => …` that uses
      `visitParents` from `unist-util-visit-parents` to find every `element` with
@@ -131,11 +131,11 @@ hast `node` to every component override, so reading `node.properties` works.
    - Note: keep the `<ReactMarkdown>` `remarkPlugins={[remarkGfm]}` and add
      `rehypePlugins={[rehypeTaskListPositions]}` + `components={…}` at each call site.
 
-2. [ ] **Add the direct dependency** — add `"unist-util-visit-parents": "^6.0.2"` to
+2. [x] **Add the direct dependency** — add `"unist-util-visit-parents": "^6.0.2"` to
    `package.json` `dependencies` (it already resolves transitively; declare it because we now
    import it). Run `npm install` so the lockfile records it.
 
-3. [ ] **Wire up `FileViewer`** (`src/components/FileViewer/FileViewer.tsx`):
+3. [x] **Wire up `FileViewer`** (`src/components/FileViewer/FileViewer.tsx`):
    - Compute `interactiveMarkdown = mode === "markdown" && !showRaw && !tooLarge`.
    - In the `renderMarkdown` branch, pass `rehypePlugins={[rehypeTaskListPositions]}` and
      `components={makeCheckboxComponents({ source: text, interactive: true, onToggle: setText })}`
@@ -143,7 +143,7 @@ hast `node` to every component override, so reading `node.properties` works.
      mode.)
    - Memoize the `components` map (`useMemo` on `[text]`) so it isn't rebuilt every render.
 
-4. [ ] **FileViewer toolbar in rendered mode** — rendered markdown is now writable, so its
+4. [x] **FileViewer toolbar in rendered mode** — rendered markdown is now writable, so its
    toolbar must surface save state. Extend the toolbar gating so the **Save button (manual)
    / "Saving…/Saved" status (auto)** block also shows for `interactiveMarkdown`, not just the
    raw/text `editable` case. Concretely: define `writable = !tooLarge && (mode === "markdown"
@@ -152,7 +152,7 @@ hast `node` to every component override, so reading `node.properties` works.
    (`(mode === "markdown" && !tooLarge) || editable`) so the Rendered/Raw segmented toggle is
    unaffected. ⌘S already works via the saver registry.
 
-5. [ ] **Wire up `KanbanPanel`** (`src/components/Kanban/KanbanPanel.tsx`):
+5. [x] **Wire up `KanbanPanel`** (`src/components/Kanban/KanbanPanel.tsx`):
    - In `SortableCard`'s view-mode body render, pass
      `rehypePlugins={[rehypeTaskListPositions]}` and
      `components={makeCheckboxComponents({ source: card.body, interactive: true, onToggle:
@@ -165,7 +165,7 @@ hast `node` to every component override, so reading `node.properties` works.
      checkboxes to click. The manual-save Save button + status already exist in the Kanban
      toolbar, so manual mode is covered.
 
-6. [ ] **Styling** — interactive affordance:
+6. [x] **Styling** — interactive affordance:
    - `FileViewer.module.css`: in `.markdown input[type="checkbox"]`, the rule currently sets
      `cursor: default`; switch to `cursor: pointer` (checkboxes are interactive now — they
      remain disabled-styled only in non-interactive contexts, which here are limited to large
@@ -176,35 +176,35 @@ hast `node` to every component override, so reading `node.properties` works.
      vertical alignment) so card-body checkboxes match the app look instead of the raw browser
      default.
 
-7. [ ] **Unit tests** — add `src/components/markdownCheckboxes.test.ts` (Vitest, pure logic)
+7. [x] **Unit tests** — add `src/components/markdownCheckboxes.test.ts` (Vitest, pure logic)
    covering `toggleTaskMarker`: `[ ]`→`[x]`, `[x]`→`[ ]`, `[X]`→`[ ]`, ordered-list markers
    (`1. [ ]`), indented/nested items, a slice with a trailing `[link](url)` after the marker
    (flip the marker, not the link), and a non-task slice (returns `null`). If practical, a
    small DOM/render test that a rendered FileViewer markdown checkbox is **not** `disabled`
    and that clicking it calls `onToggle` with the flipped source.
 
-8. [ ] **Verify build & checks** — `npm run build`, `npm run lint`, `npm test` all pass.
+8. [x] **Verify build & checks** — `npm run build`, `npm run lint`, `npm test` all pass.
 
 **Acceptance criteria**
 
-- [ ] In the `FileViewer` **rendered** markdown view, task-list checkboxes are **clickable**
+- [x] In the `FileViewer` **rendered** markdown view, task-list checkboxes are **clickable**
   (not disabled); clicking one flips `- [ ]` ⇄ `- [x]` for that item in the underlying file.
-- [ ] The toggle persists: in **auto-save** mode the change is written (debounced) and
+- [x] The toggle persists: in **auto-save** mode the change is written (debounced) and
   survives reload; in **manual-save** mode the buffer goes **dirty** and the change is written
   on ⌘S / the Save button (and is flushed on close), matching raw-editor behavior (#162).
-- [ ] The FileViewer **rendered** markdown toolbar shows the **Save button (manual)** or
+- [x] The FileViewer **rendered** markdown toolbar shows the **Save button (manual)** or
   **Saving…/Saved status (auto)**, consistent with the raw view.
-- [ ] In a **Kanban card body**, task-list checkboxes are clickable; toggling one updates that
+- [x] In a **Kanban card body**, task-list checkboxes are clickable; toggling one updates that
   card's body in the `.md` (via `updateCard` → `serializeBoard`) and persists per the save
   mode. The drag-overlay preview's checkboxes are non-interactive.
-- [ ] The correct checkbox toggles even with multiple/nested task items and items containing
+- [x] The correct checkbox toggles even with multiple/nested task items and items containing
   links or inline code; a `[ ]`-looking string inside a fenced code block is **not** treated
   as a checkbox.
-- [ ] Large files (`tooLarge`) remain raw and read-only; the Prism code view and other
+- [x] Large files (`tooLarge`) remain raw and read-only; the Prism code view and other
   read-only contexts are unchanged; no other rendered-markdown content becomes editable.
-- [ ] Clickable checkboxes have a pointer cursor and a clear checked/unchecked appearance in
+- [x] Clickable checkboxes have a pointer cursor and a clear checked/unchecked appearance in
   both the FileViewer markdown and Kanban card bodies.
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass; new `toggleTaskMarker` unit tests
+- [x] `npm run build`, `npm run lint`, and `npm test` pass; new `toggleTaskMarker` unit tests
   pass.
 
 **Notes**
@@ -232,5 +232,21 @@ hast `node` to every component override, so reading `node.properties` works.
   react-markdown **v10**, remark-gfm **v4**, `unist-util-visit-parents` **6.0.2** present.
 - **Assumption:** the checked marker char is lowercase `x` (matches existing serialization).
   No other source normalization is performed by the toggle.
+- **Implemented (2026-06-26):** shared module `src/components/markdownCheckboxes.tsx`
+  (`rehypeTaskListPositions` / `toggleTaskMarker` / `makeCheckboxComponents`), wired into
+  `FileViewer` (rendered markdown, `interactive: true`, `onToggle: setText`; toolbar
+  save/status now gated by a new `writable = !tooLarge && (markdown||text)`) and
+  `KanbanPanel` (`SortableCard` body via a new `onBodyToggle`/`onCardBodyToggle` prop chain
+  → `mutate(updateCard(… { body }))`). `unist-util-visit-parents@^6.0.2` added as a direct
+  dep. CSS: `.markdown`/`.cardBody input[type="checkbox"]` use `cursor: pointer` (the latter
+  newly styled to match the app Checkbox). **`CardPreview`** keeps the default disabled
+  checkboxes (no override added) — non-interactive by omission, the simplest way to satisfy
+  the read-only drag-overlay requirement.
+- **Tests:** `markdownCheckboxes.test.ts` covers `toggleTaskMarker` (all the listed cases)
+  **and** `rehypeTaskListPositions` against a hand-built hast tree. The optional DOM/render
+  test was **not** added: the repo's Vitest env is node-only with no jsdom/testing-library
+  (`vitest.config.ts`), so a render test would mean pulling in a DOM stack — out of proportion
+  to this task. Runtime click behavior in the live app was therefore not automatically
+  verified (build + lint + the pure-logic tests pass).
 
 ---

@@ -41,6 +41,10 @@ import { noAutoCapitalize } from "../../inputProps";
 import { useStore } from "../../store";
 import { useAutoSaveFile } from "../../useAutoSaveFile";
 import Checkbox from "../Checkbox/Checkbox";
+import {
+  makeCheckboxComponents,
+  rehypeTaskListPositions,
+} from "../markdownCheckboxes";
 import { type Board, type Card, parseBoard, serializeBoard } from "./kanban";
 import {
   addCard,
@@ -84,6 +88,8 @@ interface CardProps {
   onStopEdit: () => void;
   onDraftChange: (patch: Partial<CardDraft>) => void;
   onToggle: () => void;
+  /** Toggle a task-list checkbox inside the rendered body (#173) → new body markdown. */
+  onBodyToggle: (nextBody: string) => void;
   onDelete: () => void;
 }
 
@@ -99,6 +105,7 @@ function SortableCard({
   onStopEdit,
   onDraftChange,
   onToggle,
+  onBodyToggle,
   onDelete,
 }: CardProps) {
   const {
@@ -113,6 +120,17 @@ function SortableCard({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+  // Clickable task-list checkboxes inside the rendered body (#173): a toggle flips
+  // the marker in the de-indented `card.body` and commits via `onBodyToggle`.
+  const bodyComponents = useMemo(
+    () =>
+      makeCheckboxComponents({
+        source: card.body,
+        interactive: true,
+        onToggle: onBodyToggle,
+      }),
+    [card.body, onBodyToggle],
+  );
   // Commit-on-confirm (#160): while editing, the title/body bind to the local
   // `draft` (no per-keystroke write). The edit commits once when focus leaves the
   // whole card — but NOT when it moves between the card's own controls (title ↔
@@ -224,7 +242,11 @@ function SortableCard({
       ) : (
         card.body.trim() && (
           <div className={styles.cardBody}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeTaskListPositions]}
+              components={bodyComponents}
+            >
               {card.body}
             </ReactMarkdown>
           </div>
@@ -290,6 +312,8 @@ interface ColumnProps {
   onCardStopEdit: () => void;
   onCardDraftChange: (patch: Partial<CardDraft>) => void;
   onCardToggle: (idx: number) => void;
+  /** A body task-list checkbox toggled (#173) → that card's new body markdown. */
+  onCardBodyToggle: (idx: number, nextBody: string) => void;
   onCardDelete: (idx: number) => void;
 }
 
@@ -360,6 +384,7 @@ function BoardColumn(props: ColumnProps) {
               onStopEdit={props.onCardStopEdit}
               onDraftChange={props.onCardDraftChange}
               onToggle={() => props.onCardToggle(idx)}
+              onBodyToggle={(body) => props.onCardBodyToggle(idx, body)}
               onDelete={() => props.onCardDelete(idx)}
             />
           ))}
@@ -708,6 +733,9 @@ function KanbanPanel({
                   }))
                 }
                 onCardToggle={(idx) => mutate(toggleCard(board, col, idx))}
+                onCardBodyToggle={(idx, body) =>
+                  mutate(updateCard(board, col, idx, { body }))
+                }
                 onCardDelete={(idx) => {
                   if (editing?.col === col && editing.idx === idx) {
                     setEditing(null);

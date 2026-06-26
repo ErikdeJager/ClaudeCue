@@ -5,6 +5,10 @@ import remarkGfm from "remark-gfm";
 
 import { noAutoCapitalize } from "../../inputProps";
 import { useAutoSaveFile } from "../../useAutoSaveFile";
+import {
+  makeCheckboxComponents,
+  rehypeTaskListPositions,
+} from "../markdownCheckboxes";
 import { detectMode, prismLang } from "./fileType";
 import { highlightToHtml } from "./prism";
 import styles from "./FileViewer.module.css";
@@ -67,6 +71,19 @@ function FileViewer({ repoPath, file, active }: FileViewerProps) {
   // Reset the raw toggle per file.
   useEffect(() => setShowRaw(false), [file]);
 
+  // Clickable task-list checkboxes in the rendered markdown (#173): a toggle flips
+  // the source marker and routes through `setText` (so the #162 save mode applies).
+  // Memoized on the buffer so the map isn't rebuilt every render. `setText` is stable.
+  const markdownComponents = useMemo(
+    () =>
+      makeCheckboxComponents({
+        source: text ?? "",
+        interactive: true,
+        onToggle: setText,
+      }),
+    [text, setText],
+  );
+
   if (error) {
     return <div className={styles.message}>Couldn’t read {file}.</div>;
   }
@@ -81,6 +98,10 @@ function FileViewer({ repoPath, file, active }: FileViewerProps) {
   // large. Rendered markdown, the Prism code view, and large files stay read-only.
   const editable =
     !tooLarge && ((mode === "markdown" && showRaw) || mode === "text");
+  // Rendered markdown is now writable too (#173, clickable checkboxes), so the
+  // toolbar's save/status surfaces for any non-large markdown/text file — not just
+  // the raw/text textarea (`editable`). The textarea itself stays gated by `editable`.
+  const writable = !tooLarge && (mode === "markdown" || mode === "text");
   const showToolbar = (mode === "markdown" && !tooLarge) || editable;
 
   return (
@@ -90,7 +111,7 @@ function FileViewer({ repoPath, file, active }: FileViewerProps) {
           {/* Auto mode (#148): a subtle "Saving…/Saved" hint. Manual mode (#162):
               a Save button in its place (enabled when dirty). Its margin-right:auto
               keeps the Rendered/Raw toggle on the right when both show. */}
-          {editable && manual ? (
+          {writable && manual ? (
             <button
               type="button"
               className={styles.saveBtn}
@@ -101,7 +122,7 @@ function FileViewer({ repoPath, file, active }: FileViewerProps) {
               {dirty ? "Save" : "Saved"}
             </button>
           ) : (
-            editable &&
+            writable &&
             status !== "idle" && (
               <span className={styles.status} role="status">
                 {status === "saving"
@@ -147,7 +168,13 @@ function FileViewer({ repoPath, file, active }: FileViewerProps) {
       )}
       {renderMarkdown ? (
         <div className={styles.markdown}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeTaskListPositions]}
+            components={markdownComponents}
+          >
+            {text}
+          </ReactMarkdown>
         </div>
       ) : lang ? (
         <CodeBlock code={text} lang={lang} />

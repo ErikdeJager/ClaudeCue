@@ -9,9 +9,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #173 — Clickable task-list checkboxes in rendered markdown (FileViewer + Kanban card bodies)
-	Plan: TASK-173.md
-	Depends on: none
 
 ## DONE
 
@@ -33,3 +30,6 @@ kanban-plugin: board
 - [ ] #172 — Empty-area context menu for the left sidebar (add folder without an agent)
 	Plan: TASK-172.md
 	Depends on: #168
+- [ ] #173 — Clickable task-list checkboxes in rendered markdown (FileViewer + Kanban card bodies)
+	Plan: TASK-173.md
+	Depends on: none

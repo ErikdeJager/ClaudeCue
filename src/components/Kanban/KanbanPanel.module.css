@@ -496,6 +496,39 @@
   color: var(--text-primary);
 }
 
+/* GFM task-list checkboxes in a card body — clickable (#173), restyled to match the
+   app Checkbox (mirrors the FileViewer markdown checkbox). A click flips the marker
+   in the card's body markdown and persists via the board buffer. */
+.cardBody input[type="checkbox"] {
+  appearance: none;
+  position: relative;
+  width: 14px;
+  height: 14px;
+  margin: 0 var(--space-6) 0 0;
+  vertical-align: -2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-chip);
+  background: var(--bg-base);
+  cursor: pointer;
+}
+
+.cardBody input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.cardBody input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 3px;
+  height: 7px;
+  border: solid var(--accent-fg);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 /* Empty-column cue (#161) — a quiet hint instead of a bare gap above Add card. */
 .emptyHint {
   margin: 0;
