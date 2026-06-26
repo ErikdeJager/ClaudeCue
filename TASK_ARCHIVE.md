@@ -3317,3 +3317,61 @@ read; this introduced the codebase's first `import.meta.env.DEV` dev-only path.
 
 ---
 
+### 194. [x] Kanban: optional card checkbox — render plain `- bullet` lines as cards
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+The Kanban engine (`kanban.ts`) only treated a list item as a **card** when it had a checkbox
+(`CARD_RE = /^- \[([ xX])\] ?(.*)$/`). A **plain `- bullet`** (no `[ ]`/`[x]`) matched nothing
+and hit the catch-all, so it was **silently dropped** — the card vanished and a
+parse→serialize round-trip **lost** it. Hand-authored Obsidian/markdown boards often use plain
+bullets, so this made the board lossy. The fix makes the checkbox **optional**: a plain bullet
+renders as a card and round-trips back unchanged as `- title`.
+
+**What shipped** (commit `d8fd83b`, 2026-06-26) — **frontend-only** (no Rust):
+
+- **Tri-state `Card.checked: boolean | null`** (was `boolean`): `null` = no checkbox
+  (`- title`), `false` = `- [ ]`, `true` = `- [x]` — the minimal lossless model (chosen over a
+  separate `hasCheckbox` flag).
+- **Parse** (`parseBoard`): a new `PLAIN_CARD_RE = /^- (.*)$/` branch tried **after** `CARD_RE`
+  (so `- [ ]`/`- [x]` still win) starts a card with `checked: null`; a bare `- ` → empty-title
+  card; body continuation attaches as for checkbox cards.
+- **Serialize** (`serializeBoard`): `null` → `- ${title}` (no bracket), `false`/`true` →
+  `- [ ] `/`- [x] ` — so `- title` ⇄ `{checked:null}` is byte-stable.
+- **Render** (`KanbanPanel.tsx`): both card render sites omit the `<Checkbox>` (whose prop is
+  strictly `boolean`) when `checked === null`; the `cardDone` class already no-ops on falsy
+  `null`. The grip/drag, title edit, and delete chrome are untouched, so a plain card stays
+  draggable/editable/deletable.
+- **Ops** (`kanbanOps.ts`): UI-created cards still default to `checked: false` (plain bullets
+  originate from the markdown, not the UI); `toggleCard` guards `null` (stays `null`, never
+  `!null === true` — defensive, since a null card renders no checkbox to toggle);
+  move/update/delete preserve `checked` as-is (the `**Complete**` lane marker is a column
+  property, not per-card, so a move never rewrites it).
+- **+7 unit tests** across `kanban.test.ts` (plain parse, bodied plain bullet, byte-stable
+  mixed round-trip incl. a bare `- `, null-model deep-equal) and `kanbanOps.test.ts` (newCard
+  default, toggle-null no-op, move preserves null).
+
+**Key files touched:** `src/components/Kanban/kanban.ts` (+ `.test.ts`),
+`src/components/Kanban/kanbanOps.ts` (+ `.test.ts`), `src/components/Kanban/KanbanPanel.tsx`.
+
+**Dependencies:** none — a self-contained engine + minimal-render change. Independent of the
+"Clean up Kanban card UI" card (#195), which should account for the optional checkbox.
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** the user wasn't responding; decisions logged in
+  `ASSUMPTIONS.md` — tri-state `boolean | null` (not a `hasCheckbox` flag); only `- ` bullets
+  (`*`/`+`/numbered lists stay out); UI-created cards still default to a checkbox; no new UI to
+  toggle a card's checkbox on/off.
+- **Runtime-unverified** in this autonomous loop (no GUI session): the live render of a
+  plain-bullet card and its drag/edit/delete. The fix's core — the parse/serialize round-trip
+  that stops the card being dropped — is unit-tested (7 new cases); the render change is a
+  minimal type-checked checkbox omission. `npm run build` / `npm run lint` / `npm test`
+  (277, +7) all green; no Rust changes.
+
+---
+

@@ -34,7 +34,3 @@ kanban-plugin: board
 	Depends on: none
 
 ## DONE
-
-- [ ] #194 — Kanban: optional card checkbox (render plain `- bullet` lines as cards)
-	Plan: TASK-194.md
-	Depends on: none
