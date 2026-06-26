@@ -44,7 +44,3 @@ kanban-plugin: board
 	Depends on: none
 
 ## DONE
-
-- [ ] #189 — Keyboard-driven panel-creation modal (⌘K) + per-type shortcuts
-	Plan: TASK-189.md
-	Depends on: none

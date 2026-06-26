@@ -2965,3 +2965,75 @@ inline-rename pattern (sidebar #57 / `CanvasTabs`) were all already shipped. Ind
 
 ---
 
+### 189. [x] Keyboard-driven panel-creation modal (⌘K) + per-type quick shortcuts
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+Creating a panel took several clicks — an agent via ⌘N → `NewSessionModal`, a view via the
+repo menu's Views section (#82/#164) or the file picker. This task adds a faster,
+keyboard-first launcher: a single shortcut opens a **"Create panel" modal** to pick a
+**type** and a **target folder (repo or repo-worktree)**, plus per-type quick shortcuts — an
+explicit power-user "nice to have" that **reuses the existing creation actions** so it stays
+in sync with the Views menu and ⌘N.
+
+**What shipped** (commit `b3f8244`, 2026-06-26) — **frontend-only** (no Rust):
+
+- **Opener ⌘K / Ctrl+K** (free; the command-palette convention) opens the modal at the type
+  step. The user's literal "⌘1 = session" was impossible — **⌘1–9 is already canvas-jump
+  (#76)** — and ⌘⇧+digit clashes with macOS screenshots, so the per-type keys became
+  **in-modal digits 1–6** (primary, discoverable) plus **global ⌘⌥1–6** (the literal
+  "individual panel keybind", with a free modifier) that open the modal straight to the
+  target step for that type.
+- **Two-step modal** (`CreatePanelModal.tsx` + `.module.css`, mirroring `NewSessionModal`'s
+  centered, focus-trapped, Escape/outside-click chrome): (1) type step — the 6 types with
+  icons + digit hints; (2) target step — open repos + their worktrees (from `recents` ∪ live
+  `session.repoPath`s, worktree folders included #74, deduped) + search + **Browse…**, reusing
+  the new-session folder UX.
+- **Reuse-only creation** routed through the **same path as the Views menu**: Session →
+  `startRepoSession(folder)` (#127, which itself opens the branch/worktree flow for a git
+  folder); File/Kanban → the shared `FilePicker` (#56) → `addOverviewPanel(…, "markdown"|"kanban")`
+  / `createKanbanBoard`; Diff/Terminal/File-tree → `addOverviewPanel` directly. New panels
+  land in the **sidebar + Overview** (draggable into Canvas), never auto-inserted into the
+  active Canvas BSP — exactly like every other "add a view" entry. No new view type, no
+  re-implemented branch/worktree logic.
+- **Shared 6-type registry** (`panelTypes.ts` + `panelTypes.test.ts`) — `1` Session · `2`
+  File · `3` Diff · `4` Terminal · `5` Kanban · `6` File tree, with a unit-tested
+  `panelTypeForDigit` — is the single source the modal, the in-modal digit map, and the
+  keyboard handler all read, keeping it in sync with `ViewsMenu`/`templateBlocks`.
+- **Keyboard wiring** (`useKeyboardNav.ts`): ⌘K → `openCreatePanel()`; ⌘⌥1–6 →
+  `openCreatePanel(panelTypeForDigit(N))` **matched on `e.code` (`Digit1`–`Digit6`)** because
+  macOS Option+digit composes a glyph in `e.key` (layout/glyph-proof). The **⌘1–9 canvas-jump
+  is untouched** (canvas-jump requires `!altKey`, the new combo requires `altKey` — mutually
+  exclusive). All shortcuts are **main-window-only**, capture-phase
+  `preventDefault`+`stopPropagation` (never reach a focused PTY), and inert while
+  `createPanelOpen || newSessionOpen`. Store gains `createPanelOpen`/`createPanelType` +
+  `openCreatePanel(type?)`/`closeCreatePanel()`; `App.tsx` mounts the modal.
+
+**Key files touched:** new `src/components/CreatePanelModal/{CreatePanelModal.tsx,.module.css,
+panelTypes.ts,panelTypes.test.ts}`; `src/store.ts` (state + open/close actions);
+`src/useKeyboardNav.ts` (⌘K + ⌘⌥1–6); `src/App.tsx` (mount).
+
+**Dependencies:** none — `ViewsMenu`/`addOverviewPanel` (#82/#164), `startRepoSession` (#127),
+`createKanbanBoard`, `FilePicker` (#56), and `useKeyboardNav` were all shipped. Independent of
+#186–#188; adds no addable view type (so doesn't affect the #82 Views-menu dependency rule).
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** the user wasn't responding; decisions logged in
+  `ASSUMPTIONS.md` — opener = ⌘K; per-type keys = in-modal digits 1–6 + global ⌘⌥1–6 (since
+  ⌘1–9 is canvas-jump and ⌘⇧+digit clashes with screenshots); type order reuses the
+  Views/block-registry set; target step lists open repos + worktrees + recents + Browse;
+  modal orchestrates existing actions only; panels land in sidebar/Overview (not auto-inserted
+  into Canvas).
+- **Runtime-unverified** in this autonomous loop (no GUI session): the live ⌘K / ⌘⌥N gestures,
+  the two-step flow, and that a created panel appears in the sidebar/Overview (incl.
+  confirming ⌘1–9 still jumps canvases and the combos don't leak into a focused terminal). The
+  digit→type map is unit-tested and every creation path reuses shipped, exercised actions.
+  `npm run build` / `npm run lint` / `npm test` (259, +2) all green; no Rust changes.
+
+---
+
