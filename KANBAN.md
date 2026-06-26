@@ -14,9 +14,6 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #169 — Refresh auto-generated session names promptly (no click needed)
-	Plan: TASK-169.md
-	Depends on: none
 - [ ] #170 — Stop macOS auto-capitalizing (and auto-correcting) text inputs
 	Plan: TASK-170.md
 	Depends on: none

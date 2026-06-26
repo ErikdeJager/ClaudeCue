@@ -1818,3 +1818,57 @@ hidden and the width is fixed; expanding restores the previously-persisted width
 
 ---
 
+### 169. [x] Refresh auto-generated session names promptly — no click required
+
+**Status:** Done
+**Depends on:** none · _(fixes shipped #97 code; every symbol it touches already exists. The other open
+cards at authoring time — #167 file tree, #168 collapsible sidebar — are unrelated.)_
+**Created:** 2026-06-25
+
+**Description**
+
+Fixed a cadence bug in the #97 auto-naming pipeline: a new agent's `claude`-generated session title did
+**not** appear in the sidebar (or Overview/Canvas) until the user **clicked** the session. Root cause —
+`claude` writes its `ai-title` **asynchronously**, a moment *after* a turn finishes, so the single title
+read fired at the busy→idle edge (the title worker's only trigger) usually ran before the title was
+written and emitted nothing, with no further re-read until the next edge. Clicking only helped
+incidentally (the repaint/resize produced output → a fresh busy→idle edge → a re-read that finally found
+the title). The frontend render path was already correct (`setAutoName` swaps the store `sessions` array,
+`SessionRow` isn't memoized), so this was purely a **backend cadence problem**.
+
+**The fix** (backend-only, all in `src-tauri/src/pty.rs`): instead of one read per edge, each **poke**
+now schedules a **bounded burst** of re-reads over a ~30s window, so a late-written title surfaces within
+seconds with no interaction. A **spawn-time poke** was also added so a brand-new agent — and a
+resumed/forked session on boot — kicks off the burst immediately rather than waiting for its first
+incidental edge. No filesystem watcher and no always-on global poll (the lightweight delayed-re-read
+approach the user chose); existing per-session dedup and `forkable` (#138) emission preserved.
+
+**What shipped** (commit `8c1e115`, 2026-06-25)
+
+- Tunable burst schedule constant `TITLE_REREAD_OFFSETS_MS = [0, 1_500, 4_000, 8_000, 15_000, 30_000]`
+  (~30s window; extending the last value lengthens it).
+- `SessionManager` gained a `title_tx: Mutex<Sender<String>>` field — a **clone** of the poke channel
+  taken before the original moves into `monitor_loop` — and `spawn_with_id` now pokes the title worker
+  right after registering a session (best-effort; covers new / resume / fork / boot).
+- `title_worker` was rewritten from a blocking `recv()` into a `recv_timeout`-driven, **schedule-aware**
+  loop holding a `pending: Vec<(Instant, String)>` of re-read deadlines: a poke **replaces** that
+  session's still-pending burst and re-enqueues all offsets from now; each pass processes (and drops)
+  every due deadline (deduping ids per pass); with nothing pending it blocks on `recv()` (no busy-wait);
+  a dropped sender returns cleanly at shutdown.
+- The read-and-emit body was extracted to `read_and_emit_title` (identical #97/#138 dedup), and a pure
+  `next_due_wait` helper (unit-tested via `next_due_wait_picks_the_soonest_deadline`) was added.
+
+**Key files touched:** `src-tauri/src/pty.rs` only — **no** frontend, `title.rs`, `lib.rs`, `ipc.ts`, or
+`store.ts` changes (the `session://name` event shape, persistence, and routing are unchanged).
+
+**Notes**
+
+- Accepted tradeoff: up to ~6 log-file scans per turn per session (vs. 1 before), all off the monitor's
+  hot path and bounded to the burst window.
+- All green: `cargo test` (73), clippy, `cargo fmt`; `npm run build` / `npm run lint` / `npm test` (221)
+  / `npm run format:check`. **Caveat:** the few-seconds live visual refresh (subtask 5) was **not**
+  runtime-verified in the autonomous loop — the cadence logic is unit-tested and reviewed against the
+  read/emit path, but not observed in a running `tauri dev` session.
+
+---
+
