@@ -52,10 +52,14 @@ export interface SessionError {
   message: string;
 }
 
-/** Local branches of a folder + the current one (mirrors `git::BranchList`). */
+/** Branches of a folder + the current one (mirrors `git::BranchList`). `remote`
+ * holds qualified remote-tracking refs (e.g. `origin/feature-x`), deduped against
+ * local branches and excluding the symbolic remote HEAD (#180); optional so older
+ * callers and `{ all: [], current: "" }` fallbacks stay valid (backend always sends it). */
 export interface BranchList {
   current: string;
   all: string[];
+  remote?: string[];
 }
 
 /** A user-added Overview panel — a non-agent column (mirrors `store::OverviewPanel`, #38). */

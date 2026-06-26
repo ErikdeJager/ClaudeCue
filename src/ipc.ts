@@ -223,9 +223,16 @@ export const workingDiff = (cwd: string) =>
 export const compareBranches = (cwd: string, base: string, target: string) =>
   invoke<WorkingDiff>("compare_branches", { cwd, base, target });
 
-/** Local branches + current branch for a folder (new-session branch picker). */
+/** Local + remote branches + current branch for a folder (new-session branch
+ * picker). `remote` is populated by a prior `fetchRemotes` (#180). */
 export const listBranches = (cwd: string) =>
   invoke<BranchList>("list_branches", { cwd });
+
+/** Best-effort `git fetch --prune` to refresh remote-tracking refs before listing
+ * remote branches in the new-session picker (#180). A network read; a failure
+ * (offline / auth / no remote) rejects with a typed error the caller swallows. */
+export const fetchRemotes = (cwd: string) =>
+  invoke<void>("fetch_remotes", { cwd });
 
 /** Check out an existing local branch in `cwd` (the first git write — #27). */
 export const checkoutBranch = (cwd: string, branch: string) =>

@@ -80,12 +80,18 @@ pub struct WorkingDiff {
     pub files: Vec<FileDiff>,
 }
 
-/// Local branches of a folder, with the currently checked-out one. A non-git
-/// folder yields `{ current: "", all: [] }`.
+/// Branches of a folder: the currently checked-out one, the local branches
+/// (`all`), and the remote-tracking branches (`remote`, qualified `<remote>/<name>`,
+/// #180). A non-git folder yields `{ current: "", all: [], remote: [] }`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BranchList {
     pub current: String,
     pub all: Vec<String>,
+    /// Remote-tracking branches as qualified short refs (e.g. `origin/feature-x`),
+    /// excluding the symbolic `*/HEAD` and any whose short name already exists
+    /// locally (deduped against `all`). Selecting one pulls it into a new local
+    /// tracking branch (#180).
+    pub remote: Vec<String>,
 }
 
 /// Current branch name, a short sha when detached, or `""` for a non-git dir.
@@ -200,7 +206,7 @@ pub fn compare_branches(
 /// the UI treats as "just spawn here" (no branch picker).
 pub fn list_branches(cwd: impl AsRef<Path>) -> BranchList {
     let cwd = cwd.as_ref();
-    let all = run_git(
+    let all: Vec<String> = run_git(
         cwd,
         &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
     )
@@ -211,9 +217,58 @@ pub fn list_branches(cwd: impl AsRef<Path>) -> BranchList {
             .collect()
     })
     .unwrap_or_default();
+    // Remote-tracking branches (#180): two cheap reads, no network. Exclude the
+    // symbolic `*/HEAD` (e.g. `origin/HEAD`, or its bare `origin` short form) and any
+    // ref whose name part (after the first `/`) already exists as a local branch.
+    let remote: Vec<String> = run_git(
+        cwd,
+        &["for-each-ref", "--format=%(refname:short)", "refs/remotes"],
+    )
+    .map(|out| {
+        out.lines()
+            .filter(|line| !line.is_empty())
+            .filter(|line| match line.split_once('/') {
+                // `<remote>/<name>` — keep unless it's a `*/HEAD` or a local dup.
+                Some((_remote, name)) => name != "HEAD" && !all.iter().any(|b| b == name),
+                // A bare remote name (the `origin/HEAD` short form) — drop it.
+                None => false,
+            })
+            .map(str::to_string)
+            .collect()
+    })
+    .unwrap_or_default();
     BranchList {
         current: current_branch(cwd),
         all,
+        remote,
+    }
+}
+
+/// Best-effort `git fetch --prune` to refresh remote-tracking refs before the
+/// new-session branch picker lists remote branches (#180) — the app's first git
+/// **network** read. `GIT_TERMINAL_PROMPT=0` (and SSH `BatchMode`) make a private
+/// remote fail fast instead of hanging on a credential prompt in a GUI-launched
+/// process. Returns git's stderr on failure; the caller swallows it (cached refs
+/// are shown instead).
+pub fn fetch_remotes(cwd: impl AsRef<Path>) -> Result<(), String> {
+    let cwd = cwd.as_ref();
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(["fetch", "--prune"])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes")
+        .output()
+        .map_err(|e| e.to_string())?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if stderr.is_empty() {
+            "git fetch failed".to_string()
+        } else {
+            stderr
+        })
     }
 }
 
@@ -294,7 +349,13 @@ fn validate_new_branch(cwd: &Path, name: &str, base: &str) -> Result<(), String>
     if existing.all.iter().any(|b| b == name) {
         return Err(format!("branch `{name}` already exists"));
     }
-    if !base.is_empty() && !existing.all.iter().any(|b| b == base) {
+    // The base may be a local branch or a remote-tracking ref (#180) — selecting a
+    // remote branch "pulls" it by creating a new local branch based on `origin/x`.
+    // Membership-in-list still blocks arbitrary / flag-like refspecs at the boundary.
+    if !base.is_empty()
+        && !existing.all.iter().any(|b| b == base)
+        && !existing.remote.iter().any(|b| b == base)
+    {
         return Err(format!("unknown base branch `{base}`"));
     }
     Ok(())
@@ -923,6 +984,62 @@ index 0..1
         assert!(worktree_add_new_branch(&dir, "wt/feature", "", &dest2).is_err());
 
         let _ = fs::remove_dir_all(&dest);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn list_branches_includes_remotes_excludes_head_and_dedups() {
+        let Some(dir) = init_repo("remote-branches") else {
+            return;
+        };
+        fs::write(dir.join("a.txt"), "x\n").unwrap();
+        assert!(commit_all(&dir, "init"));
+        // A purely-remote branch (no local counterpart) is listed.
+        assert!(git_in(
+            &dir,
+            &["update-ref", "refs/remotes/origin/feat", "HEAD"]
+        ));
+        // The symbolic origin/HEAD is excluded.
+        assert!(git_in(
+            &dir,
+            &["update-ref", "refs/remotes/origin/HEAD", "HEAD"]
+        ));
+        // A remote branch duplicating a local one is deduped out.
+        assert!(git_in(&dir, &["branch", "dup"]));
+        assert!(git_in(
+            &dir,
+            &["update-ref", "refs/remotes/origin/dup", "HEAD"]
+        ));
+
+        let list = list_branches(&dir);
+        assert!(list.remote.iter().any(|r| r == "origin/feat"));
+        assert!(!list.remote.iter().any(|r| r == "origin/HEAD"));
+        assert!(!list.remote.iter().any(|r| r == "origin/dup"));
+        // The deduped name still exists as a local branch.
+        assert!(list.all.iter().any(|b| b == "dup"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_branch_accepts_a_remote_tracking_ref_as_base() {
+        let Some(dir) = init_repo("remote-base") else {
+            return;
+        };
+        fs::write(dir.join("a.txt"), "x\n").unwrap();
+        assert!(commit_all(&dir, "init"));
+        assert!(git_in(
+            &dir,
+            &["update-ref", "refs/remotes/origin/feat", "HEAD"]
+        ));
+
+        // The widened validation accepts a remote-tracking ref as the base; "pulling"
+        // origin/feat is creating a local branch based on it.
+        assert!(create_branch(&dir, "feat-local", "origin/feat").is_ok());
+        assert!(list_branches(&dir).all.iter().any(|b| b == "feat-local"));
+        // A still-unknown base is rejected.
+        assert!(create_branch(&dir, "other", "origin/nope").is_err());
+
         let _ = fs::remove_dir_all(&dir);
     }
 }

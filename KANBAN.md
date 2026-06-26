@@ -11,12 +11,12 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #180 — Show remote branches in the new-agent branch picker (auto-fetch + pull-on-select)
-	Plan: TASK-180.md
-	Depends on: none
 
 ## DONE
 
 - [ ] #179 — Show hidden dot-folders in the file tree and pickers
 	Plan: TASK-179.md
+	Depends on: none
+- [ ] #180 — Show remote branches in the new-agent branch picker (auto-fetch + pull-on-select)
+	Plan: TASK-180.md
 	Depends on: none

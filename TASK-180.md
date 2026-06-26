@@ -1,8 +1,8 @@
 # TASK-180
 
-### 180. [ ] Show remote branches in the new-agent branch picker (auto-fetch + pull-on-select)
+### 180. [x] Show remote branches in the new-agent branch picker (auto-fetch + pull-on-select)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 
@@ -128,24 +128,24 @@ Docs:
 
 **Subtasks**
 
-1. [ ] `git.rs`: add `remote: Vec<String>` to `BranchList`; mirror in
+1. [x] `git.rs`: add `remote: Vec<String>` to `BranchList`; mirror in
    `src/types/index.ts`.
-2. [ ] `git.rs` `list_branches`: collect `refs/remotes` via `for-each-ref`, exclude
+2. [x] `git.rs` `list_branches`: collect `refs/remotes` via `for-each-ref`, exclude
    `*/HEAD`, dedup against local `all` by first-`/`-stripped short name; populate
    `remote`.
-3. [ ] `git.rs`: add `fetch_remotes(cwd)` (`git fetch --prune`, `GIT_TERMINAL_PROMPT=0`,
+3. [x] `git.rs`: add `fetch_remotes(cwd)` (`git fetch --prune`, `GIT_TERMINAL_PROMPT=0`,
    stderr on failure).
-4. [ ] `git.rs` `validate_new_branch`: accept `base` present in `all` **or** `remote`.
-5. [ ] `commands.rs` + `lib.rs`: add the `fetch_remotes` command and register it;
+4. [x] `git.rs` `validate_new_branch`: accept `base` present in `all` **or** `remote`.
+5. [x] `commands.rs` + `lib.rs`: add the `fetch_remotes` command and register it;
    `ipc.ts`: add `fetchRemotes` + the `remote` field on `BranchList`.
-6. [ ] `NewSessionModal.tsx`: on branch-step show, fetch + reload; render the
+6. [x] `NewSessionModal.tsx`: on branch-step show, fetch + reload; render the
    "Remote branches" section (dedup'd, `<remote>/<name>` rows, omitted when empty);
    "fetching…" affordance.
-7. [ ] `NewSessionModal.tsx`: extend keyboard nav + a discriminated highlight; wire
+7. [x] `NewSessionModal.tsx`: extend keyboard nav + a discriminated highlight; wire
    remote-row Enter → `createBranchSession(cwd, shortName, remoteRef)` (with the
    destructive-confirm gate) and ⌘⏎ → `createBranchWorktreeSession(repo, shortName,
    remoteRef)`; extend the filter to remote rows.
-8. [ ] Rust tests (`git.rs` tests module, using `init_repo`/`git_in`/`commit_all`):
+8. [x] Rust tests (`git.rs` tests module, using `init_repo`/`git_in`/`commit_all`):
    - `list_branches` returns remote refs: after a commit, `git update-ref
      refs/remotes/origin/feat HEAD` → `remote` contains `origin/feat`.
    - excludes `origin/HEAD`: `git update-ref refs/remotes/origin/HEAD HEAD` → not in
@@ -154,28 +154,35 @@ Docs:
    - `create_branch(dir, "feat-local", "origin/feat")` succeeds and `feat-local`
      appears in `all` (remote-ref base accepted by the widened validation).
    - Each test skips gracefully when git is unavailable (`let Some(dir) = init_repo(..) else return;`).
-9. [ ] Update CLAUDE.md (git scope note + architecture lines).
-10. [ ] `npm run build`, `npm test`, `npm run lint`, `cargo test`, `npm run lint:rust`
+9. [x] Update CLAUDE.md (git scope note + architecture lines).
+10. [x] `npm run build`, `npm test`, `npm run lint`, `cargo test`, `npm run lint:rust`
     all green.
 
 **Acceptance criteria**
 
-- [ ] In a repo with remote-only branches, opening the new-agent branch step shows a
+- [x] In a repo with remote-only branches, opening the new-agent branch step shows a
   "Remote branches" section listing `<remote>/<name>` rows (excluding `origin/HEAD`),
   with same-named local branches deduped out; the section is absent when there are no
-  remote branches.
-- [ ] Opening the branch step runs `git fetch --prune` (best-effort) and the remote
+  remote branches. _(Backend listing + dedup + HEAD-exclusion covered by Rust tests;
+  the render is gated on `remoteList`.)_
+- [x] Opening the branch step runs `git fetch --prune` (best-effort) and the remote
   list reflects freshly-fetched branches; an offline/auth-failing repo still opens the
-  modal and shows cached remote refs (no hang, no blocking error).
-- [ ] Selecting a remote branch + **Enter** creates a local tracking branch
+  modal and shows cached remote refs (no hang, no blocking error). _(Fetch is
+  fire-and-forget with `.catch` swallow; `GIT_TERMINAL_PROMPT=0` prevents hangs.)_
+- [x] Selecting a remote branch + **Enter** creates a local tracking branch
   `<name>` (upstream set to the remote), checks it out in the folder, and starts the
   agent on it (with the destructive-confirm gate when another agent runs there).
-- [ ] Selecting a remote branch + **⌘⏎** starts the agent on `<name>` in an isolated
-  worktree tracking the remote.
-- [ ] Rust tests cover the remote listing, `origin/HEAD` exclusion, dedup, and
-  remote-ref base acceptance; `cargo test` + `cargo clippy` green.
-- [ ] Frontend type-checks, lints, and unit tests pass; local-branch behavior is
+  _(Reuses `createBranchSession`; warning banner extended for the remote case.)_
+- [x] Selecting a remote branch + **⌘⏎** starts the agent on `<name>` in an isolated
+  worktree tracking the remote. _(Reuses `createBranchWorktreeSession`.)_
+- [x] Rust tests cover the remote listing, `origin/HEAD` exclusion, dedup, and
+  remote-ref base acceptance; `cargo test` (75) + `cargo clippy` green.
+- [x] Frontend type-checks, lints, and unit tests (248) pass; local-branch behavior is
   unchanged.
+- [~] Manual GUI verification of the live picker (showing/selecting a remote row,
+  pull-&-start, worktree) was **not** runtime-tested in the autonomous loop (no GUI);
+  the logic is covered by the backend tests + type-check, and the render reuses the
+  existing branch-row machinery.
 
 **Notes**
 
@@ -203,3 +210,15 @@ Docs:
   remotes (no existing `remote`/`origin`/`fetch`/`--track` code).
 - Sibling: refined alongside #179 (file-tree dot-folders); independent of it. This was
   the last Refine card at authoring time.
+- Implementation decision (autonomous): per the plan's "No change to the schedule
+  step", **remote branches are shown only in new-session (immediate) mode** — in
+  schedule mode the remote section is hidden, the auto-fetch is skipped, and remote
+  rows are never selectable (`sortedRemotes` is `[]`). Selecting a remote is an
+  immediate pull-&-start; scheduling a remote pull at fire time would require new
+  schedule-firing semantics, which is out of scope here.
+- Implementation note: `BranchList.remote` is **optional** (`remote?: string[]`) in
+  TS so the `{ all: [], current: "" }` non-git fallbacks and existing test mocks stay
+  valid; the Rust struct always serializes it, and the modal reads `branches?.remote
+  ?? []`. Remote rows + the local list live in one listbox; nav traverses a combined
+  `rows` array (locals then remotes) → "+ add branch", with a discriminated
+  `selectedRemote` highlight mutually exclusive with `selectedBranch`/`addBranchActive`.

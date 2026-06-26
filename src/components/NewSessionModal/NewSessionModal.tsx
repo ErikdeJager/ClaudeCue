@@ -10,7 +10,12 @@ import {
 } from "lucide-react";
 
 import { noAutoCapitalize } from "../../inputProps";
-import { listBranches, listSkills, pickDirectory } from "../../ipc";
+import {
+  fetchRemotes,
+  listBranches,
+  listSkills,
+  pickDirectory,
+} from "../../ipc";
 import { repoName } from "../../paths";
 import { useStore } from "../../store";
 import { toLocalInput } from "../../time";
@@ -32,6 +37,14 @@ const sortBranches = (all: string[]) =>
 
 // Only show the branch filter once the list is long enough to need it (#66).
 const BRANCH_FILTER_THRESHOLD = 4;
+
+// The local name a remote ref pulls into (#180): strip the first path segment
+// (the remote name), so `origin/feature/foo` → `feature/foo`. Matches the backend
+// dedup split (`split_once('/')`).
+const remoteShortName = (ref: string) => {
+  const i = ref.indexOf("/");
+  return i === -1 ? ref : ref.slice(i + 1);
+};
 
 // Default lead time for a new schedule (#93): 5 minutes out, so the prefilled
 // launch time is sensibly in the future.
@@ -81,6 +94,11 @@ function NewSessionModal() {
   const [branches, setBranches] = useState<BranchList | null>(null);
   const [branchQuery, setBranchQuery] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  // Remote branches (#180): the highlighted remote ref (e.g. `origin/feature-x`),
+  // mutually exclusive with `selectedBranch` / `addBranchActive` as the active row.
+  // `fetchingRemotes` shows a "fetching…" hint while the on-open `git fetch` runs.
+  const [selectedRemote, setSelectedRemote] = useState<string | null>(null);
+  const [fetchingRemotes, setFetchingRemotes] = useState(false);
   // Schedule step (#93): launch time (datetime-local string), optional prompt + name.
   const [fireAt, setFireAt] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -130,6 +148,8 @@ function NewSessionModal() {
     setAddBranchActive(false);
     setNewBranchName("");
     setBranchError(null);
+    setSelectedRemote(null);
+    setFetchingRemotes(false);
     if (initialBranches && prefillRepo) {
       // #127: per-repo start on a git folder — open straight at the branch step with
       // the preloaded branch list (folder step skipped; no second list_branches).
@@ -192,6 +212,7 @@ function NewSessionModal() {
             ? bl.current
             : (sortBranches(bl.all)[0] ?? null),
         );
+        setSelectedRemote(null);
         setBranchQuery("");
         // Reset the "+ add branch" form for the new folder; default its base to the
         // folder's current branch (#124).
@@ -202,14 +223,46 @@ function NewSessionModal() {
       })
       .catch(() => {
         if (!cancelled) {
-          setBranches({ all: [], current: "" });
+          setBranches({ all: [], current: "", remote: [] });
           setSelectedBranch(null);
+          setSelectedRemote(null);
         }
       });
     return () => {
       cancelled = true;
     };
   }, [open, cwd]);
+
+  // Auto-fetch remote branches when the branch step opens for a git folder (#180):
+  // `git fetch --prune` (best-effort), then re-list to pick up freshly-fetched
+  // remotes (and any new locals). Shows local branches immediately (never blocks on
+  // the fetch); an offline/auth-failing repo degrades to the cached remote refs.
+  // Runs for both the folder→branch path and the #127 preload (whose seeded
+  // branches may lack `remote`). New-session only — schedule mode is unchanged.
+  useEffect(() => {
+    if (!open || step !== "branch" || scheduleMode || !cwd) return;
+    const folder = cwd;
+    let cancelled = false;
+    setFetchingRemotes(true);
+    void fetchRemotes(folder)
+      .catch(() => {
+        // Best-effort: swallow offline / auth / no-remote failures.
+      })
+      .then(() => (cancelled ? null : listBranches(folder)))
+      .then((bl) => {
+        // Refresh only the lists; keep the user's current selection untouched.
+        if (!cancelled && bl) setBranches(bl);
+      })
+      .catch(() => {
+        // A failed re-list leaves the already-shown branches in place.
+      })
+      .finally(() => {
+        if (!cancelled) setFetchingRemotes(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, step, cwd, scheduleMode]);
 
   // Branch step: focus the filter (when shown) else the selected branch button.
   useEffect(() => {
@@ -298,15 +351,15 @@ function NewSessionModal() {
     el?.scrollIntoView({ block: "nearest" });
   }, [cwd, step, pickerActive]);
 
-  // Keep the selected branch scrolled into view as ↑/↓ move it — important when
-  // the filter input holds focus and the buttons don't.
+  // Keep the selected branch (local or remote, #180) scrolled into view as ↑/↓
+  // move it — important when the filter input holds focus and the buttons don't.
   useEffect(() => {
     if (step !== "branch") return;
     const el = branchesRef.current?.querySelector(
       '[aria-selected="true"]',
     ) as HTMLElement | null;
     el?.scrollIntoView({ block: "nearest" });
-  }, [selectedBranch, step]);
+  }, [selectedBranch, selectedRemote, step]);
 
   if (!open) return null;
 
@@ -331,11 +384,58 @@ function NewSessionModal() {
   const folderResolved = branches !== null;
   const folderIsGit = !!branches && branches.all.length > 0;
 
+  // Remote branches (#180): in git order, filtered by the same branch filter.
+  // Hidden in schedule mode (selecting one is an immediate pull-&-start, not a
+  // schedule), so the schedule flow is unchanged.
+  const sortedRemotes = scheduleMode ? [] : (branches?.remote ?? []);
+  const remoteList = bq
+    ? sortedRemotes.filter((r) => r.toLowerCase().includes(bq))
+    : sortedRemotes;
+  // The selectable rows inside the branch listbox, in DOM order: locals then
+  // remotes. The roving nav + the post-list "+ add branch" option traverse this.
+  const rows: { kind: "local" | "remote"; value: string }[] = [
+    ...branchList.map((b) => ({ kind: "local" as const, value: b })),
+    ...remoteList.map((r) => ({ kind: "remote" as const, value: r })),
+  ];
+  const currentRowIndex = () => {
+    if (selectedRemote !== null)
+      return rows.findIndex(
+        (r) => r.kind === "remote" && r.value === selectedRemote,
+      );
+    if (selectedBranch !== null)
+      return rows.findIndex(
+        (r) => r.kind === "local" && r.value === selectedBranch,
+      );
+    return -1;
+  };
+  // Select the row at `index` (clearing the add-branch highlight); optionally move
+  // DOM focus to its button (querySelectorAll order matches `rows`).
+  const selectRow = (index: number, focus: boolean) => {
+    const row = rows[index];
+    if (!row) return;
+    if (row.kind === "local") {
+      setSelectedBranch(row.value);
+      setSelectedRemote(null);
+    } else {
+      setSelectedRemote(row.value);
+    }
+    setAddBranchActive(false);
+    if (focus) {
+      branchesRef.current
+        ?.querySelectorAll<HTMLButtonElement>("[data-branch],[data-remote]")
+        [index]?.focus();
+    }
+  };
+
   const willCheckout =
     folderIsGit && !!selectedBranch && selectedBranch !== branches?.current;
   const runningInFolder = sessions.filter(
     (s) => s.repoPath === cwd && s.exitedCode === undefined,
   ).length;
+  // A remote row is the active selection (a pull-&-start, which checks out a new
+  // local branch in the folder → destructive when agents already run there).
+  const isRemoteActive =
+    !scheduleMode && selectedRemote !== null && !addBranchActive;
   const isDestructive = willCheckout && runningInFolder > 0;
   const canCreate = !!cwd && !busy;
 
@@ -411,6 +511,46 @@ function NewSessionModal() {
     }
   };
 
+  // Pull a remote branch locally (#180): create a local tracking branch named
+  // after the remote (`origin/feature-x` → `feature-x`), based on the remote ref,
+  // check it out **in the folder**, and start — reusing #124's create-branch path.
+  // The destructive-confirm warning (agents running here) shows like the local
+  // checkout-and-start path. The store returns `true` or an inline error message.
+  const confirmRemoteCheckout = async () => {
+    if (!cwd || busy || selectedRemote === null) return;
+    setBusy(true);
+    setBranchError(null);
+    const result = await createBranchSession(
+      cwd,
+      remoteShortName(selectedRemote),
+      selectedRemote,
+    );
+    if (result === true) close();
+    else {
+      setBranchError(result);
+      setBusy(false);
+    }
+  };
+
+  // ⌘⏎ on a remote row (#180): pull it into an isolated worktree on the new local
+  // tracking branch (no folder checkout, so no destructive confirm) — mirrors the
+  // local-branch worktree path via #124's create-branch-as-worktree.
+  const confirmRemoteWorktree = async () => {
+    if (!cwd || busy || selectedRemote === null) return;
+    setBusy(true);
+    setBranchError(null);
+    const result = await createBranchWorktreeSession(
+      cwd,
+      remoteShortName(selectedRemote),
+      selectedRemote,
+    );
+    if (result === true) close();
+    else {
+      setBranchError(result);
+      setBusy(false);
+    }
+  };
+
   // New-branch name input keys (#124/#125): in new-session mode Enter creates +
   // starts (⌘⏎ as a worktree); in schedule mode Enter advances to the launch-time
   // step (no worktree — #125). ArrowUp returns to the branch list.
@@ -425,11 +565,13 @@ function NewSessionModal() {
     if (event.key === "ArrowUp") {
       event.preventDefault();
       setAddBranchActive(false);
-      const btns =
-        branchesRef.current?.querySelectorAll<HTMLButtonElement>(
-          "[data-branch]",
-        );
-      (btns?.[btns.length - 1] ?? branchFilterRef.current)?.focus();
+      // Return to the last selectable row — a remote (#180) if any, else a local.
+      const els = branchesRef.current?.querySelectorAll<HTMLButtonElement>(
+        "[data-branch],[data-remote]",
+      );
+      const lastIndex = (els?.length ?? 0) - 1;
+      if (lastIndex >= 0) selectRow(lastIndex, true);
+      else branchFilterRef.current?.focus();
     }
   };
 
@@ -559,29 +701,60 @@ function NewSessionModal() {
     }
   };
 
-  // Filter the branch list as the user types; keep a branch selected (top match)
-  // so Enter always starts something.
+  // Filter the branch list as the user types; keep a row selected (top match —
+  // locals first, then remotes #180) so Enter always starts something.
   const onBranchQueryChange = (value: string) => {
     setBranchQuery(value);
     setAddBranchActive(false); // re-filtering returns the highlight to a branch (#124)
     const vq = value.trim().toLowerCase();
-    const nl = vq
+    const nlLocal = vq
       ? sortedBranches.filter((b) => b.toLowerCase().includes(vq))
       : sortedBranches;
-    if (selectedBranch === null || !nl.includes(selectedBranch)) {
-      setSelectedBranch(nl[0] ?? null);
+    const nlRemote = vq
+      ? sortedRemotes.filter((r) => r.toLowerCase().includes(vq))
+      : sortedRemotes;
+    const localStillValid =
+      selectedRemote === null &&
+      selectedBranch !== null &&
+      nlLocal.includes(selectedBranch);
+    const remoteStillValid =
+      selectedRemote !== null && nlRemote.includes(selectedRemote);
+    if (localStillValid || remoteStillValid) return;
+    if (nlLocal.length > 0) {
+      setSelectedBranch(nlLocal[0] ?? null);
+      setSelectedRemote(null);
+    } else if (nlRemote.length > 0) {
+      setSelectedBranch(null);
+      setSelectedRemote(nlRemote[0] ?? null);
+    } else {
+      setSelectedBranch(null);
+      setSelectedRemote(null);
     }
   };
 
-  // Move + select the adjacent branch in the (filtered) list; returns its index.
-  const moveBranch = (delta: number) => {
-    if (branchList.length === 0) return -1;
-    const i = selectedBranch ? branchList.indexOf(selectedBranch) : -1;
-    const next =
-      i < 0 ? 0 : Math.min(Math.max(i + delta, 0), branchList.length - 1);
-    const b = branchList[next];
-    if (b) setSelectedBranch(b);
-    return next;
+  // Move the highlight one row down/up across the combined local→remote list;
+  // ArrowDown past the last row activates "+ add branch". `focus` moves DOM focus
+  // (listbox nav) vs. keeping it (filter-input nav). Returns whether it moved.
+  const moveRow = (down: boolean, focus: boolean) => {
+    const cur = currentRowIndex();
+    if (down) {
+      if (cur >= rows.length - 1) {
+        setAddBranchActive(true);
+        return;
+      }
+      selectRow(cur < 0 ? 0 : cur + 1, focus);
+    } else {
+      if (cur <= 0) return; // already at the first row — stay
+      selectRow(cur - 1, focus);
+    }
+  };
+
+  // ⌘⏎ in the branch step: start in an isolated worktree (#74) — a remote row pulls
+  // into a worktree (#180), else the selected local branch. No worktree in schedule.
+  const startWorktreeFromBranch = () => {
+    if (scheduleMode) return;
+    if (selectedRemote !== null) void confirmRemoteWorktree();
+    else void createWorktree();
   };
 
   // ↑/↓ in the branch filter input: move the selection only (keep typing focus).
@@ -589,27 +762,16 @@ function NewSessionModal() {
   const onBranchQueryKeyDown = (
     event: ReactKeyboardEvent<HTMLInputElement>,
   ) => {
-    // ⌘⏎ starts in an isolated worktree (#74); plain Enter falls through to the
+    // ⌘⏎ starts in an isolated worktree (#74/#180); plain Enter falls through to the
     // form submit (normal start in the repo folder). No worktree in schedule mode.
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
-      if (!scheduleMode) void createWorktree();
+      startWorktreeFromBranch();
       return;
     }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     event.preventDefault();
-    const down = event.key === "ArrowDown";
-    // ArrowDown past the last branch (or from a filtered-empty list) highlights the
-    // "+ add branch" option (#124; also in schedule mode #125); ArrowUp is handled
-    // in its input.
-    if (down) {
-      const i = selectedBranch ? branchList.indexOf(selectedBranch) : -1;
-      if (i >= branchList.length - 1) {
-        setAddBranchActive(true);
-        return;
-      }
-    }
-    moveBranch(down ? 1 : -1);
+    moveRow(event.key === "ArrowDown", false);
   };
 
   // ↑/↓ roving over the branch list; Enter starts (gated by canCreate). Branch
@@ -618,31 +780,16 @@ function NewSessionModal() {
     if (event.key === "Enter") {
       event.preventDefault();
       // Schedule mode (#93): advance to the launch-time step. Else ⌘⏎ = worktree
-      // (#74), plain Enter = normal start.
+      // (#74/#180), plain Enter = normal start (a remote row pulls + starts, #180).
       if (scheduleMode) goToSchedule();
-      else if (event.metaKey || event.ctrlKey) void createWorktree();
+      else if (event.metaKey || event.ctrlKey) startWorktreeFromBranch();
+      else if (selectedRemote !== null) void confirmRemoteCheckout();
       else void create();
       return;
     }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     event.preventDefault();
-    const down = event.key === "ArrowDown";
-    // ArrowDown past the last branch (or from a filtered-empty list) highlights the
-    // "+ add branch" option (#124; also in schedule mode #125); ArrowUp is handled
-    // in its input.
-    if (down) {
-      const i = selectedBranch ? branchList.indexOf(selectedBranch) : -1;
-      if (i >= branchList.length - 1) {
-        setAddBranchActive(true);
-        return;
-      }
-    }
-    const next = moveBranch(down ? 1 : -1);
-    if (next >= 0) {
-      branchesRef.current
-        ?.querySelectorAll<HTMLButtonElement>("[data-branch]")
-        [next]?.focus();
-    }
+    moveRow(event.key === "ArrowDown", true);
   };
 
   // Keep Tab focus inside the dialog (focus-trap, a11y #49). Excludes roving
@@ -686,6 +833,7 @@ function NewSessionModal() {
               if (scheduleMode) goToScheduleFromBranch();
               else void confirmAddBranch();
             } else if (scheduleMode) goToSchedule();
+            else if (selectedRemote !== null) void confirmRemoteCheckout();
             else void create();
           } else {
             void submitSchedule();
@@ -826,31 +974,81 @@ function NewSessionModal() {
               aria-label="Branch"
               onKeyDown={onBranchKeyDown}
             >
-              {branchList.length === 0 ? (
+              {branchList.length === 0 &&
+              remoteList.length === 0 &&
+              !fetchingRemotes ? (
                 <p className={styles.empty}>No matching branches.</p>
               ) : (
-                branchList.map((b) => (
-                  <button
-                    key={b}
-                    type="button"
-                    role="option"
-                    aria-selected={b === selectedBranch && !addBranchActive}
-                    data-branch
-                    tabIndex={b === selectedBranch && !addBranchActive ? 0 : -1}
-                    className={`${styles.branch} ${b === selectedBranch && !addBranchActive ? styles.branchActive : ""}`}
-                    onClick={() => {
-                      setSelectedBranch(b);
-                      setAddBranchActive(false);
-                    }}
-                    title={b}
-                  >
-                    <GitBranch size={13} strokeWidth={1.5} />
-                    <span className={styles.branchName}>{b}</span>
-                    {b === branches?.current && (
-                      <span className={styles.branchCurrent}>current</span>
-                    )}
-                  </button>
-                ))
+                <>
+                  {branchList.map((b) => {
+                    const active =
+                      b === selectedBranch &&
+                      selectedRemote === null &&
+                      !addBranchActive;
+                    return (
+                      <button
+                        key={b}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        data-branch
+                        tabIndex={active ? 0 : -1}
+                        className={`${styles.branch} ${active ? styles.branchActive : ""}`}
+                        onClick={() => {
+                          setSelectedBranch(b);
+                          setSelectedRemote(null);
+                          setAddBranchActive(false);
+                        }}
+                        title={b}
+                      >
+                        <GitBranch size={13} strokeWidth={1.5} />
+                        <span className={styles.branchName}>{b}</span>
+                        {b === branches?.current && (
+                          <span className={styles.branchCurrent}>current</span>
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  {/* Remote branches (#180): pulled into a local tracking branch on
+                      select. Shown only in new-session mode, below the locals; the
+                      "fetching…" hint reflects the on-open git fetch. */}
+                  {(remoteList.length > 0 || fetchingRemotes) && (
+                    <>
+                      <p className={styles.remoteHeader}>
+                        Remote branches
+                        {fetchingRemotes && (
+                          <span className={styles.remoteFetching}>
+                            fetching…
+                          </span>
+                        )}
+                      </p>
+                      {remoteList.map((r) => {
+                        const active = r === selectedRemote && !addBranchActive;
+                        return (
+                          <button
+                            key={r}
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            data-remote
+                            tabIndex={active ? 0 : -1}
+                            className={`${styles.branch} ${active ? styles.branchActive : ""}`}
+                            onClick={() => {
+                              setSelectedRemote(r);
+                              setSelectedBranch(null);
+                              setAddBranchActive(false);
+                            }}
+                            title={`${r} — pull into a local branch`}
+                          >
+                            <GitBranch size={13} strokeWidth={1.5} />
+                            <span className={styles.branchName}>{r}</span>
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                </>
               )}
             </div>
 
@@ -916,7 +1114,7 @@ function NewSessionModal() {
             )}
 
             {!scheduleMode &&
-              (isDestructive || addBranchActive) &&
+              (isDestructive || addBranchActive || isRemoteActive) &&
               runningInFolder > 0 && (
                 <div className={styles.warning}>
                   <AlertTriangle
@@ -930,6 +1128,16 @@ function NewSessionModal() {
                         Creating{" "}
                         <strong>
                           {newBranchName.trim() || "a new branch"}
+                        </strong>{" "}
+                        checks it out, changing the working tree under{" "}
+                      </>
+                    ) : isRemoteActive ? (
+                      <>
+                        Pulling{" "}
+                        <strong>
+                          {selectedRemote
+                            ? remoteShortName(selectedRemote)
+                            : ""}
                         </strong>{" "}
                         checks it out, changing the working tree under{" "}
                       </>
@@ -959,14 +1167,24 @@ function NewSessionModal() {
                   onClick={() =>
                     addBranchActive
                       ? void confirmAddBranchWorktree()
-                      : void createWorktree()
+                      : isRemoteActive
+                        ? void confirmRemoteWorktree()
+                        : void createWorktree()
                   }
                   disabled={
                     !cwd ||
                     busy ||
-                    (addBranchActive ? !newBranchName.trim() : !selectedBranch)
+                    (addBranchActive
+                      ? !newBranchName.trim()
+                      : isRemoteActive
+                        ? false
+                        : !selectedBranch)
                   }
-                  title="Start in an isolated git worktree"
+                  title={
+                    isRemoteActive
+                      ? "Pull into an isolated git worktree"
+                      : "Start in an isolated git worktree"
+                  }
                 >
                   Worktree <kbd className={styles.btnKbd}>⌘⏎</kbd>
                 </button>
@@ -982,7 +1200,9 @@ function NewSessionModal() {
                   ? "Next"
                   : addBranchActive
                     ? "Create & start"
-                    : "Start"}
+                    : isRemoteActive
+                      ? "Pull & start"
+                      : "Start"}
                 <kbd className={styles.btnKbd}>⏎</kbd>
               </button>
             </div>

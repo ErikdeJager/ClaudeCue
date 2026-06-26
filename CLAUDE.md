@@ -82,7 +82,12 @@ even though it works in `tauri dev`.
   manager best-effort `resume_session`s each via `claude --resume <id>`.
 - **Git:** `working_diff(cwd)` / `current_branch(cwd)` / `compare_branches(cwd, base,
   target)` (the #81 two-dot branch compare) shell out to `git`; the `DiffInspector` and
-  sidebar render the structured result.
+  sidebar render the structured result. `list_branches` returns both **local** (`all`)
+  and **remote-tracking** (`remote`, qualified `<remote>/<name>`, deduped vs local,
+  `*/HEAD` excluded) branches (#180); `fetch_remotes(cwd)` runs a best-effort `git
+  fetch --prune` (the app's first git **network** read, `GIT_TERMINAL_PROMPT=0` so a
+  private remote fails fast) to refresh them before the new-session branch picker lists
+  them.
 - **Views:** the store holds `sessions / selectedId / view / recents / branches /
   canvases / activeCanvasId / claudeMissing / toasts / schedules / settings /
   sidebarWidth`; the app mounts one of
@@ -345,7 +350,7 @@ even though it works in `tauri dev`.
 │   ├── src/title.rs        # Best-effort reader for claude's own ai-title (#97)
 │   ├── src/commands.rs     # Tauri command surface + event payloads
 │   ├── src/store.rs        # JSON persistence (sessions, recents, canvases, canvas templates, schedules, settings, sidebar width)
-│   ├── src/git.rs          # Git: branch + diff + compare (#81) + list + checkout + worktree (#74)
+│   ├── src/git.rs          # Git: branch + diff + compare (#81) + list (local+remote #180) + checkout + worktree (#74) + fetch (#180)
 │   ├── src/files.rs        # Repo file access (list/read text + write_text_file #141, path-validated)
 │   ├── src/skills.rs        # Read-only scan of .claude skills/commands for prompt autocomplete (#114)
 │   ├── Info.plist          # Partial plist (mic + speech-recognition usage strings), merged into the bundle
@@ -392,7 +397,15 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   agent, or with **⌘⏎** creates it as a worktree (`git worktree add -b`); the name is
   validated backend-side (a valid ref that must not already exist) with an inline
   error, and the destructive-checkout warning still applies to the in-folder path.
-  No commits.
+  The reads now also include one **network** read — (4) **`git fetch --prune`**
+  (#180): opening the new-session branch step auto-fetches (best-effort,
+  `GIT_TERMINAL_PROMPT=0` so a private remote can't hang the modal) so the picker can
+  list **remote branches** under a "Remote branches" header (deduped vs local,
+  `*/HEAD` excluded). Selecting a remote branch **pulls it locally** by **reusing the
+  #124 create-branch write** — a new local tracking branch named `<short>` based on
+  `<remote-ref>` (`git checkout -b` in-folder, or `git worktree add -b` on **⌘⏎**),
+  with `validate_new_branch` widened to accept a remote-tracking ref as the base. No
+  new pull/checkout command, and no commits.
 - **File access is read-mostly, with one deliberate write** — `files.rs` lists +
   reads repo text files for the viewer (#40/#44) and, since **#141**, writes a repo
   text file (`write_text_file`) — the app's **first arbitrary file write**, backing

@@ -259,6 +259,27 @@
   color: var(--text-muted);
 }
 
+/* Remote branches subheader inside the branch listbox (#180) — separates the
+   pulled-locally remote refs from the local branches above. */
+.remoteHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin: var(--space-6) 0 var(--space-1);
+  padding: 0 var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--fs-meta-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.remoteFetching {
+  color: var(--text-muted);
+  font-style: italic;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 /* "+ add branch" (#124): the create-a-new-branch option after the branch list —
    accent text so it reads as an action, not a branch. Sits just below the list
    (outside its scroll box), mirroring #123's folder picker. */

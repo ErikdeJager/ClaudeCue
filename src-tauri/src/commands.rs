@@ -836,6 +836,15 @@ pub fn list_branches(cwd: String) -> BranchList {
     git::list_branches(cwd)
 }
 
+/// Best-effort `git fetch --prune` for the new-session branch picker (#180) — a new
+/// git network read that refreshes remote-tracking refs so `list_branches` can show
+/// remote branches. Failure (offline / auth / no remote) surfaces as a typed
+/// `SessionError::Git` the UI swallows (cached refs are shown instead).
+#[tauri::command]
+pub fn fetch_remotes(cwd: String) -> Result<(), SessionError> {
+    git::fetch_remotes(&cwd).map_err(SessionError::Git)
+}
+
 /// Check out a branch in `cwd` (the first git write — see #27). Errors surface as
 /// a typed `SessionError::Git { message }` carrying git's explanation.
 #[tauri::command]
