@@ -2825,3 +2825,81 @@ add-time `[50,50]` and the agent header-bar drag/rename target are untouched.
 
 ---
 
+### 187. [x] "Save current canvas as template" — seed the Template Editor from a live canvas
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+Canvas templates (#117/#118) are reusable saved layouts whose leaves hold inert **action
+blocks** (`new-agent` / `new-terminal` / `open-file` / `open-diff` / `open-kanban` /
+`open-filetree`). Until now a template could only be built **from scratch** in the
+full-screen `TemplateEditor` by dragging blocks from a palette. This task adds the reverse
+on-ramp: after assembling a canvas you like (real agents/files/diffs/kanban/terminals),
+**turn that live canvas into a template** in one action — opening the Template Editor
+**pre-populated** with equivalent blocks (file/kanban blocks already carrying the correct
+relative path), so the user only names + tweaks + Saves.
+
+**What shipped** (commit `4b1ddea`, 2026-06-26) — **frontend-only** (no Rust):
+
+- **Menu entry.** A fourth item, **"Save current canvas as template…"**, in the Canvas
+  **▾ Templates** menu (`CanvasTabs.tsx`), after "New template…", **disabled**
+  (`canSaveAsTemplate`) when the active canvas has no panels.
+- **Pure inverse mapper** — new `src/components/Canvas/canvasToTemplate.ts`:
+  `canvasToTemplate(layout, resolveAgentName?)` → `CanvasNode | null`, the inverse of #118's
+  instantiation. Each live leaf maps to its template block via a **registry reverse-lookup**
+  (`blockForLiveKind`, added to `templateBlocks.ts`, matching `BLOCK_REGISTRY` entries by
+  their `liveKind`) — so live→block shares the same single source of truth as block→live:
+  `agent`→`new-agent`, `terminal`→`new-terminal`, `file`→`open-file`, `diff`→`open-diff`,
+  `kanban`→`open-kanban`, `filetree`→`open-filetree`. `repoPath` is **dropped** (templates
+  are folder-agnostic — the repo is chosen at use time); only the relative `file` travels.
+  A `new-agent` block carries the agent's **custom name** only (via an injected
+  `resolveAgentName(sessionId)` over `sessions` — not the auto-title #97, not the `prompt`,
+  which is unrecoverable from a live conversation). `scheduled`/`pending` leaves are dropped
+  and their split **collapses** (one survivor promoted, like `removeLeaf`); leaf/split ids
+  and split `dir`/`sizes` are preserved (keeps the mapper pure/deterministic). An
+  all-dropped/empty canvas → `null`.
+- **Store seeding** (`store.ts`): new `templateEditorSeed` / `templateEditorSeedName` fields
+  + `openTemplateEditorFromCanvas()` — maps the active layout with the name resolver; on
+  `null` it **toasts** "This canvas has nothing to save as a template" and no-ops; else opens
+  a **new-template** editor (`templateEditorId: null`) carrying the seed + the active tab's
+  name as the default. The seed is cleared in **both** `closeTemplateEditor` and
+  `openTemplateEditor` (so an edit/blank-template open never inherits a stale seed).
+- **Editor** (`TemplateEditor.tsx`): its `useState` initializers fall back `name` →
+  `seedName` and `layout` → a deep-clone of the seed when not editing an `existing` template,
+  so editing never mutates the store seed or the live canvas. The draft stays **unsaved**
+  until Save (`onSave` → `saveTemplate(name, layout, null)` creates only on Save).
+- **6 unit tests** in `canvasToTemplate.test.ts` (each live kind → block kind + id reuse;
+  file/kanban carry relative path & drop `repoPath`; agent carries resolver name / omits when
+  absent; scheduled/pending dropped + collapse; empty → null; nested tree preserves
+  `dir`/`sizes`/order).
+
+**Key files touched:** new `src/components/Canvas/canvasToTemplate.ts` (+ `.test.ts`);
+`src/components/Canvas/templateBlocks.ts` (`blockForLiveKind`); `src/store.ts` (seed state +
+`openTemplateEditorFromCanvas` + seed clearing); `src/components/TemplateEditor/TemplateEditor.tsx`
+(seed fallback); `src/components/Canvas/CanvasTabs.tsx` (menu item + `canSaveAsTemplate`).
+
+**Dependencies:** none — the template system (#117/#118), block registry, `TemplateEditor`,
+`templateInstantiate.ts`, and the `canvas_templates` blob were all already shipped. Independent
+of #186.
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** the user had stopped responding, so the refine agent
+  made the open decisions to best judgment (logged in `ASSUMPTIONS.md`): trigger = a Templates
+  menu item (not a toolbar button); mapping reuses the registry `liveKind` + existing ids +
+  split `dir`/`sizes`; agent blocks carry the custom name only; default name = the tab name;
+  empty/all-dropped → toast + no-op.
+- **Known limitation (per scope):** a branch-compare diff panel (#81) maps to a plain
+  working-tree `open-diff` block (compare refs aren't preserved; `diff` blocks carry no
+  config).
+- **Runtime-unverified** in this autonomous loop (no GUI session): the end-to-end gesture
+  (build a canvas → Save as template → editor opens pre-populated with correct
+  blocks/names/paths/proportions → Save → reuse via "New tab from template…"). The pure
+  mapping is unit-tested (6 cases) and the seeding + save/instantiate paths reuse shipped
+  code. `npm run build` / `npm run lint` / `npm test` (257, +6) all green; no Rust changes.
+
+---
+

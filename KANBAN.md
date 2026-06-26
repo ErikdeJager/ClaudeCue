@@ -42,9 +42,6 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #187 — "Save current canvas as template" (seed Template Editor from a live canvas)
-	Plan: TASK-187.md
-	Depends on: none
 - [ ] #188 — Double-click a panel/card header to rename the agent inline
 	Plan: TASK-188.md
 	Depends on: none
