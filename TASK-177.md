@@ -1,8 +1,8 @@
 # TASK-177
 
-### 177. [ ] "Open view in this folder" on every panel + an instant "New session" option
+### 177. [x] "Open view in this folder" on every panel + an instant "New session" option
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 

@@ -3,6 +3,7 @@ import {
   FileDiff,
   FileText,
   FolderTree,
+  Plus,
   SquareKanban,
   Terminal as TerminalIcon,
 } from "lucide-react";
@@ -30,6 +31,7 @@ function ViewsMenu({
 }) {
   const addOverviewPanel = useStore((s) => s.addOverviewPanel);
   const createKanbanBoard = useStore((s) => s.createKanbanBoard);
+  const spawnSession = useStore((s) => s.spawnSession);
   const [mode, setMode] = useState<"menu" | "files">("menu");
   const [fileKind, setFileKind] = useState<"markdown" | "kanban">("markdown");
   const [files, setFiles] = useState<string[] | null>(null);
@@ -127,6 +129,22 @@ function ViewsMenu({
 
   return (
     <>
+      {/* Instant agent spawn on this folder's current branch — no modal (#177).
+          A separate action from the "add a view" items, so it sits apart above
+          a separator. Appears everywhere the button does, including agents. */}
+      <button
+        type="button"
+        role="menuitem"
+        className={styles.item}
+        onClick={() => {
+          void spawnSession(repoPath);
+          onClose();
+        }}
+      >
+        <Plus size={14} strokeWidth={1.5} className={styles.icon} />
+        New session here
+      </button>
+      <div className={styles.sep} role="separator" />
       {items.map((v) => {
         const Icon = v.icon;
         return (

@@ -215,6 +215,20 @@ function LeafPanel({
           {content.kind === "agent" && session && !session.worktreeParent && (
             <OpenViewButton repoPath={repoPath} className={styles.panelClose} />
           )}
+          {/* "Open view or start a session" in a non-agent panel's folder (#177)
+              — file / diff / kanban / filetree / terminal, matching where agents
+              have it. Scheduled / pending panels are excluded. */}
+          {repoPath &&
+            (content.kind === "file" ||
+              content.kind === "diff" ||
+              content.kind === "kanban" ||
+              content.kind === "filetree" ||
+              content.kind === "terminal") && (
+              <OpenViewButton
+                repoPath={repoPath}
+                className={styles.panelClose}
+              />
+            )}
           {/* Fork the conversation into a new parallel session (#126) — agents only.
               Gated (#138): unavailable until the source has a real turn to fork. */}
           {content.kind === "agent" && session && (

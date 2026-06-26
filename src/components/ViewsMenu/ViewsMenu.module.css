@@ -27,3 +27,10 @@
   flex-shrink: 0;
   color: var(--text-secondary);
 }
+
+/* Separates the instant "New session here" action (#177) from the add-view items. */
+.sep {
+  height: 1px;
+  margin: var(--space-4) var(--space-8);
+  background: var(--border-hairline);
+}

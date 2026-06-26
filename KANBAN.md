@@ -9,9 +9,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #177 — "Open view in this folder" on every panel + instant "New session"
-	Plan: TASK-177.md
-	Depends on: none
 
 ## DONE
 
@@ -23,4 +20,7 @@ kanban-plugin: board
 	Depends on: none
 - [ ] #176 — Configurable Overview panel minimum width (Settings)
 	Plan: TASK-176.md
+	Depends on: none
+- [ ] #177 — "Open view in this folder" on every panel + instant "New session"
+	Plan: TASK-177.md
 	Depends on: none

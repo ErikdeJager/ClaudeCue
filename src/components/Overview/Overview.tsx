@@ -325,6 +325,9 @@ function ExtraPanel({
   );
   const actions = (
     <>
+      {/* "Open view or start a session" in this panel's folder (#177) — matching
+          where agents have it; uses the panel's own repoKey folder. */}
+      <OpenViewButton repoPath={repoPath} className={styles.action} />
       {/* Maximize into big mode (#157). */}
       <button
         type="button"
