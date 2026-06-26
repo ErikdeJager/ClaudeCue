@@ -3717,3 +3717,51 @@ guard so this builds on the right trigger logic).
 
 ---
 
+### 201. [x] Folder/worktree context menu: collapse the two "New session" items into one
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-26
+
+**Description**
+
+The sidebar **repo (folder) context menu** showed **two** new-session actions: a top-level
+"New session" (`startRepoSession`, #127 — branch-aware, mirrors the inline `+`) and "New
+session here" as the first item of the shared `ViewsMenu` (`spawnSession`, #177 — instant spawn
+on the current branch). The same duplication existed in the **worktree header menu**
+(`spawnWorktreeSession` top-level + `ViewsMenu`'s "New session here"). This collapses each menu
+to a single, unambiguous "New session".
+
+**What shipped** (commit `5868f2f`, 2026-06-26) — **frontend-only** (no Rust):
+
+- **One prop, two call sites:** `ViewsMenu` gained `includeNewSession?: boolean` (default
+  `true`); the "New session here" button + its trailing separator are wrapped in a fragment
+  gated on it. The **repo context menu** and the **worktree header menu** — both already
+  rendering their own top-level "New session" — pass `includeNewSession={false}`, so only the
+  top-level item survives in each (repo: `startRepoSession`; worktree: `spawnWorktreeSession`).
+- **Standalone popovers keep it:** the shared `ViewsPopover` (used by `WorktreeViewsBadge` #164
+  **and** `OpenViewButton` #165/#177 — a third `ViewsMenu` render beyond the two the card named)
+  stays on the default `true`, since neither has a separate top-level new-session action; "New
+  session here" remains their sole new-session affordance.
+- No behavior change to the surviving "New session" actions or the view items
+  (file/diff/terminal/kanban/filetree) — only the leading button + separator are conditionally
+  rendered.
+
+**Key files touched:** `src/components/ViewsMenu/ViewsMenu.tsx` (the `includeNewSession` prop
+gate), `src/components/Sidebar/Sidebar.tsx` (repo context menu + `WorktreeHeader` pass
+`includeNewSession={false}`).
+
+**Dependencies:** none — a local `ViewsMenu` prop + two call sites.
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** decisions in `ASSUMPTIONS.md` — keep the top-level "New
+  session" and suppress `ViewsMenu`'s "New session here" only in menus that already have one;
+  applied to the worktree header menu too (the card named only the "folder" menu) for
+  consistency; the badge/open-view popovers keep theirs.
+- **Runtime-unverified** in this autonomous loop (no GUI session): the visual "exactly one New
+  session per context menu" check. It's a pure conditional-render prop gate. `npm run build` /
+  `npm run lint` / `npm test` (288) all green; no Rust changes.
+
+---
+
