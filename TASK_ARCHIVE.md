@@ -3121,3 +3121,68 @@ Updates section), #192 (patch notes), and #193 (dev mock) all depend on it. Refe
 
 ---
 
+### 191. [x] Settings → "Updates" section: check for updates + review what will be installed
+
+**Status:** Done
+**Depends on:** #190
+**Created:** 2026-06-26
+
+**Description**
+
+Add a dedicated **"Updates"** section to the Settings modal — the review-and-install surface
+the user opens "when they want to update, to see what will be installed". It gives #190's
+auto-update machinery (the `update` store slice, `checkForUpdate`/`installUpdate`, the
+freeze/progress/restart flow) a **manual, detailed home**: a "Check for updates" button, the
+current vs. available version, and a slot for what's in the update — beyond #190's minimal
+auto-detected "update available → confirm" path.
+
+**What shipped** (commit `f697f6c`, 2026-06-26) — **frontend-only** (no Rust, no new updater
+logic):
+
+- **New `"updates"` Settings section** (`Settings.tsx`, Lucide `RefreshCw`) added to the
+  `Section` type + `SECTIONS`, with its own pane: the **current version** (reusing the About
+  `appVersion()` fetch); a **"Check for updates"** button → `checkForUpdate()` (spinner +
+  "Checking…", disabled while checking/downloading); status feedback — `idle` → "You're up to
+  date", `error` → `update.error`, `available` → the new version + a **labelled "What's new"
+  slot** (`whatsNewSlot`, carrying `data-update-version` for #192 to fill) + an **"Update now &
+  restart"** button → `installUpdate()`; `downloading` → an inline progress bar bound to
+  `update.progress` (the #190 full-window freeze overlay still covers the app). Update actions
+  are **immediate** (not draft-staged), like Data & About's actions.
+- **Deep-link** from the #190 sidebar `UpdateIndicator`: `setSettingsOpen(open, section?)`
+  gained an optional initial section stored in a new `settingsSection` field (cleared on close
+  and on a plain gear open, so the gear still lands on Terminal); the mounted-only-while-open
+  Settings modal seeds its `section` `useState` from it. The indicator now opens
+  `setSettingsOpen(true, "updates")` (the richer review surface) instead of #190's bare confirm
+  modal.
+- **#190 reconciled, not duplicated:** #190's `UpdateModal` **confirm dialog** is now dormant
+  (nothing calls `openUpdateConfirm`), but its **install overlay** (`downloading`) is still the
+  reused freeze/progress/restart surface; `openUpdateConfirm`/`cancelUpdate` stay in the store
+  for the #193 mock. No second competing confirm surface was built.
+- **Naming gotcha handled:** the slice is read as `updateState` in `Settings.tsx` (the
+  component already has a local `update(key, value)` draft helper that would shadow a slice
+  named `update`).
+
+**Key files touched:** `src/components/Settings/Settings.tsx` (+ `.module.css` pane styles —
+status/error lines, `.whatsNew*` slot, `.updateProgress` bar, `.updateNow` CTA, `.spin`
+keyframe), `src/store.ts` (`settingsSection` + `setSettingsOpen(open, section?)`) +
+`src/store.test.ts` (deep-link test), `src/components/Update/UpdateIndicator.tsx` (deep-link
+onClick).
+
+**Dependencies:** #190 (needs its `update` slice, `checkForUpdate`/`installUpdate`, the
+indicator, and the install flow). #192 (patch notes) renders into the "What's new" slot this
+provides; #193 (mock) is how these panes are exercised before a real signed release.
+
+**Notes**
+
+- **Autonomous refine (2026-06-26):** the user wasn't responding; decisions logged in
+  `ASSUMPTIONS.md` — the "alternative settings screen for updating" = a new section in the
+  existing Settings modal (not a separate window); reuses #190 entirely (UI + deep-link only);
+  the indicator deep-links here, making this the primary "review then install" surface; "what
+  will be installed" is a labelled slot (content is #192); update actions are immediate.
+- **Runtime-unverified** in this autonomous loop (no GUI session + no signed release): the live
+  pane render and the actual check/install. All states are reachable via #193's `setUpdateState`;
+  the wiring is type-checked, lint/format clean, and the deep-link is unit-tested.
+  `npm run build` / `npm run lint` / `npm test` (263, +1) all green; no Rust changes.
+
+---
+

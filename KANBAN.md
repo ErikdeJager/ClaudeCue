@@ -43,7 +43,3 @@ kanban-plugin: board
 	Depends on: none
 
 ## DONE
-
-- [ ] #191 — Settings → "Updates" section: check for updates + review what will be installed
-	Plan: TASK-191.md
-	Depends on: #190
