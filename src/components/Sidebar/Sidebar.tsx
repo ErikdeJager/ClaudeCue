@@ -894,14 +894,38 @@ function WorktreeHeader({
       title={compact ? `${branch} · worktree` : path}
       onContextMenu={openMenu}
     >
+      {/* The branch glyph marks the row as a worktree (#196, replacing the literal
+          "worktree" word) — distinct from a repo's Folder icon (#128). Labelled so
+          the meaning survives without the text. */}
       <GitBranch
         size={compact ? 16 : 12}
         strokeWidth={1.5}
         className={styles.worktreeIcon}
-        aria-hidden
+        role="img"
+        aria-label="worktree"
       />
       {!compact && <span className={styles.worktreeName}>{branch}</span>}
-      {!compact && <span className={styles.worktreeBadge}>worktree</span>}
+      {/* Inline "+" new session in this worktree (#196), mirroring the repo header's
+          + (#127): reuses the app-managed worktree folder (ref-count++, #166). The
+          click is contained so it never opens the row's context menu. Disabled when
+          the parent repo is unknown (like the menu's "New session", #166). */}
+      {!compact && (
+        <button
+          type="button"
+          className={styles.plus}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (parent) void spawnWorktreeSession(parent, branch);
+          }}
+          disabled={!parent}
+          title={
+            parent ? "New session in this worktree" : "Worktree parent unknown"
+          }
+          aria-label="New session in this worktree"
+        >
+          <Plus size={14} strokeWidth={1.5} />
+        </button>
+      )}
       {menu && (
         <>
           <div

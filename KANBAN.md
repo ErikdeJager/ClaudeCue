@@ -8,9 +8,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #196 — Worktree header: icon-only marker + inline "new session" button
-	Plan: TASK-196.md
-	Depends on: none
 - [ ] #197 — Click a worktree to filter Overview to just that worktree
 	Plan: TASK-197.md
 	Depends on: #196
@@ -35,3 +32,6 @@ kanban-plugin: board
 - [ ] #195 — Clean up Kanban card UI (hover-revealed actions, declutter title)
 	Plan: TASK-195.md
 	Depends on: #194
+- [ ] #196 — Worktree header: icon-only marker + inline "new session" button
+	Plan: TASK-196.md
+	Depends on: none

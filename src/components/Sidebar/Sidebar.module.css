@@ -246,8 +246,15 @@
   transition: color var(--dur-fast) var(--ease-out);
 }
 
-.plus:hover {
+.plus:hover:not(:disabled) {
   color: var(--text-primary);
+}
+
+/* Worktree "+" with an unknown parent (#196) — non-interactive, muted. */
+.plus:disabled {
+  color: var(--text-muted);
+  cursor: default;
+  opacity: 0.5;
 }
 
 .plusCoral {
@@ -709,24 +716,16 @@
   flex-shrink: 0;
 }
 
+/* Grows to fill the row so the trailing "+" (#196) sits at the right edge and the
+   branch name truncates — mirroring the repo header's `.repoTitle` layout. */
 .worktreeName {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   font-family: var(--mono);
   font-size: var(--fs-meta-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* "worktree" marker so an isolated instance is unmistakable (#74). */
-.worktreeBadge {
-  flex-shrink: 0;
-  margin-left: auto;
-  padding: 0 var(--space-4);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-chip);
-  color: var(--text-muted);
-  font-size: var(--fs-meta-sm);
 }
 
 /* --- Collapsed icon rail (#168) ---

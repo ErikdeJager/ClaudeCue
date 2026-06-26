@@ -1,8 +1,8 @@
 # Task 196
 
-### 196. [ ] Worktree header: icon-only marker + an inline "new session" button like repos
+### 196. [x] Worktree header: icon-only marker + an inline "new session" button like repos
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 
@@ -67,28 +67,31 @@ menu (New session / Views / Reveal / Copy / Pull / Close worktree) intact.
 
 **Subtasks**
 
-1. [ ] Remove the `worktreeBadge` "worktree" text; ensure the `GitBranch` icon + a `title`/
-   `aria-label` still mark the row as a worktree.
-2. [ ] Add the inline `+` button (repo-header-style) → `spawnWorktreeSession(parent, branch)`;
-   disabled when `parent` is unknown; click doesn't open the context menu / select.
-3. [ ] CSS: worktree header flex layout with the trailing `+`; name truncation; compact-rail
-   unchanged.
-4. [ ] **Verify** — `npm run build`, `npm run lint`, `npm test` green; Rust untouched.
-   Manual (or note as runtime-unverified): a worktree row shows an icon (no "worktree" word)
-   and a `+`; clicking `+` spawns an agent **inside that worktree** (nested under the same
-   header, ref-count++); the right-click menu still works; compact rail still shows just the
-   icon.
+1. [x] Removed the `worktreeBadge` "worktree" text span; the `GitBranch` icon now carries
+   `role="img" aria-label="worktree"` (was `aria-hidden`) so the meaning survives without the
+   word; the header keeps its absolute-path `title`.
+2. [x] Added the inline `+` button (repo-header `.plus` styling) → `spawnWorktreeSession(parent,
+   branch)`; native `disabled={!parent}` (greyed via a new `.plus:disabled`,
+   `title="Worktree parent unknown"`); `onClick` `stopPropagation` so it never opens the row's
+   context menu/select.
+3. [x] CSS: `.worktreeName` gains `flex: 1` so the row is `icon + branch-name(grow) + "+"` with
+   the name truncating, mirroring `.repoTitle`; dropped the dead `.worktreeBadge` rule; added
+   `.plus:disabled`. Compact-rail (`!compact` gates the name + `+`) unchanged.
+4. [x] **Verify** — `npm run build`, `npm run lint`, `npm test` (277) green; **no Rust
+   changes**; both files prettier-clean. The live render/click is **runtime-unverified** in
+   this loop (no GUI) — see Notes.
 
 **Acceptance criteria**
 
-- [ ] The worktree header **no longer shows the literal word "worktree"**; an icon marks it
-      (with an accessible "worktree" label/title).
-- [ ] The worktree header has an **inline "+" new-session button** matching the repo header's;
-      clicking it starts an agent **in that worktree** (via `spawnWorktreeSession`), and is
-      disabled when the parent repo is unknown.
-- [ ] The right-click menu (New session / Views / Reveal / Copy / Pull / Close worktree) and
-      compact-rail rendering are unchanged.
-- [ ] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
+- [x] The worktree header **no longer shows the literal word "worktree"**; the `GitBranch` icon
+      marks it (with an accessible `aria-label="worktree"`), distinct from a repo's `Folder`.
+- [x] The worktree header has an **inline "+" new-session button** matching the repo header's
+      `.plus`; clicking it calls `spawnWorktreeSession(parent, branch)` (reuses that worktree,
+      ref-count++ #166), and is `disabled` when the parent repo is unknown. _(Live click
+      runtime-unverified — see Notes.)_
+- [x] The right-click menu (New session / Views / Reveal / Copy / Pull / Close worktree) is
+      untouched, and compact-rail rendering (just the icon) is unchanged.
+- [x] `npm run build`, `npm run lint`, `npm test` pass; no Rust changes.
 
 **Notes**
 
@@ -108,3 +111,24 @@ menu (New session / Views / Reveal / Copy / Pull / Close worktree) intact.
 - **References:** `Sidebar.tsx` `WorktreeHeader` (~846, icon ~896, badge ~903, menu New
   session ~937–950), repo header `+` (~1481–1485, `startRepoSession`), `spawnWorktreeSession`
   / `ViewsMenu`. CLAUDE.md "Sidebar tree (#45/#59)" + worktree notes (#74/#96/#133/#164/#166).
+
+**Implementation notes (2026-06-26 — done)**
+
+- Touched only `Sidebar.tsx` (`WorktreeHeader` markup) + `Sidebar.module.css`. **No Rust.**
+- **Reused, not re-created:** the inline `+` uses the repo header's existing `.plus` class and
+  the shipped `spawnWorktreeSession(parent, branch)` (the same action the worktree menu's "New
+  session" already calls), so a new agent reuses the app-managed worktree (ref-count++, #166).
+- **Disabled vs aria-disabled:** the plan said "like the menu item" (which uses
+  `aria-disabled` + a guard). For a plain icon button, native `disabled={!parent}` is cleaner
+  (it natively blocks the click and greys via the new `.plus:disabled`); kept the guard
+  (`if (parent)`) too for belt-and-suspenders. The menu item is unchanged.
+- **Icon a11y:** dropping the word risked losing meaning, so the icon went from `aria-hidden`
+  to `role="img" aria-label="worktree"`. No jsx-a11y linter in the repo, so this is purely a
+  semantic improvement; visually identical.
+- **`stopPropagation` added** (the repo `+` doesn't, but its DOM structure already isolates it)
+  so the worktree `+` click never bubbles to a (current/future, e.g. #197 click-to-filter)
+  header handler — honoring the plan's explicit "stop the row's context-menu/selection".
+- **Runtime-unverified (autonomous loop, no GUI session):** the rendered header (icon + name +
+  `+`, no badge) and that clicking `+` spawns an agent nested under the same worktree. The
+  change is small, mirrors the verified repo `+`, reuses shipped actions, and passes
+  build/lint/test. Recommend a quick `npm run tauri dev` pass with a worktree present.
