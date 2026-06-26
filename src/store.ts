@@ -65,6 +65,50 @@ let eventsSubscribed = false;
 // must not add a second "Session exited" toast on top of the action's toast (#32).
 const intentionalKills = new Set<string>();
 
+// Worktree folder → parent repo (#199), recorded whenever the auto-delete guard runs
+// (i.e. an agent of the worktree is removed/exits) so a later **panel/schedule** close
+// can still resolve the worktree's parent after its last agent is gone — the parent is
+// required to `git worktree remove`. Module-level + in-memory (rebuilt from the session
+// lifecycle each run), like `intentionalKills`; cleared when the worktree is removed.
+const worktreeParents = new Map<string, string>();
+
+/**
+ * Whether a worktree folder `dest` is still referenced by any item (#199): a session
+ * (`repoPath === dest` — including an exited-but-still-shown agent with a Restart
+ * overlay), an `overviewPanels[dest]` entry (file/diff/terminal/kanban/filetree, #164),
+ * or a scheduled session targeting it (`cwd === dest`, #198). Pure — the auto-delete
+ * guard keeps the worktree exactly as long as ANY item of ANY type points at it, and
+ * removes it only once none remain.
+ */
+export function worktreeHasItems(
+  state: {
+    sessions: readonly { repoPath: string }[];
+    overviewPanels: Record<string, readonly unknown[]>;
+    schedules: readonly { cwd: string }[];
+  },
+  dest: string,
+): boolean {
+  return (
+    state.sessions.some((s) => s.repoPath === dest) ||
+    (state.overviewPanels[dest]?.length ?? 0) > 0 ||
+    state.schedules.some((sc) => sc.cwd === dest)
+  );
+}
+
+/** Resolve a worktree folder's parent repo (#199) — from a live session of the
+ *  worktree, else the recorded mapping (which survives the last agent's removal). */
+function worktreeParentOf(
+  state: {
+    sessions: readonly { repoPath: string; worktreeParent?: string | null }[];
+  },
+  dest: string,
+): string | undefined {
+  return (
+    state.sessions.find((s) => s.repoPath === dest && !!s.worktreeParent)
+      ?.worktreeParent ?? worktreeParents.get(dest)
+  );
+}
+
 // Sidebar width (#108): drag-resizable, clamped to [min, max] and persisted
 // separately from the Settings blob (so the modal's draft can't clobber a drag).
 const SIDEBAR_WIDTH_DEFAULT = 260;
@@ -2122,6 +2166,11 @@ export const useStore = create<AppState>()((set, get) => ({
     } catch {
       // ignore
     }
+    // Worktree auto-delete guard (#199): if this panel's folder is a worktree, remove
+    // the worktree once this was the last item referencing it (any agent / panel /
+    // schedule keeps it; dirty kept). No-op for a regular repo folder.
+    const wtParent = worktreeParentOf(get(), repoPath);
+    if (wtParent) void get().cleanupWorktreeIfEmpty(wtParent, repoPath);
   },
 
   setDiffCompare: (repoPath, config) => {
@@ -2935,15 +2984,16 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   cleanupWorktreeIfEmpty: async (parent, dest) => {
-    // Ref-counted (#74): never remove a worktree while another active agent still
-    // runs in it.
-    const stillActive = get().sessions.some(
-      (s) => s.repoPath === dest && s.exitedCode === undefined,
-    );
-    if (stillActive) return;
+    // Record the parent so a later panel/schedule close can resolve it once this
+    // worktree's last agent is gone (#199).
+    worktreeParents.set(dest, parent);
+    // Ref-counted (#74/#199): keep the worktree while ANY item — an agent (incl. an
+    // exited-but-shown one), a panel, or a scheduled session — still references it.
+    if (worktreeHasItems(get(), dest)) return;
     try {
       // Non-forced: git refuses a dirty worktree, which is our dirty guard.
       await ipc.removeWorktree(parent, dest, false);
+      worktreeParents.delete(dest);
     } catch {
       // Keep a dirty worktree rather than force-deleting uncommitted work (#74).
       get().pushToast("Worktree kept — it has uncommitted changes", "error");
@@ -3316,11 +3366,18 @@ export const useStore = create<AppState>()((set, get) => ({
   },
 
   cancelSchedule: async (id) => {
+    const schedule = get().schedules.find((x) => x.id === id);
     set((s) => ({ schedules: s.schedules.filter((x) => x.id !== id) }));
     // A schedule cancelled from the left panel also leaves every Canvas tab (#152).
     pruneCanvasLeaves((c) => c.kind === "scheduled" && c.scheduleId === id);
     await ipc.cancelSchedule(id).catch(() => {});
     get().pushToast("Schedule canceled");
+    // Worktree auto-delete guard (#199): a schedule can target a worktree (#198) —
+    // cancelling the last item there frees the worktree. No-op for a repo folder.
+    if (schedule) {
+      const wtParent = worktreeParentOf(get(), schedule.cwd);
+      if (wtParent) void get().cleanupWorktreeIfEmpty(wtParent, schedule.cwd);
+    }
   },
 
   updateSchedule: async (id, prompt, name, at) => {

@@ -11,9 +11,6 @@ kanban-plugin: board
 - [ ] #198 — Schedule a session into a worktree (create at fire time, clean up on cancel)
 	Plan: TASK-198.md
 	Depends on: #199
-- [ ] #199 — Worktree auto-delete guard: count all item types, run on every item close
-	Plan: TASK-199.md
-	Depends on: none
 - [ ] #200 — Worktree removal must not freeze the UI (run git worktree remove off-thread)
 	Plan: TASK-200.md
 	Depends on: #199
@@ -25,3 +22,7 @@ kanban-plugin: board
 	Depends on: none
 
 ## DONE
+
+- [ ] #199 — Worktree auto-delete guard: count all item types, run on every item close
+	Plan: TASK-199.md
+	Depends on: none

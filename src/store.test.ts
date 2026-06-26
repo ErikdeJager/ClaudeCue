@@ -16,6 +16,7 @@ import {
   repoOrder,
   useStore,
   versionIncreased,
+  worktreeHasItems,
 } from "./store";
 import type {
   CanvasContent,
@@ -717,6 +718,75 @@ describe("overviewClusterKeys (#174)", () => {
       filter: null,
     });
     expect(ids).toEqual(["s2"]);
+  });
+});
+
+describe("worktreeHasItems (#199)", () => {
+  const dest = "/data/worktrees/repo-id/feat";
+  const empty = { sessions: [], overviewPanels: {}, schedules: [] };
+
+  it("is false for a worktree with no items (→ safe to remove)", () => {
+    expect(worktreeHasItems(empty, dest)).toBe(false);
+  });
+
+  it("counts an agent whose repoPath is the worktree (incl. an exited-but-shown one)", () => {
+    // The guard counts ANY session at this folder — including an exited agent still
+    // shown with a Restart overlay (the old guard only counted live agents).
+    expect(
+      worktreeHasItems({ ...empty, sessions: [{ repoPath: dest }] }, dest),
+    ).toBe(true);
+  });
+
+  it("counts an overview panel keyed to the worktree folder", () => {
+    expect(
+      worktreeHasItems(
+        { ...empty, overviewPanels: { [dest]: [{ id: "p1" }] } },
+        dest,
+      ),
+    ).toBe(true);
+    // An empty panel list does not count.
+    expect(
+      worktreeHasItems({ ...empty, overviewPanels: { [dest]: [] } }, dest),
+    ).toBe(false);
+  });
+
+  it("counts a scheduled session targeting the worktree folder", () => {
+    expect(
+      worktreeHasItems({ ...empty, schedules: [{ cwd: dest }] }, dest),
+    ).toBe(true);
+  });
+
+  it("ignores items belonging to other folders", () => {
+    expect(
+      worktreeHasItems(
+        {
+          sessions: [{ repoPath: "/work/other" }],
+          overviewPanels: { "/work/other": [{ id: "p" }] },
+          schedules: [{ cwd: "/work/other" }],
+        },
+        dest,
+      ),
+    ).toBe(false);
+  });
+
+  it("mixed items all count; only true emptiness (all types gone) is removable", () => {
+    const full = {
+      sessions: [{ repoPath: dest }],
+      overviewPanels: { [dest]: [{ id: "p" }] },
+      schedules: [{ cwd: dest }],
+    };
+    expect(worktreeHasItems(full, dest)).toBe(true);
+    // Drop the agent → still has a panel + schedule.
+    expect(worktreeHasItems({ ...full, sessions: [] }, dest)).toBe(true);
+    // Drop the panel too → still has the schedule.
+    expect(
+      worktreeHasItems(
+        { sessions: [], overviewPanels: {}, schedules: [{ cwd: dest }] },
+        dest,
+      ),
+    ).toBe(true);
+    // Drop the schedule → empty → removable.
+    expect(worktreeHasItems(empty, dest)).toBe(false);
   });
 });
 
