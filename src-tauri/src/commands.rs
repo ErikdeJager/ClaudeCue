@@ -400,9 +400,32 @@ pub fn set_repo_color(
         .map_err(|e| SessionError::Io(e.to_string()))
 }
 
+/// Immediate children of one directory (`subdir`, repo-relative; empty = repo root)
+/// for the **lazy** file tree (#167) — folders first, then viewable files, no count
+/// or depth cap (depth is reached by expanding one level at a time). Path-validated.
 #[tauri::command]
-pub fn list_files(repo: String) -> Vec<String> {
-    crate::files::list_files(repo)
+pub fn list_dir(
+    repo: String,
+    subdir: String,
+) -> Result<Vec<crate::files::DirEntryInfo>, SessionError> {
+    crate::files::list_dir(&repo, &subdir).map_err(SessionError::Io)
+}
+
+/// Search a repo's viewable files for the file picker (#56) — substring match over
+/// repo-relative paths, optionally restricted to an extension (e.g. `.md` for the
+/// Kanban picker), result-capped so it scales to very large repos. Deterministic
+/// across machines.
+#[tauri::command]
+pub fn search_files(
+    repo: String,
+    query: String,
+    ext: Option<String>,
+    limit: Option<usize>,
+) -> Vec<String> {
+    let limit = limit
+        .unwrap_or(crate::files::SEARCH_RESULT_CAP)
+        .clamp(1, crate::files::SEARCH_RESULT_CAP * 8);
+    crate::files::search_files(&repo, &query, ext.as_deref(), limit)
 }
 
 /// Read a repo-relative text file for the file viewer (#40/#44); the path is

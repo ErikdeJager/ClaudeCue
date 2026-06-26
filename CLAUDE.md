@@ -353,7 +353,7 @@ even though it works in `tauri dev`.
 │   ├── src/commands.rs     # Tauri command surface + event payloads
 │   ├── src/store.rs        # JSON persistence (sessions, recents, canvases, canvas templates, schedules, settings, sidebar width)
 │   ├── src/git.rs          # Git: branch + diff + compare (#81) + list (local+remote #180) + checkout + worktree (#74) + fetch (#180) + pull --ff-only (#181)
-│   ├── src/files.rs        # Repo file access (list/read text + write_text_file #141, path-validated)
+│   ├── src/files.rs        # Repo file access (lazy list_dir tree + search_files picker, read/write_text_file #141, path-validated)
 │   ├── src/skills.rs        # Read-only scan of .claude skills/commands for prompt autocomplete (#114)
 │   ├── Info.plist          # Partial plist (mic + speech-recognition usage strings), merged into the bundle
 │   ├── tauri.conf.json     # Window, bundle, build config
@@ -418,7 +418,22 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
   reads repo text files for the viewer (#40/#44) and, since **#141**, writes a repo
   text file (`write_text_file`) — the app's **first arbitrary file write**, backing
   the markdown **Kanban board** (#141–#151) and the FileViewer's **editable raw
-  markdown / plain-text** view (#148/#149). The write is path-validated
+  markdown / plain-text** view (#148/#149). **File listing scales to any repo, all
+  files:** the old recursive `list_files` (a flat list **capped at 500 / depth 8**,
+  walked in unsorted filesystem order — so a large repo's files, incl. user-created
+  ones like a Kanban `.md`, were silently truncated, and *which* ones differed per
+  machine) is replaced by two bounded commands. The **lazy file tree** (#167) calls
+  **`list_dir(repo, subdir)`** for one directory level at a time (folders first then
+  viewable files), fetched on each folder's first expand — **no count or depth cap**
+  (deep trees are reached by expanding), so it works for huge repos. The **file
+  picker** (#56) calls **`search_files(repo, query, ext?, limit)`** — a
+  **deterministic** (sorted-walk, machine-independent) case-insensitive substring
+  search over repo-relative paths, optional extension filter (`.md` for Kanban), with
+  a **result** cap (`SEARCH_RESULT_CAP`, 500) the user narrows by typing, so the IPC
+  payload + render stay bounded on arbitrarily large repos. Both still skip heavy/dep
+  dirs **and now `.git`** (`SKIP_DIRS` — narrowing #179's all-dot-folders listing, so
+  `.git` internals no longer flood / crowd out real files; `.claude`/`.github`/… stay
+  listed) and binary extensions (`SKIP_EXTS`). The write is path-validated
   exactly like `read_text_file` (canonicalize, confine to the repo, reject
   `..`/symlink/out-of-repo targets; a new file's parent dir must exist + be inside
   the repo), narrowing the earlier "no arbitrary file writes" rule the way #74/#124

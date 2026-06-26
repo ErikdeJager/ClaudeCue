@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   FileDiff,
   FileText,
@@ -8,7 +8,6 @@ import {
   Terminal as TerminalIcon,
 } from "lucide-react";
 
-import { listFiles } from "../../ipc";
 import { useStore } from "../../store";
 import FilePicker from "../FilePicker/FilePicker";
 import styles from "./ViewsMenu.module.css";
@@ -34,34 +33,13 @@ function ViewsMenu({
   const spawnSession = useStore((s) => s.spawnSession);
   const [mode, setMode] = useState<"menu" | "files">("menu");
   const [fileKind, setFileKind] = useState<"markdown" | "kanban">("markdown");
-  const [files, setFiles] = useState<string[] | null>(null);
-
-  // Load the repo's files when a File/Kanban action enters the picker.
-  useEffect(() => {
-    if (mode !== "files") return;
-    let cancelled = false;
-    setFiles(null);
-    void listFiles(repoPath)
-      .then((list) => {
-        if (!cancelled) setFiles(list);
-      })
-      .catch(() => {
-        if (!cancelled) setFiles([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [mode, repoPath]);
 
   if (mode === "files") {
     // Kanban is scoped to `.md` (#142); the same picker creates a new board (#151).
-    const list =
-      fileKind === "kanban"
-        ? (files?.filter((f) => f.toLowerCase().endsWith(".md")) ?? null)
-        : files;
     return (
       <FilePicker
-        files={list}
+        repoPath={repoPath}
+        ext={fileKind === "kanban" ? ".md" : undefined}
         onPick={(f) => {
           void addOverviewPanel(repoPath, fileKind, f);
           onClose();

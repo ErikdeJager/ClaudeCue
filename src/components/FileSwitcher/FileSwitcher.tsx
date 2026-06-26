@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, FolderOpen } from "lucide-react";
 
-import { listFiles, pickFile } from "../../ipc";
+import { pickFile } from "../../ipc";
 import { splitPath } from "../../paths";
 import FilePicker from "../FilePicker/FilePicker";
 import styles from "./FileSwitcher.module.css";
@@ -28,9 +28,9 @@ interface FileSwitcherProps {
 /**
  * The file-viewer header's filename rendered as a **switcher** (#90): a button
  * (basename + ▾ caret) that opens a searchable popover of the repo's files
- * (reusing `FilePicker` #56); picking one swaps the viewer in place. Self-contained
- * — it loads `listFiles(repoPath)` when opened and dismisses on pick / outside-click
- * / Escape. Shared by the Overview file column and Canvas file panel headers. It
+ * (reusing `FilePicker` #56, which searches the repo server-side); picking one swaps
+ * the viewer in place. Self-contained — it dismisses on pick / outside-click / Escape.
+ * Shared by the Overview file column and Canvas file panel headers. It
  * stops pointerdown so opening it never starts the Overview card's drag (#43/#70).
  */
 function FileSwitcher({
@@ -41,26 +41,7 @@ function FileSwitcher({
   nameClassName,
 }: FileSwitcherProps) {
   const [open, setOpen] = useState(false);
-  const [files, setFiles] = useState<string[] | null>(null);
   const rootRef = useRef<HTMLSpanElement>(null);
-
-  // Load the repo's files when the popover opens (same list as the repo menu's
-  // "File viewer" add, #82).
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setFiles(null);
-    void listFiles(repoPath)
-      .then((list) => {
-        if (!cancelled) setFiles(list);
-      })
-      .catch(() => {
-        if (!cancelled) setFiles([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, repoPath]);
 
   // Dismiss on outside-click + Escape.
   useEffect(() => {
@@ -106,7 +87,7 @@ function FileSwitcher({
       {open && (
         <div className={styles.popover} role="dialog" aria-label="Switch file">
           <FilePicker
-            files={files}
+            repoPath={repoPath}
             onPick={(f) => {
               onPick(f);
               setOpen(false);

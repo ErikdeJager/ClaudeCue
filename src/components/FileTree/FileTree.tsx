@@ -1,4 +1,11 @@
-import { type MouseEvent as ReactMouseEvent, useEffect, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -8,9 +15,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-import { listFiles, revealPath } from "../../ipc";
+import { type DirEntry, listDir, revealPath } from "../../ipc";
 import { useStore } from "../../store";
-import { buildFileTree, type FileTreeNode } from "./buildFileTree";
 import styles from "./FileTree.module.css";
 
 /** Right-click menu state: the cursor position + the file the menu targets. */
@@ -23,38 +29,47 @@ interface FileMenu {
 /**
  * A collapsible repo file tree (#167) — a first-class, repo-scoped view rendered in
  * the sidebar, an Overview column, and a Canvas panel (and a Canvas-template block),
- * exactly like the diff panel. It loads the backend's **flat** `list_files` result
- * (already filtered: no hidden/heavy/binary files, capped at 500 / depth 8) and
- * builds the nested tree **client-side** via the pure `buildFileTree`. Folders
- * expand/collapse on click (state lives in local component state, not persisted);
- * clicking a file opens it in the file viewer; right-clicking a file offers
- * Open in file viewer / Open as Kanban board (`.md` only) / Reveal in Finder / Copy
- * absolute path / Copy relative path (#184). Folders have no menu. No backend change
- * — same data source as `FilePicker`.
+ * exactly like the diff panel. It loads **lazily**, one directory level at a time, via
+ * the backend `list_dir`: the root loads on mount and each folder fetches its children
+ * the first time it's expanded. So the tree supports **arbitrarily deep** structures
+ * and **very large repos** without ever walking the whole tree (no count or depth cap)
+ * — the same data source as the file picker's `search_files`. Folder expansion state
+ * lives in local component state (not persisted; refresh reloads from the root).
+ * Clicking a file opens it in the file viewer; right-clicking a file offers Open in
+ * file viewer / Open as Kanban board (`.md` only) / Reveal in Finder / Copy absolute
+ * path / Copy relative path (#184). Folders have no menu.
  */
 function FileTree({ repoPath }: { repoPath: string }) {
   const openFileFromTree = useStore((s) => s.openFileFromTree);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
-  const [tree, setTree] = useState<FileTreeNode[] | null>(null);
+  // Children keyed by directory path ("" = repo root); a missing key = not yet loaded.
+  const [children, setChildren] = useState<Record<string, DirEntry[]>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<FileMenu | null>(null);
   const [nonce, setNonce] = useState(0);
+  // Paths with an in-flight `list_dir` — guards against double-loading on re-render.
+  const inFlight = useRef<Set<string>>(new Set());
 
-  // Load (and reload on manual refresh) the repo's flat file list → nested tree.
+  // Fetch one directory level (idempotent while a request is in flight).
+  const load = useCallback(
+    (path: string) => {
+      if (inFlight.current.has(path)) return;
+      inFlight.current.add(path);
+      void listDir(repoPath, path)
+        .then((list) => setChildren((prev) => ({ ...prev, [path]: list })))
+        .catch(() => setChildren((prev) => ({ ...prev, [path]: [] })))
+        .finally(() => inFlight.current.delete(path));
+    },
+    [repoPath],
+  );
+
+  // Reset and reload the root whenever the repo changes or the user refreshes.
   useEffect(() => {
-    let cancelled = false;
-    setTree(null);
-    void listFiles(repoPath)
-      .then((list) => {
-        if (!cancelled) setTree(buildFileTree(list));
-      })
-      .catch(() => {
-        if (!cancelled) setTree([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [repoPath, nonce]);
+    inFlight.current = new Set();
+    setChildren({});
+    setExpanded(new Set());
+    load("");
+  }, [repoPath, nonce, load]);
 
   // Dismiss the context menu on Escape.
   useEffect(() => {
@@ -69,8 +84,12 @@ function FileTree({ repoPath }: { repoPath: string }) {
   const toggle = (path: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+        if (children[path] === undefined) load(path); // lazy first-open fetch
+      }
       return next;
     });
   };
@@ -88,10 +107,23 @@ function FileTree({ repoPath }: { repoPath: string }) {
     });
   };
 
-  const renderNodes = (nodes: FileTreeNode[], depth: number) =>
-    nodes.map((node) => {
+  // Render one directory level; recurses into expanded folders. A not-yet-loaded
+  // level shows a brief "Loading…" hint, an empty one nothing (root handled below).
+  const renderLevel = (path: string, depth: number): ReactNode => {
+    const entries = children[path];
+    if (entries === undefined) {
+      return (
+        <p
+          className={styles.hint}
+          style={{ paddingLeft: `${8 + depth * 14}px` }}
+        >
+          Loading…
+        </p>
+      );
+    }
+    return entries.map((node) => {
       const indent = { paddingLeft: `${8 + depth * 14}px` };
-      if (node.type === "folder") {
+      if (node.is_dir) {
         const isOpen = expanded.has(node.path);
         const Chevron = isOpen ? ChevronDown : ChevronRight;
         const FolderIcon = isOpen ? FolderOpen : Folder;
@@ -118,9 +150,7 @@ function FileTree({ repoPath }: { repoPath: string }) {
               />
               <span className={styles.name}>{node.name}</span>
             </button>
-            {isOpen && node.children
-              ? renderNodes(node.children, depth + 1)
-              : null}
+            {isOpen ? renderLevel(node.path, depth + 1) : null}
           </div>
         );
       }
@@ -144,6 +174,9 @@ function FileTree({ repoPath }: { repoPath: string }) {
         </button>
       );
     });
+  };
+
+  const root = children[""];
 
   return (
     <div className={styles.tree}>
@@ -159,12 +192,12 @@ function FileTree({ repoPath }: { repoPath: string }) {
         </button>
       </div>
       <div className={styles.body}>
-        {tree === null ? (
+        {root === undefined ? (
           <p className={styles.hint}>Loading…</p>
-        ) : tree.length === 0 ? (
+        ) : root.length === 0 ? (
           <p className={styles.hint}>No files in this repo.</p>
         ) : (
-          renderNodes(tree, 0)
+          renderLevel("", 0)
         )}
       </div>
 

@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Search } from "lucide-react";
 
+import { searchFiles } from "../../ipc";
 import { noAutoCapitalize } from "../../inputProps";
 import styles from "./FilePicker.module.css";
 
 interface FilePickerProps {
-  /** Repo-relative file paths to choose from; `null` = still loading. */
-  files: string[] | null;
+  /** Repo whose files are searched (repo-relative results). */
+  repoPath: string;
+  /** Restrict results to this extension (e.g. `.md` for the Kanban picker). */
+  ext?: string;
   /** Called with the chosen repo-relative path. */
   onPick: (file: string) => void;
   /**
@@ -33,20 +36,25 @@ function dirname(path: string): string {
 }
 
 /**
- * Reusable searchable file picker (#56): an autofocused search box over a
- * filtered, scrollable list of files. Each row shows the **basename** prominently
- * with the containing **directory dimmed**. Filtering is a case-insensitive
- * substring match over the full repo-relative path. Keyboard: type to filter,
- * Up/Down to move the highlight, Enter to choose. On-system tokens; mono paths.
+ * Reusable searchable file picker (#56): an autofocused search box over a scrollable
+ * list of matches. Each row shows the **basename** prominently with the containing
+ * **directory dimmed**. The match is computed **server-side** (the backend
+ * `search_files` — a case-insensitive substring over the whole repo, result-capped),
+ * so it scales to very large repos without ever loading every path into the view
+ * (#167); the query is debounced. Keyboard: type to search, Up/Down to move the
+ * highlight, Enter to choose.
  */
 function FilePicker({
-  files,
+  repoPath,
+  ext,
   onPick,
   onCreate,
   createSuffix,
 }: FilePickerProps) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  // Server-side matches; `null` until the first response (the loading state).
+  const [matches, setMatches] = useState<string[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -54,11 +62,26 @@ function FilePicker({
     inputRef.current?.focus();
   }, []);
 
-  const filtered = useMemo(() => {
-    if (!files) return [];
-    const q = query.trim().toLowerCase();
-    return q ? files.filter((f) => f.toLowerCase().includes(q)) : files;
-  }, [files, query]);
+  // Debounced server-side search. Stale results stay visible until the next response
+  // arrives (no null flicker per keystroke), so the list never blanks while typing.
+  useEffect(() => {
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      void searchFiles(repoPath, query, ext)
+        .then((list) => {
+          if (!cancelled) setMatches(list);
+        })
+        .catch(() => {
+          if (!cancelled) setMatches([]);
+        });
+    }, 100);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [repoPath, query, ext]);
+
+  const filtered = matches ?? [];
 
   // The trimmed search text, reused both as the filter and (#151) the new file's
   // name when a create affordance is offered.
@@ -73,8 +96,8 @@ function FilePicker({
       ? `${trimmedQuery}${suffix}`
       : trimmedQuery;
 
-  // Reset the highlight to the top whenever the filter changes.
-  useEffect(() => setActive(0), [query]);
+  // Reset the highlight to the top whenever the result set changes.
+  useEffect(() => setActive(0), [matches]);
 
   // Keep the highlighted row scrolled into view as it moves.
   useEffect(() => {
@@ -126,7 +149,7 @@ function FilePicker({
           aria-label={onCreate ? "Search or name a board" : "Search files"}
         />
       </div>
-      {files === null ? (
+      {matches === null ? (
         <p className={styles.hint}>Loading…</p>
       ) : filtered.length > 0 ? (
         <div
@@ -158,11 +181,11 @@ function FilePicker({
       // below is the answer, so suppress the otherwise-confusing empty hint.
       canCreate ? null : (
         <p className={styles.hint}>
-          {files.length === 0
-            ? onCreate
+          {trimmedQuery
+            ? "No matches."
+            : onCreate
               ? "No boards yet — type a name to create one."
-              : "No files in this repo."
-            : "No matches."}
+              : "No files in this repo."}
         </p>
       )}
       {canCreate && (

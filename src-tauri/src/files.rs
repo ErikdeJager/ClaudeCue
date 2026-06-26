@@ -6,11 +6,18 @@
 //! (markdown rendered sanitized with no raw HTML; code highlighted from escaped
 //! source).
 
+use serde::Serialize;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-/// Directory names skipped while listing (heavy / build / vendored dirs).
+/// Directory names skipped while listing/searching (heavy build/dependency dirs, plus
+/// the `.git` VCS-internals dir). `.git` is skipped — narrowing #179, which had listed
+/// *all* dot-folders: a `.git` dir holds hundreds–thousands of objects/refs/logs that
+/// are not user files, so it both floods the tree and (under the old count cap) crowded
+/// real files out of the list. Other dot-folders (`.claude`, `.github`, `.vscode`, …)
+/// are still listed.
 const SKIP_DIRS: &[&str] = &[
+    ".git",
     "node_modules",
     "target",
     "dist",
@@ -28,45 +35,159 @@ const SKIP_EXTS: &[&str] = &[
     "webm", "mkv", "mp3", "wav", "ogg", "flac", "exe", "dll", "so", "dylib", "bin", "wasm", "node",
     "class", "o", "a", "lib", "obj", "dmg", "iso", "jar",
 ];
-const LIST_CAP: usize = 500;
-const MAX_DEPTH: usize = 8;
+/// Safety backstop on recursion depth for the flat `search_files` walk — **not** a
+/// feature cap (the lazy `list_dir` tree has no depth limit; the user expands as deep
+/// as they like). It only stops a symlink-looped tree from recursing without end, so
+/// it's set far beyond any real source nesting.
+const MAX_SEARCH_DEPTH: usize = 64;
+/// Default cap on the number of `search_files` *results* (not on tree coverage): the
+/// picker shows the top matches and the user narrows by typing. This keeps the IPC
+/// payload and the rendered list bounded on arbitrarily large repos, while the lazy
+/// tree (`list_dir`) imposes no count limit at all.
+pub const SEARCH_RESULT_CAP: usize = 500;
 const MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 
-/// Repo viewable files as repo-relative paths (sorted), excluding heavy/vendored
-/// dirs (`SKIP_DIRS`) and binary extensions, capped. Dot-folders (`.claude`,
-/// `.github`, `.git`, …) are listed (#179). A non-readable dir yields an empty list.
-pub fn list_files(repo: impl AsRef<Path>) -> Vec<String> {
+/// One immediate child of a directory, returned by `list_dir` to drive the **lazy**
+/// file tree (#167): the tree fetches a single directory level at a time as folders
+/// are expanded, so it supports arbitrarily deep structures and very large repos
+/// without ever walking the whole tree. `path` is repo-relative (POSIX `/`); `name`
+/// is the last segment (the row label); `is_dir` distinguishes an expandable folder
+/// from a viewable file.
+#[derive(Debug, Clone, Serialize)]
+pub struct DirEntryInfo {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+}
+
+/// Resolve `rel` against `repo`, confining the result inside the repo: the canonical
+/// (symlink-resolved) path must stay under the canonical repo, rejecting `..` and
+/// symlink escapes (and absolute `rel`, which resolves outside). An empty `rel` is the
+/// repo root. Mirrors the containment check `read_text_file` uses.
+fn confine(repo: &Path, rel: &str) -> Result<PathBuf, String> {
+    let canon_repo = repo.canonicalize().map_err(|e| e.to_string())?;
+    let target = if rel.is_empty() {
+        repo.to_path_buf()
+    } else {
+        repo.join(rel)
+    };
+    let canon = target.canonicalize().map_err(|e| e.to_string())?;
+    if !canon.starts_with(&canon_repo) {
+        return Err("path is outside the repository".to_string());
+    }
+    Ok(canon)
+}
+
+/// Immediate children of one directory (`subdir`, repo-relative; empty = the repo
+/// root), for the lazy file tree (#167). Folders come first, then viewable files, each
+/// sorted case-insensitively. Heavy/dependency dirs and `.git` (`SKIP_DIRS`) are
+/// hidden; binary files (`SKIP_EXTS`) are hidden, but **every** other folder and file
+/// is returned — there is no count or depth cap (depth is reached by expanding,
+/// one level per call). The path is confined to `repo` (rejects `..`/symlink escapes).
+pub fn list_dir(repo: impl AsRef<Path>, subdir: &str) -> Result<Vec<DirEntryInfo>, String> {
     let repo = repo.as_ref();
+    let dir = confine(repo, subdir)?;
+    let prefix = subdir.trim_matches('/');
+    let entries = fs::read_dir(&dir).map_err(|e| e.to_string())?;
+    let mut dirs: Vec<DirEntryInfo> = Vec::new();
+    let mut files: Vec<DirEntryInfo> = Vec::new();
+    for entry in entries.flatten() {
+        let os_name = entry.file_name();
+        let name = os_name.to_string_lossy().to_string();
+        let rel = if prefix.is_empty() {
+            name.clone()
+        } else {
+            format!("{prefix}/{name}")
+        };
+        let path = entry.path();
+        if path.is_dir() {
+            if SKIP_DIRS.contains(&name.as_str()) {
+                continue;
+            }
+            dirs.push(DirEntryInfo {
+                name,
+                path: rel,
+                is_dir: true,
+            });
+        } else if is_listable(&path) {
+            files.push(DirEntryInfo {
+                name,
+                path: rel,
+                is_dir: false,
+            });
+        }
+    }
+    let by_name =
+        |a: &DirEntryInfo, b: &DirEntryInfo| a.name.to_lowercase().cmp(&b.name.to_lowercase());
+    dirs.sort_by(by_name);
+    files.sort_by(by_name);
+    dirs.append(&mut files);
+    Ok(dirs)
+}
+
+/// Search a repo's viewable files for the file picker: a recursive, **deterministic**
+/// (each directory's entries are sorted before recursing, so the same files surface on
+/// every machine) walk that returns repo-relative paths whose path contains `query`
+/// (case-insensitive substring; empty `query` = the first files), excluding
+/// heavy/dependency dirs + `.git` (`SKIP_DIRS`) and binaries (`SKIP_EXTS`). An optional
+/// `ext` (e.g. `.md`) restricts to that extension. The walk stops once `limit` matches
+/// are collected, so the result — and thus the IPC payload and the rendered list —
+/// stays bounded on arbitrarily large repos; the user narrows by typing.
+pub fn search_files(
+    repo: impl AsRef<Path>,
+    query: &str,
+    ext: Option<&str>,
+    limit: usize,
+) -> Vec<String> {
+    let repo = repo.as_ref();
+    let needle = query.trim().to_lowercase();
+    let ext = ext.map(|e| e.to_lowercase());
     let mut out = Vec::new();
-    collect(repo, repo, &mut out, 0);
-    out.sort();
+    search_collect(repo, repo, &needle, ext.as_deref(), limit, &mut out, 0);
     out
 }
 
-fn collect(root: &Path, dir: &Path, out: &mut Vec<String>, depth: usize) {
-    if out.len() >= LIST_CAP || depth > MAX_DEPTH {
+fn search_collect(
+    root: &Path,
+    dir: &Path,
+    needle: &str,
+    ext: Option<&str>,
+    limit: usize,
+    out: &mut Vec<String>,
+    depth: usize,
+) {
+    if out.len() >= limit || depth > MAX_SEARCH_DEPTH {
         return;
     }
-    let Ok(entries) = fs::read_dir(dir) else {
+    let Ok(read) = fs::read_dir(dir) else {
         return;
     };
-    for entry in entries.flatten() {
-        if out.len() >= LIST_CAP {
+    // Sort entries so the walk (and the `limit` cut-off) is deterministic across
+    // machines — the old unsorted walk truncated a different arbitrary set per disk.
+    let mut entries: Vec<_> = read.flatten().collect();
+    entries.sort_by_key(|e| e.file_name().to_string_lossy().to_lowercase());
+    for entry in entries {
+        if out.len() >= limit {
             return;
         }
+        let os_name = entry.file_name();
+        let name = os_name.to_string_lossy();
         let path = entry.path();
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
         if path.is_dir() {
-            // Skip only heavy build/dep dirs (node_modules, target, …). Dot-folders
-            // like .claude / .github / .git are listed (#179).
             if SKIP_DIRS.contains(&name.as_ref()) {
                 continue;
             }
-            collect(root, &path, out, depth + 1);
+            search_collect(root, &path, needle, ext, limit, out, depth + 1);
         } else if is_listable(&path) {
             if let Ok(rel) = path.strip_prefix(root) {
-                out.push(rel.to_string_lossy().replace('\\', "/"));
+                let rel = rel.to_string_lossy().replace('\\', "/");
+                let lower = rel.to_lowercase();
+                if ext.is_some_and(|e| !lower.ends_with(e)) {
+                    continue;
+                }
+                if needle.is_empty() || lower.contains(needle) {
+                    out.push(rel);
+                }
             }
         }
     }
@@ -167,34 +288,77 @@ mod tests {
     }
 
     #[test]
-    fn lists_text_files_excluding_heavy_dirs_and_binaries() {
-        let dir = tmp("list");
+    fn list_dir_returns_one_level_folders_first_excluding_heavy_and_binaries() {
+        let dir = tmp("listdir");
         fs::write(dir.join("README.md"), "# hi").unwrap();
-        fs::write(dir.join("main.rs"), "fn main() {}").unwrap();
-        fs::write(dir.join("notes.txt"), "ok").unwrap();
         fs::write(dir.join("LICENSE"), "MIT").unwrap(); // extensionless → text
         fs::write(dir.join("logo.png"), "binary").unwrap(); // binary ext → skipped
         fs::create_dir_all(dir.join("src")).unwrap();
         fs::write(dir.join("src/lib.ts"), "export {}").unwrap();
         fs::create_dir_all(dir.join("node_modules/pkg")).unwrap();
         fs::write(dir.join("node_modules/pkg/x.js"), "skip").unwrap();
-        // Dot-folders are now listed (#179): .git internals and .claude content.
+        // `.git` is skipped now; other dot-folders are still listed.
         fs::create_dir_all(dir.join(".git")).unwrap();
         fs::write(dir.join(".git/config"), "[core]").unwrap();
-        fs::create_dir_all(dir.join(".claude/skills/foo")).unwrap();
-        fs::write(dir.join(".claude/skills/foo/SKILL.md"), "# skill").unwrap();
+        fs::create_dir_all(dir.join(".claude")).unwrap();
 
-        let files = list_files(&dir);
-        assert!(files.contains(&"README.md".to_string()));
-        assert!(files.contains(&"main.rs".to_string()));
-        assert!(files.contains(&"notes.txt".to_string()));
-        assert!(files.contains(&"LICENSE".to_string()));
-        assert!(files.contains(&"src/lib.ts".to_string()));
-        // Dot-folders (incl. .git) are included (#179).
-        assert!(files.contains(&".git/config".to_string()));
-        assert!(files.contains(&".claude/skills/foo/SKILL.md".to_string()));
-        assert!(!files.iter().any(|f| f.ends_with(".png")));
-        assert!(!files.iter().any(|f| f.contains("node_modules")));
+        let root = list_dir(&dir, "").unwrap();
+        let names: Vec<&str> = root.iter().map(|e| e.name.as_str()).collect();
+        // Folders come first (`.claude`, `src`), then files (`LICENSE`, `README.md`).
+        assert_eq!(names, vec![".claude", "src", "LICENSE", "README.md"]);
+        // `.git`, `node_modules`, and the binary are excluded; `src` is a folder.
+        assert!(!names.contains(&".git"));
+        assert!(!names.contains(&"node_modules"));
+        assert!(!names.contains(&"logo.png"));
+        assert!(root.iter().find(|e| e.name == "src").unwrap().is_dir);
+
+        // Lazy descent: listing `src` returns its child, with a repo-relative path.
+        let src = list_dir(&dir, "src").unwrap();
+        assert_eq!(src.len(), 1);
+        assert_eq!(src[0].path, "src/lib.ts");
+        assert!(!src[0].is_dir);
+
+        // Traversal escapes are rejected.
+        assert!(list_dir(&dir, "../..").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn search_files_matches_substring_and_has_no_count_cap() {
+        let dir = tmp("search");
+        fs::write(dir.join("README.md"), "# hi").unwrap();
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(dir.join("src/store.ts"), "export {}").unwrap();
+        fs::write(dir.join("KANBAN.md"), "# board").unwrap();
+        fs::create_dir_all(dir.join("node_modules")).unwrap();
+        fs::write(dir.join("node_modules/store.ts"), "skip").unwrap();
+        // Far more than the old 500 cap — every one is reachable via search.
+        for i in 0..600 {
+            fs::write(dir.join(format!("note-{i:04}.md")), "x").unwrap();
+        }
+
+        // Empty query returns the first results (bounded by the limit), deterministically.
+        let first = search_files(&dir, "", None, 50);
+        assert_eq!(first.len(), 50);
+
+        // A specific name is found even though it sorts past the old 500-file cap —
+        // the user-created board is never silently dropped now.
+        let kanban = search_files(&dir, "kanban", None, SEARCH_RESULT_CAP);
+        assert_eq!(kanban, vec!["KANBAN.md".to_string()]);
+
+        // Substring match across nested dirs, skipping node_modules.
+        let store = search_files(&dir, "store", None, SEARCH_RESULT_CAP);
+        assert_eq!(store, vec!["src/store.ts".to_string()]);
+
+        // The `.md` extension filter (Kanban picker) restricts results.
+        let md = search_files(&dir, "readme", Some(".md"), SEARCH_RESULT_CAP);
+        assert_eq!(md, vec!["README.md".to_string()]);
+        let ts = search_files(&dir, "store", Some(".md"), SEARCH_RESULT_CAP);
+        assert!(ts.is_empty());
+
+        // No count cap on coverage: all 600 notes + the other files are searchable.
+        let all_notes = search_files(&dir, "note-", None, 1000);
+        assert_eq!(all_notes.len(), 600);
         let _ = fs::remove_dir_all(&dir);
     }
 

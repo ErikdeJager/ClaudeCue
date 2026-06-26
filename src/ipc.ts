@@ -181,9 +181,39 @@ export const closeCanvasWindow = (id: string) =>
  * since a just-opened window may have missed the `canvas://windows` broadcast. */
 export const listCanvasWindows = () => invoke<string[]>("list_canvas_windows");
 
-/** Repo-relative viewable (text-ish) files in a repo (file viewer, #44). */
-export const listFiles = (repo: string) =>
-  invoke<string[]>("list_files", { repo });
+/** One immediate child of a directory in the lazy file tree (#167). */
+export interface DirEntry {
+  /** Last path segment — the row label. */
+  name: string;
+  /** Repo-relative path (POSIX `/`), e.g. `src/components`. */
+  path: string;
+  /** An expandable folder vs a viewable file. */
+  is_dir: boolean;
+}
+
+/** Immediate children of one directory (`subdir` repo-relative, empty = repo root)
+ * for the **lazy** file tree (#167): folders first then viewable files, no count or
+ * depth cap — the tree fetches one level per expansion, so it scales to deep / huge
+ * repos. Rejects paths outside the repo. */
+export const listDir = (repo: string, subdir: string) =>
+  invoke<DirEntry[]>("list_dir", { repo, subdir });
+
+/** Search a repo's viewable files for the picker (#56) — case-insensitive substring
+ * over repo-relative paths, optionally restricted to an extension (e.g. `.md`),
+ * result-capped server-side so it scales to very large repos. Empty `query` returns
+ * the first files. */
+export const searchFiles = (
+  repo: string,
+  query: string,
+  ext?: string,
+  limit?: number,
+) =>
+  invoke<string[]>("search_files", {
+    repo,
+    query,
+    ext: ext ?? null,
+    limit: limit ?? null,
+  });
 
 /** Read a repo-relative text file (validated inside the repo, #40/#44). */
 export const readTextFile = (repo: string, file: string) =>

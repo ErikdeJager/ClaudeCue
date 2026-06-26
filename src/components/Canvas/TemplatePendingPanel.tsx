@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, FolderSearch, Loader, RotateCw } from "lucide-react";
 
-import { listFiles } from "../../ipc";
 import { useStore } from "../../store";
 import type { CanvasContent } from "../../types";
 import FilePicker from "../FilePicker/FilePicker";
@@ -33,25 +32,7 @@ function TemplatePendingPanel({
   const label = block ? blockPlaceholderLabel(block) : "block";
 
   const [picking, setPicking] = useState(false);
-  const [files, setFiles] = useState<string[] | null>(null);
   const pickRef = useRef<HTMLDivElement>(null);
-
-  // Load the folder's files when the picker opens (#56 list).
-  useEffect(() => {
-    if (!picking) return;
-    setFiles(null);
-    let cancelled = false;
-    void listFiles(repoPath)
-      .then((list) => {
-        if (!cancelled) setFiles(list);
-      })
-      .catch(() => {
-        if (!cancelled) setFiles([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [picking, repoPath]);
 
   // Dismiss the picker on outside-click / Escape.
   useEffect(() => {
@@ -112,7 +93,7 @@ function TemplatePendingPanel({
                 aria-label="Pick file"
               >
                 <FilePicker
-                  files={files}
+                  repoPath={repoPath}
                   onPick={(f) => {
                     setPicking(false);
                     pickFile(canvasId, leafId, f);
