@@ -1754,3 +1754,67 @@ existing `FilePicker`).
 
 ---
 
+### 168. [x] Collapsible left panel — minimize the sidebar to an icon rail
+
+**Status:** Done
+**Depends on:** none · _(edits the existing `Sidebar` + adds a thin persisted flag; nothing it needs
+is produced by another open task. The #113→#115 collapsible-repo-folders history is a different,
+reverted feature and is unaffected.)_
+**Created:** 2026-06-25
+
+**Description**
+
+Made the left **Sidebar** collapsible to a narrow (~56px) icon **rail**. A footer **chevron** button
+and **⌘B** (main window only) toggle between the full panel and the rail, and the collapsed/expanded
+state **persists across restarts**. Collapsed, the rail shows only icons — a New-session `+`, a
+Schedule clock, a compact Overview/Canvas switch, then per repo a repo-colored **folder icon** with
+that repo's **per-session activity dots** (`BusyIndicator`s, blue shimmer while busy / yellow when
+settled / gray when fresh, each tooltipped with the session name) stacked beneath it, each worktree as
+its own **branch glyph** (with its dots) under the parent, and a footer with the **Settings** gear plus
+the expand chevron. No text labels, item/schedule/session rows, flyouts, or click-to-select on the dots
+(the activity dots are indicators only — to reach an individual session/item the user **expands** the
+sidebar, a deliberate "expand to navigate" choice). **Context menus keep working while collapsed:**
+right-clicking a folder icon opens the repo menu, right-clicking a worktree icon the worktree menu;
+left-clicking a folder icon filters Overview to that repo. While collapsed the #108 resize handle is
+hidden and the width is fixed; expanding restores the previously-persisted width.
+
+**What shipped** (commit `cd7b8c3`, 2026-06-25)
+
+- **Persisted `sidebar_collapsed` bool**, plumbed end-to-end mirroring #108's `sidebar_width` and kept
+  **separate from the Settings blob** (so a Settings-modal draft can never clobber the live toggle):
+  `store.rs` field + `sidebar_collapsed()` / `set_sidebar_collapsed()`, `commands.rs`
+  `get_sidebar_collapsed` / `set_sidebar_collapsed`, `lib.rs` `invoke_handler` registration, `ipc.ts`
+  `getSidebarCollapsed` / `setSidebarCollapsed`, and `store.ts` state + `setSidebarCollapsed` /
+  `toggleSidebarCollapsed` + boot `Promise.all` load (`Option` + serde-default so an older
+  `sessions.json` upgrades cleanly as expanded).
+- **`ViewSwitch` compact mode** — an optional `compact` prop renders the two options icon-only
+  (`LayoutGrid` Overview / `PanelsTopLeft` Canvas) for the rail, default labelled rendering unchanged.
+- **`WorktreeHeader` compact mode** — an optional `compact` prop renders just the `GitBranch` glyph
+  (no name/badge), the entire right-click menu intact.
+- **Collapsed rail rendering** in `Sidebar.tsx` + `Sidebar.module.css`: the New/Schedule/compact-
+  ViewSwitch icons, per-repo folder-icon buttons (left-click filters Overview, right-click opens the
+  repo menu) with per-session `BusyIndicator` dots, and per-worktree branch icons with their dots,
+  reusing the existing `repos` / `repoSessions` / `worktreePaths` / `wtAgents` / `sessionBusy` /
+  `sessionActive` data. The repo context-menu open handler was extracted to a shared
+  `openRepoMenu(repo, event)` used by both the expanded header and the rail folder icon. A `.collapsed`
+  modifier hides the resize handle, fixes width to `SIDEBAR_RAIL_WIDTH` (56px), centers the icon
+  column, and vertically stacks the footer.
+- **⌘B shortcut** in `useKeyboardNav.ts` (capture-phase, `IS_MAIN_WINDOW`-guarded — inert in a detached
+  CanvasWindow, matching the ⌘N / ⌘⇧N pattern).
+- **Tests:** a `store.test.ts` case for `toggleSidebarCollapsed` (default false → toggles → persists via
+  `ipc.setSidebarCollapsed`) and primed `getSidebarCollapsed` in `store.refresh.test.ts`'s ipc mock.
+
+**Key files touched:** `src-tauri/src/store.rs`, `src-tauri/src/commands.rs`, `src-tauri/src/lib.rs`,
+`src/ipc.ts`, `src/store.ts`, `src/useKeyboardNav.ts`, `src/components/Sidebar/Sidebar.tsx`
+(+`.module.css`), `src/components/ViewSwitch/ViewSwitch.tsx` (+`.module.css`), `src/store.test.ts`,
+`src/store.refresh.test.ts`.
+
+**Notes**
+
+- The persistence deliberately mirrors #108 (`sidebar_width`) end-to-end, swapping `u32`→`bool` — no
+  clamping or debounce (toggling is rare).
+- All green: `npm run build`, `npm run lint`, `npm test` (221), `npm run format:check`, `cargo test`,
+  `npm run lint:rust`, `cargo fmt --check`.
+
+---
+
