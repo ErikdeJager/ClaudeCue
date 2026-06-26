@@ -1,8 +1,8 @@
 # TASK-175
 
-### 175. [ ] File-tree click: jump to an already-open file (don't double-open) and open in the current view
+### 175. [x] File-tree click: jump to an already-open file (don't double-open) and open in the current view
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-26
 

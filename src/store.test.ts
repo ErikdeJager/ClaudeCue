@@ -1224,6 +1224,141 @@ describe("openSessionInCanvas (#153)", () => {
   });
 });
 
+describe("openFileFromTree (#175)", () => {
+  const s = () => useStore.getState();
+  const fileLeaf = (
+    id: string,
+    repoPath: string,
+    file: string,
+  ): CanvasNode => ({
+    type: "leaf",
+    id,
+    content: { kind: "file", repoPath, file },
+  });
+
+  it("Overview, file not open: adds a markdown column and selects it", async () => {
+    useStore.setState({
+      view: "overview",
+      overviewPanels: {},
+      selectedId: null,
+    });
+    await s().openFileFromTree("/repo/a", "notes.md", "markdown");
+    const st = s();
+    const panels = st.overviewPanels["/repo/a"] ?? [];
+    expect(panels).toHaveLength(1);
+    expect(panels[0]).toMatchObject({ kind: "markdown", file: "notes.md" });
+    expect(st.selectedId).toBe(panels[0]?.id);
+  });
+
+  it("Overview, file already open: jumps to the existing column, no duplicate", async () => {
+    useStore.setState({
+      view: "overview",
+      overviewPanels: {
+        "/repo/a": [{ id: "p1", kind: "markdown", file: "notes.md" }],
+      },
+      selectedId: null,
+    });
+    await s().openFileFromTree("/repo/a", "notes.md", "markdown");
+    const st = s();
+    expect(st.overviewPanels["/repo/a"]).toHaveLength(1); // no duplicate
+    expect(st.selectedId).toBe("p1");
+  });
+
+  it("Canvas, file not a leaf: registers the panel and appends a leaf to the active tab", async () => {
+    useStore.setState({
+      view: "canvas",
+      canvases: [{ id: "canvas-1", name: "Canvas 1", layout: null }],
+      activeCanvasId: "canvas-1",
+      overviewPanels: {},
+      detachedCanvasIds: [],
+      selectedId: null,
+      activeLeafId: null,
+    });
+    await s().openFileFromTree("/repo/a", "notes.md", "markdown");
+    const st = s();
+    // Registered in the source of truth (sidebar + Overview + #152 cascade).
+    const panels = st.overviewPanels["/repo/a"] ?? [];
+    expect(panels).toHaveLength(1);
+    expect(panels[0]).toMatchObject({ kind: "markdown", file: "notes.md" });
+    // Appended as a {kind:"file"} leaf in the active tab, focused + selected.
+    const leaves = collectLeaves(st.canvases[0]?.layout ?? null);
+    expect(leaves).toHaveLength(1);
+    expect(leaves[0]?.content).toMatchObject({
+      kind: "file",
+      repoPath: "/repo/a",
+      file: "notes.md",
+    });
+    expect(st.activeLeafId).toBe(leaves[0]?.id);
+    expect(st.selectedId).toBe(panels[0]?.id);
+  });
+
+  it("Canvas, file already a leaf in the active tab: focuses it, no second leaf or panel", async () => {
+    useStore.setState({
+      view: "canvas",
+      canvases: [
+        {
+          id: "canvas-1",
+          name: "Canvas 1",
+          layout: fileLeaf("L", "/repo/a", "notes.md"),
+        },
+      ],
+      activeCanvasId: "canvas-1",
+      overviewPanels: {
+        "/repo/a": [{ id: "p1", kind: "markdown", file: "notes.md" }],
+      },
+      detachedCanvasIds: [],
+      selectedId: null,
+      activeLeafId: null,
+    });
+    await s().openFileFromTree("/repo/a", "notes.md", "markdown");
+    const st = s();
+    const leaves = collectLeaves(st.canvases[0]?.layout ?? null);
+    expect(leaves).toHaveLength(1); // no second leaf
+    expect(st.overviewPanels["/repo/a"]).toHaveLength(1); // no duplicate panel
+    expect(st.activeLeafId).toBe("L");
+    expect(st.selectedId).toBe("p1");
+  });
+
+  it("Canvas, leaf lives in a detached tab: raises that window, no main-view switch (#84)", async () => {
+    useStore.setState({
+      view: "canvas",
+      canvases: [
+        { id: "canvas-1", name: "Canvas 1", layout: null },
+        {
+          id: "c2",
+          name: "Canvas 2",
+          layout: fileLeaf("L", "/repo/a", "notes.md"),
+        },
+      ],
+      activeCanvasId: "canvas-1",
+      overviewPanels: {
+        "/repo/a": [{ id: "p1", kind: "markdown", file: "notes.md" }],
+      },
+      detachedCanvasIds: ["c2"],
+      selectedId: null,
+      activeLeafId: null,
+    });
+    const focusSpy = vi.spyOn(s(), "focusCanvasWindow");
+    await s().openFileFromTree("/repo/a", "notes.md", "markdown");
+    const st = s();
+    expect(focusSpy).toHaveBeenCalledWith("c2");
+    expect(st.activeCanvasId).toBe("canvas-1"); // main view's active tab unchanged
+    expect(st.selectedId).toBe("p1");
+    // Nothing appended to the main tab.
+    expect(collectLeaves(st.canvases[0]?.layout ?? null)).toHaveLength(0);
+    focusSpy.mockRestore();
+  });
+
+  it("addOverviewPanel returns the new id on add and the existing id on a dedup hit", async () => {
+    useStore.setState({ overviewPanels: {} });
+    const id1 = await s().addOverviewPanel("/repo/a", "markdown", "notes.md");
+    expect(typeof id1).toBe("string");
+    const id2 = await s().addOverviewPanel("/repo/a", "markdown", "notes.md");
+    expect(id2).toBe(id1); // dedup hit returns the existing id
+    expect(s().overviewPanels["/repo/a"]).toHaveLength(1);
+  });
+});
+
 describe("forkability gating (#138)", () => {
   const s = () => useStore.getState();
 

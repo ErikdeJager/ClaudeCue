@@ -32,7 +32,7 @@ interface FileMenu {
  * path. Folders have no menu. No backend change — same data source as `FilePicker`.
  */
 function FileTree({ repoPath }: { repoPath: string }) {
-  const addOverviewPanel = useStore((s) => s.addOverviewPanel);
+  const openFileFromTree = useStore((s) => s.openFileFromTree);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
   const [tree, setTree] = useState<FileTreeNode[] | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -75,7 +75,7 @@ function FileTree({ repoPath }: { repoPath: string }) {
   };
 
   const openFile = (file: string) =>
-    void addOverviewPanel(repoPath, "markdown", file);
+    void openFileFromTree(repoPath, file, "markdown");
 
   const openMenu = (event: ReactMouseEvent, file: string) => {
     event.preventDefault();
@@ -199,7 +199,7 @@ function FileTree({ repoPath }: { repoPath: string }) {
                 role="menuitem"
                 className={styles.menuItem}
                 onClick={() => {
-                  void addOverviewPanel(repoPath, "kanban", menu.file);
+                  void openFileFromTree(repoPath, menu.file, "kanban");
                   setMenu(null);
                 }}
               >

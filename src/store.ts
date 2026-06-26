@@ -689,12 +689,15 @@ export interface AppState {
   setRepoColor: (path: string, color: string) => Promise<void>;
   /** Apply + persist application settings (#100) and run their side-effects. */
   saveSettings: (settings: Settings) => Promise<void>;
-  /** Add / close / reorder a repo's extra Overview panels (optimistic + persisted, #38). */
+  /** Add / close / reorder a repo's extra Overview panels (optimistic + persisted, #38).
+   * Returns the new panel's id on add, the **existing** panel's id on a dedup hit
+   * (#175 — so a caller can select/focus it), or `null` on a real failure (e.g. a
+   * terminal that couldn't spawn). */
   addOverviewPanel: (
     repoPath: string,
     kind: OverviewPanel["kind"],
     file?: string,
-  ) => Promise<void>;
+  ) => Promise<string | null>;
   /** Author a new Kanban board (#143): write `<name>.md` with the default
    * To Do/Doing/Done lanes via `writeTextFile`, then open it as a `kanban` panel. */
   createKanbanBoard: (repoPath: string, name: string) => Promise<void>;
@@ -859,6 +862,20 @@ export interface AppState {
    * Switches to Canvas + focuses the panel; the agent is already a `sessions` item
    * so no `overviewPanels` registration is needed (#152). */
   openSessionInCanvas: (sessionId: string) => void;
+  /** View-aware file open from the file tree (#175). In **Overview**: add (or, on a
+   * dedup hit, jump to the already-open) Overview column and select it (the
+   * `selectedId` → `data-item-id` effect scrolls it into view). In **Canvas** (incl.
+   * a detached canvas window): focus the file's existing leaf across all tabs —
+   * switching to its tab or raising its detached window (#84) — else append it as a
+   * panel to the active tab. Either way the file is registered in `overviewPanels`
+   * (the #152 source of truth) so it also shows in the sidebar + Overview and its
+   * removal cascades. `kind` is the panel kind: `"markdown"` (file viewer) or
+   * `"kanban"` (board). */
+  openFileFromTree: (
+    repoPath: string,
+    file: string,
+    kind: "markdown" | "kanban",
+  ) => Promise<void>;
   /** Forget a cleanly-exited (code 0) agent (#63): drop it from the store and its
    * persisted record (kill + forget, like Remove) so it vanishes from
    * Focus/Overview/sidebar and won't return on next boot; shows a brief toast. */
@@ -1741,17 +1758,18 @@ export const useStore = create<AppState>()((set, get) => ({
     const current = get().overviewPanels[repoPath] ?? [];
     // Terminals are never deduped — multiple independent shells per repo (#72);
     // one diff per repo; one file tree per repo (#167); one markdown panel per file.
-    const dup =
+    const existing =
       kind === "diff" || kind === "filetree"
-        ? current.some((p) => p.kind === kind)
+        ? current.find((p) => p.kind === kind)
         : kind === "markdown" || kind === "kanban"
-          ? current.some((p) => p.kind === kind && p.file === file)
-          : false;
-    if (dup) {
+          ? current.find((p) => p.kind === kind && p.file === file)
+          : undefined;
+    if (existing) {
       // Already open (#59 dedup) — a gentle nudge instead of a second "Opened…"
-      // (#83), so re-clicking the menu item still gives feedback.
+      // (#83), so re-clicking the menu item still gives feedback. Returns the
+      // existing panel's id (#175) so a caller can jump to/select it.
       get().pushToast("Already open");
-      return;
+      return existing.id;
     }
     const panel: OverviewPanel = {
       id: crypto.randomUUID(),
@@ -1769,7 +1787,7 @@ export const useStore = create<AppState>()((set, get) => ({
           isSessionError(err) ? err.message : "Could not open terminal",
           "error",
         );
-        return;
+        return null;
       }
     }
     const next = [...current, panel];
@@ -1784,6 +1802,7 @@ export const useStore = create<AppState>()((set, get) => ({
     } catch {
       // Persist failed (e.g. outside Tauri); keep the local layout for the session.
     }
+    return panel.id;
   },
 
   createKanbanBoard: async (repoPath, name) => {
@@ -2748,6 +2767,80 @@ export const useStore = create<AppState>()((set, get) => ({
     void ipc
       .setCanvases({ canvases: next, activeId: created.id })
       .catch(() => {});
+  },
+
+  openFileFromTree: async (repoPath, file, kind) => {
+    // "Present" is judged relative to the current view (#175): a detached canvas
+    // window is always Canvas; in the main window the mounted view decides which
+    // tree the user clicked.
+    const inCanvas = !IS_MAIN_WINDOW || get().view === "canvas";
+    const content: CanvasContent =
+      kind === "kanban"
+        ? { kind: "kanban", repoPath, file }
+        : { kind: "file", repoPath, file };
+
+    if (!inCanvas) {
+      // Overview: add the column (or get the existing one on a dedup hit) and
+      // select it — selecting an existing column scrolls it into view, so a click
+      // jumps to it instead of dead-ending or double-opening.
+      const id = await get().addOverviewPanel(repoPath, kind, file);
+      if (id) set({ selectedId: id });
+      return;
+    }
+
+    // Canvas: register the file in overviewPanels (the #152 source of truth) so it
+    // also shows in the sidebar + Overview and removal cascades — toast-less here
+    // (the Canvas open isn't an Overview "Opened…" action). Reuse an existing
+    // panel id when present so re-opening doesn't add a second sidebar row.
+    let panelId = (get().overviewPanels[repoPath] ?? []).find(
+      (p) => p.kind === kind && p.file === file,
+    )?.id;
+    if (!panelId) {
+      panelId = crypto.randomUUID();
+      registerOverviewPanel(repoPath, { id: panelId, kind, file });
+    }
+
+    // Already a leaf in some tab? Focus it (a single item renders in one slot at a
+    // time, #18/#84) — switching to its tab, or raising its detached window.
+    const { canvases, detachedCanvasIds, activeCanvasId } = get();
+    const item: SidebarItem = {
+      id: "",
+      kind: kind === "kanban" ? "kanban" : "file",
+      repoPath,
+      file,
+    };
+    for (const c of canvases) {
+      const leaf = collectLeaves(c.layout).find((l) =>
+        matchesCanvasItem(l.content, item),
+      );
+      if (!leaf) continue;
+      if (detachedCanvasIds.includes(c.id)) {
+        get().focusCanvasWindow(c.id);
+        set({ selectedId: panelId });
+      } else {
+        set({
+          view: "canvas",
+          activeCanvasId: c.id,
+          activeLeafId: leaf.id,
+          selectedId: panelId,
+        });
+        void ipc.setCanvases({ canvases, activeId: c.id }).catch(() => {});
+      }
+      return;
+    }
+
+    // Not present in the canvas: append it to the active tab (mirror forkSession's
+    // append). setActiveCanvasLayout persists + broadcasts (#84) and targets the
+    // detached canvas in a detached window.
+    const layout =
+      canvases.find((c) => c.id === activeCanvasId)?.layout ?? null;
+    const leafId = crypto.randomUUID();
+    get().setActiveCanvasLayout(
+      layout
+        ? appendLeaf(layout, content, leafId, crypto.randomUUID())
+        : { type: "leaf", id: leafId, content },
+    );
+    set({ activeLeafId: leafId, selectedId: panelId });
   },
 
   forgetExitedSession: async (id) => {
