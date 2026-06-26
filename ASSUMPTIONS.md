@@ -180,3 +180,18 @@ judgment with "see if this … has good UX"):
   before a real release.
 - **Working-tree note:** an implementing agent was concurrently editing Canvas/store files
   (#186, since completed) — this refine staged only its own 3 files, never `-A`.
+
+---
+
+## TASK-193 — Dev-only mock update
+
+- **"Insert a command" = a dev-gated `window.__claudecue` console helper** (`mockUpdate`/
+  `mockProgress`/`mockError`/`clearUpdate`), plus an optional dev-only "Simulate update"
+  button in the #191 Updates pane.
+- **Dev-only via `import.meta.env.DEV`** — registered under the guard so it's absent from
+  production builds (verify it's gone in `tauri build`).
+- **Simulated install** = a **mock flag in `updater.ts`**: `installUpdate` animates progress
+  0→100 on a timer and fires the post-update toast **without** the real plugin or a relaunch.
+- **Sets `update.notes`** (the #192 field) so it exercises the patch-notes render too.
+- **Depends on: #190, #191, #192** — the mock exists to test the full update UI; it drives
+  every field those three add. Matches the lowest-number-first implement order.
