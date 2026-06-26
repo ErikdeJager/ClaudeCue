@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Increase panel min width
-	The minimum width of a panel should be increased very slightly in overview mode. So that there is a bit more space for the different elements
 - [ ] open view in folder session option
 	The Open view in this folder button that is present on agents should also be present on other file types (kanban, file view, etc.) And make sure that there is a new session option as well. That starts a new session on that specific folder and branch instantly (does not need to open the new session modal)
 
@@ -15,6 +13,9 @@ kanban-plugin: board
 
 - [ ] #175 — File-tree click: jump to an already-open file, open in the current view
 	Plan: TASK-175.md
+	Depends on: none
+- [ ] #176 — Configurable Overview panel minimum width (Settings)
+	Plan: TASK-176.md
 	Depends on: none
 
 ## DONE
