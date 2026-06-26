@@ -6,11 +6,12 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] open view in folder session option
-	The Open view in this folder button that is present on agents should also be present on other file types (kanban, file view, etc.) And make sure that there is a new session option as well. That starts a new session on that specific folder and branch instantly (does not need to open the new session modal)
 
 ## READY
 
+- [ ] #177 — "Open view in this folder" on every panel + instant "New session"
+	Plan: TASK-177.md
+	Depends on: none
 
 ## DONE
 
