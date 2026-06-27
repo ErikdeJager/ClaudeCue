@@ -8,13 +8,10 @@ kanban-plugin: board
 
 - [ ] Extend the syntax highlighting (same languages as the file viewer task) to the diff viewer, so diffs are syntax-highlighted too.
 - [ ] Add a "commits" option to the diff viewer that lists previous commits. Clicking any commit shows what changed in that commit in the diff viewer.
-- [ ] Redesign the diff viewer UI to look more polished and improve the reading experience, keeping all existing functionality. Add a setting to let the user pick their preferred display mode. At least these two modes (from the wireframes): (1) Accordion files — each changed file is its own card (modified/added badge, filename + subpath, +/- counts); expand one card at a time to read its diff inline so what you're reading is never ambiguous; header shows repo · branch, a "N files changed +X -Y" summary, and a Unified/Split toggle. (2) Focused single file — one file fills the panel; step through files with prev/next arrows or jump via a file picker (e.g. "1/9" dropdown) for maximum reading room. The wireframes don't show worktree, compare, or commits, but those options must all stay available. Keep the Unified/Split toggle too.
+- [ ] Redesign the diff viewer UI to look more polished and improve the reading experience, keeping all existing functionality. Add a setting to let the user pick their preferred display mode. At least these two modes (from the wireframes): (1) Accordion files — each changed file is its own card (modified/added badge, filename + subpath, +/- counts); expand one card at a time to read its diff inline so what you're reading is never ambiguous; header shows repo · branch, a "N files changed +X -Y" summary, and a Unified/Split toggle. (2) Focused single file — one file fills the panel; step through files with prev/next arrows or jump via a file picker (e.g. "1/9" dropdown) for maximum reading room. The wireframes don't show worktree, compare, or commits, but those options must all stay available. Keep the Unified/Split toggle too. Default option should be focussed single file viewer
 
 ## READY
 
-- [ ] #225 — Subtle current-branch badge next to each sidebar folder, synced from any source
-	Plan: TASK-225.md
-	Depends on: none
 - [ ] #226 — Replace agent-header worktree badge with a folder + branch indicator
 	Plan: TASK-226.md
 	Depends on: none
@@ -27,5 +24,5 @@ kanban-plugin: board
 
 ## DONE
 
-- [x] #224 — Canvas template file block: support full paths + relative/absolute path choice
-	Plan: TASK-224.md
+- [x] #225 — Subtle current-branch badge next to each sidebar folder, synced from any source
+	Plan: TASK-225.md

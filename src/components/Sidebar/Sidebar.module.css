@@ -233,7 +233,9 @@
 }
 
 .repoName {
-  flex: 1;
+  /* Don't grow (#225): so the branch badge sits right after the name rather than
+     being pushed to the far edge; still shrinks + truncates when the name is long. */
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   font-family: var(--mono);
@@ -244,7 +246,23 @@
   text-align: left;
 }
 
+/* Subtle current-branch badge next to the repo name (#225): grayed + compact,
+   truncates so a long branch never crowds the name / count / +. */
+.repoBranch {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .count {
+  /* Pushed to the right edge (#225 — repoName no longer grows to do it). */
+  margin-left: auto;
   flex-shrink: 0;
   color: var(--text-muted);
   font-size: var(--fs-meta-xs);

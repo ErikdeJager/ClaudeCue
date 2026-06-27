@@ -1,6 +1,6 @@
-### 225. [ ] Show a subtle current-branch badge next to each sidebar folder, kept in sync from any source
+### 225. [x] Show a subtle current-branch badge next to each sidebar folder, kept in sync from any source
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 

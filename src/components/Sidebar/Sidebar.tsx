@@ -1226,6 +1226,14 @@ function RepoGroup({
           aria-pressed={isFiltered}
         >
           <span className={styles.repoName}>{repoName(repo)}</span>
+          {/* Subtle current-branch badge (#225): the folder's git branch, kept in
+              sync by the #212 edge + the focus/visibility/poll effect below. Hidden
+              for a non-git / unknown folder. Truncates so it never crowds the name. */}
+          {branches[repo] && (
+            <span className={styles.repoBranch} title={branches[repo]}>
+              {branches[repo]}
+            </span>
+          )}
           {!isEmpty && (
             <span className={styles.count}>{repoSessions.length}</span>
           )}
@@ -1476,6 +1484,46 @@ function Sidebar() {
     // session mutation (exit, output) that allocates a new sessions array.
     void refreshBranches();
   }, [refreshBranches, reposKey]);
+
+  // Keep the repo branch badges (#225) in sync with **external** checkouts — a `git
+  // checkout` in a terminal of an idle repo (no busy→idle edge, #212) or in another
+  // tool. The #212 edge refresh stays; this adds (a) a refresh when the window regains
+  // focus / becomes visible ("changed it elsewhere, came back"), and (b) a modest poll
+  // while the window is visible, paused when hidden. `refreshBranches` batches every
+  // repo into one `currentBranches` IPC call, so a tick is one call. Main-window only —
+  // the Sidebar mounts only there. The interval is tunable.
+  useEffect(() => {
+    const BRANCH_POLL_MS = 15_000;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const startPoll = () => {
+      if (timer === undefined) {
+        timer = setInterval(() => void refreshBranches(), BRANCH_POLL_MS);
+      }
+    };
+    const stopPoll = () => {
+      if (timer !== undefined) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopPoll();
+      } else {
+        void refreshBranches();
+        startPoll();
+      }
+    };
+    const onFocus = () => void refreshBranches();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    if (!document.hidden) startPoll();
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      stopPoll();
+    };
+  }, [refreshBranches]);
 
   // Escape dismisses the context menu (keyboard-dismissable).
   useEffect(() => {
