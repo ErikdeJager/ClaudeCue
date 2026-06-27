@@ -5191,3 +5191,51 @@ agent menu (#57/#131/#132/#142/#153).
 
 ---
 
+### 229. [x] Syntax-highlight the diff viewer (reusing the file viewer's languages)
+
+**Status:** Done
+**Depends on:** #227
+**Created:** 2026-06-28
+
+**Description**
+
+The **DiffInspector** rendered diff lines as plain, unhighlighted text. This applies the same
+Prism syntax highlighting the FileViewer uses — reusing the curated language set extended by #227
+(C#/Go/Lua/SQL/Ruby/PHP/Gradle + the existing Java/Rust/JS-TS/HTML/CSS/JSON/YAML/Python) — so diff
+code is highlighted in both the unified and split views.
+
+**What shipped** (commit `295ff6c`, 2026-06-28) — render-side only, reusing #227's pure surface (no
+backend/`git.rs` change):
+
+- **`src/components/DiffInspector/DiffInspector.tsx`:** imported `prismLang` (`../FileViewer/
+  fileType`) + `highlightToHtml` (`../FileViewer/prism`). `DiffFile` detects the language **once
+  per file** from its `path` (`const lang = prismLang(file.path)`; `undefined` → plain text). A
+  shared **`CodeContent`** component renders each line's code via `dangerouslySetInnerHTML={{
+  __html: highlightToHtml(text, lang) }}` when `lang` is known (else plain text), and replaces the
+  plain-text `content` spans in **both** `UnifiedRow` and `SplitRow`. The `+`/`−`/` ` markers and
+  add/del/context row background classes are unchanged. Per-line tokenization (lightweight; accepts
+  imperfect cross-line constructs), bounded by the existing `MAX_DIFF_ROWS` cap.
+- **`DiffInspector.module.css`:** Prism token styling for the diff's `.content` spans mirroring the
+  FileViewer's `--syn-*` palette (shared source of truth), so the two viewers match and colors read
+  well on the add/del row backgrounds.
+
+**Key files touched:** `src/components/DiffInspector/DiffInspector.tsx` (language detect + shared
+`CodeContent` in both row types), `src/components/DiffInspector/DiffInspector.module.css` (diff
+token CSS).
+
+**Dependencies:** **#227** — which provides the extended language set and the
+`prismLang`/`highlightToHtml` surface this task consumes (both touch the shared highlight infra).
+
+**Notes**
+
+- **Safety:** `highlightToHtml` HTML-escapes its input (Prism + the `escapeHtml` fallback), so the
+  injected markup carries no raw file HTML — `dangerouslySetInnerHTML` has no injection vector; an
+  uncurated file type falls back to escaped plain text.
+- **Cross-platform:** pure frontend; language detection is by file extension on repo-relative
+  `/`-separated diff paths; no OS-specific code; identical on macOS and Windows.
+- **Out of scope:** context-aware multi-line tokenization (per-line is sufficient/lightweight),
+  intra-line word-level diff highlighting, adding languages (that was #227), and the diff
+  data/backend (unchanged).
+
+---
+
