@@ -887,6 +887,33 @@
   padding: var(--space-1) 0;
 }
 
+/* Rail agent dot (#228): the BusyIndicator wrapped in a clickable, selectable button.
+   A compact square so the dot column's footprint is unchanged; hover + selected
+   (mirroring the expanded .rowSelected accent) give the same feedback as a row. */
+.railDot {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.railDot:hover {
+  background: var(--bg-hover);
+}
+
+.railDotSelected,
+.railDotSelected:hover {
+  background: var(--accent-dim);
+}
+
 .railWorktreeGroup {
   display: flex;
   width: 100%;

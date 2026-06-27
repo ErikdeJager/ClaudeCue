@@ -1,6 +1,6 @@
-### 228. [ ] Make agents in the collapsed sidebar rail clickable (left-click select + right-click menu)
+### 228. [x] Make agents in the collapsed sidebar rail clickable (left-click select + right-click menu)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 

@@ -10,9 +10,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #228 — Make agents in the collapsed sidebar rail clickable (left-click select + right-click menu)
-	Plan: TASK-228.md
-	Depends on: none
 - [ ] #229 — Syntax-highlight the diff viewer (reusing the file viewer's languages)
 	Plan: TASK-229.md
 	Depends on: #227
@@ -27,4 +24,6 @@ kanban-plugin: board
 	Depends on: none
 
 ## DONE
-- [ ] 
+
+- [x] #228 — Make agents in the collapsed sidebar rail clickable (left-click select + right-click menu)
+	Plan: TASK-228.md

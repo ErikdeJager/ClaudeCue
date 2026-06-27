@@ -803,6 +803,11 @@ export interface AppState {
    * order is `mergeRepoOrder(folderOrder, repoOrder(...))`, so a spawned repo appends
    * and a forgotten one drops without scrambling the rest. */
   folderOrder: string[];
+  /** Transient "begin renaming this agent" request (#228): set by the collapsed-rail
+   * Rename action (which first expands the sidebar, since the narrow rail has no room
+   * for the inline editor); the now-visible expanded `SessionRow` consumes it on mount
+   * to auto-start its inline rename, then clears it. Not persisted. */
+  pendingRenameSessionId: string | null;
 
   // --- Sync reducers ---
   setView: (view: View) => void;
@@ -884,6 +889,9 @@ export interface AppState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   /** Toggle the sidebar collapsed flag (#168) — the footer chevron + ⌘B. */
   toggleSidebarCollapsed: () => void;
+  /** Request (or clear) an inline rename for an agent (#228) — see
+   * `pendingRenameSessionId`. */
+  setPendingRenameSession: (id: string | null) => void;
   /** Persist the drag-reordered top-level sidebar folder order (#211): optimistic
    * `set` + persist via `setRepoOrder` (main window). */
   reorderRepos: (ordered: string[]) => Promise<void>;
@@ -1478,6 +1486,7 @@ export const useStore = create<AppState>()((set, get) => ({
   sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   sidebarCollapsed: false,
   folderOrder: [],
+  pendingRenameSessionId: null,
 
   setView: (view) => set({ view }),
   // Open/close the Settings modal (#100); an optional `section` deep-links to a
@@ -1509,6 +1518,7 @@ export const useStore = create<AppState>()((set, get) => ({
   },
   toggleSidebarCollapsed: () =>
     get().setSidebarCollapsed(!get().sidebarCollapsed),
+  setPendingRenameSession: (id) => set({ pendingRenameSessionId: id }),
   // Persist the drag-reordered top-level folder order (#211): optimistic local set,
   // then persist (main window only — a detached canvas has no sidebar). Mirrors
   // `reorderOverview`; a persist failure (e.g. outside Tauri) keeps the local order.

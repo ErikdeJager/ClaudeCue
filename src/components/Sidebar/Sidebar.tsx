@@ -278,6 +278,147 @@ interface SessionRowProps {
   onRename: (name: string) => void;
 }
 
+/**
+ * The agent right-click menu (#228), shared by the expanded `SessionRow` and the
+ * collapsed-rail dots so the two never diverge: **Rename**, **Fork conversation**
+ * (gated #138/#142), **Copy session ID** (resume-only #142), **Open in canvas**
+ * (#153), and **Remove**. Renders a full-window dismiss overlay + the positioned menu;
+ * Escape also closes. The caller pre-clamps `{x, y}` to the viewport.
+ */
+function AgentContextMenu({
+  session,
+  x,
+  y,
+  onClose,
+  onRename,
+  onRemove,
+}: {
+  session: SessionView;
+  x: number;
+  y: number;
+  onClose: () => void;
+  onRename: () => void;
+  onRemove: () => void;
+}) {
+  // Fork (#126) + copy session ID (#131) reuse the store directly — the same fork
+  // action as the Overview/Canvas header buttons. Open in canvas (#153) reuses a tab.
+  const forkSession = useStore((s) => s.forkSession);
+  const copyToClipboard = useStore((s) => s.copyToClipboard);
+  const openSessionInCanvas = useStore((s) => s.openSessionInCanvas);
+  // Fork is unavailable (#138/#142) until the source has a real turn, or when the agent
+  // can't fork at all (Codex); `forkReason` (Codex takes precedence) is the disabled
+  // tooltip. Copy session ID is resume-only (#142).
+  const forkReason = forkUnavailableReason(session);
+  const canFork = forkReason === null;
+  const canResume = agentSupportsResume(session.agent);
+
+  // Escape closes the menu (keyboard-dismissable, like the repo menu #54).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      <div
+        className={styles.menuOverlay}
+        onClick={onClose}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onClose();
+        }}
+      />
+      <div className={styles.menu} style={{ left: x, top: y }} role="menu">
+        <button
+          type="button"
+          role="menuitem"
+          className={styles.menuItem}
+          onClick={() => {
+            onClose();
+            onRename();
+          }}
+        >
+          Rename
+        </button>
+        {/* Fork the agent's conversation (#131) — reuses the #126 action, same as the
+            Overview/Canvas header fork buttons. */}
+        <button
+          type="button"
+          role="menuitem"
+          className={`${styles.menuItem} ${styles.menuItemView}`}
+          aria-disabled={!canFork}
+          title={forkReason ?? undefined}
+          onClick={() => {
+            if (!canFork) return;
+            onClose();
+            void forkSession(session.id);
+          }}
+        >
+          <GitFork size={14} strokeWidth={1.5} className={styles.menuIcon} />
+          Fork conversation
+        </button>
+        {/* Copy the claude session UUID (#131) — usable with `claude --resume`. Hidden
+            for non-resumable agents (Codex, #142). */}
+        {canResume && (
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.menuItem}
+            onClick={() => {
+              onClose();
+              void copyToClipboard(session.claudeSessionId, "session ID");
+            }}
+          >
+            Copy session ID
+          </button>
+        )}
+        {/* Open the agent in the Canvas view (#153): reuse its tab/detached window, else
+            a new "Canvas N" tab. */}
+        <button
+          type="button"
+          role="menuitem"
+          className={`${styles.menuItem} ${styles.menuItemView}`}
+          onClick={() => {
+            onClose();
+            openSessionInCanvas(session.id);
+          }}
+        >
+          <PanelsTopLeft
+            size={14}
+            strokeWidth={1.5}
+            className={styles.menuIcon}
+          />
+          Open in canvas
+        </button>
+        <div className={styles.menuSeparator} role="separator" />
+        <button
+          type="button"
+          role="menuitem"
+          className={styles.menuItemDanger}
+          onClick={() => {
+            onClose();
+            onRemove();
+          }}
+        >
+          Remove
+        </button>
+      </div>
+    </>
+  );
+}
+
+/** Clamp a right-click position so the agent menu never overflows the viewport
+ * (#131/#153 — 5 items + a separator). Shared by the row + rail menu (#228). */
+function clampAgentMenuPos(clientX: number, clientY: number) {
+  return {
+    x: Math.max(8, Math.min(clientX, window.innerWidth - 160)),
+    y: Math.max(8, Math.min(clientY, window.innerHeight - 200)),
+  };
+}
+
 function SessionRow({
   session,
   label,
@@ -288,18 +429,10 @@ function SessionRow({
   onRemove,
   onRename,
 }: SessionRowProps) {
-  // Fork (#126) + copy session ID (#131) reuse the store directly — the row menu
-  // surfaces the same fork action as the Overview/Canvas header buttons.
-  const forkSession = useStore((s) => s.forkSession);
-  const copyToClipboard = useStore((s) => s.copyToClipboard);
-  // Open the agent in Canvas (#153) — reuse its existing tab or create a new one.
-  const openSessionInCanvas = useStore((s) => s.openSessionInCanvas);
-  // Fork is unavailable (#138/#142) until the source has a real turn to fork, or when
-  // the agent can't fork at all (Codex); fail-open elsewhere. `forkReason` (Codex
-  // takes precedence) is the disabled tooltip. Copy session ID is resume-only (#142).
-  const forkReason = forkUnavailableReason(session);
-  const canFork = forkReason === null;
-  const canResume = agentSupportsResume(session.agent);
+  // Begin an inline rename when the collapsed-rail Rename requested it (#228): the
+  // rail expands the sidebar, then this now-visible row auto-starts editing.
+  const pendingRenameSessionId = useStore((s) => s.pendingRenameSessionId);
+  const setPendingRenameSession = useStore((s) => s.setPendingRenameSession);
 
   // Draggable into Canvas (#47); a small activation distance keeps the click
   // (select) working. The drag snaps back outside Canvas's drop zones.
@@ -316,21 +449,28 @@ function SessionRow({
     ? { transform: CSS.Translate.toString(transform) }
     : undefined;
 
-  // Right-click menu (Rename / Remove, #57) + the inline rename editor.
+  // Right-click menu (#57/#228, now the shared AgentContextMenu) + the inline rename
+  // editor. `menu` holds the clamped open position.
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const committed = useRef(false);
 
-  // Escape closes the row menu (keyboard-dismissable, like the repo menu #54).
+  // Consume a rail-originated rename request (#228): when the collapsed rail asks to
+  // rename this agent (it expands the sidebar first, since the narrow rail has no room
+  // for the editor), auto-begin editing once this row mounts, then clear the flag.
   useEffect(() => {
-    if (!menu) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenu(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menu]);
+    if (pendingRenameSessionId !== session.id) return;
+    setDraft(session.name ?? "");
+    committed.current = false;
+    setEditing(true);
+    setPendingRenameSession(null);
+  }, [
+    pendingRenameSessionId,
+    session.id,
+    session.name,
+    setPendingRenameSession,
+  ]);
 
   const beginRename = () => {
     setDraft(session.name ?? "");
@@ -369,12 +509,7 @@ function SessionRow({
       onContextMenu={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        setMenu({
-          x: Math.max(8, Math.min(event.clientX, window.innerWidth - 160)),
-          // Clamp for the taller menu (#131 Fork / Copy session ID + #153 Open in
-          // canvas → 5 items + a separator) so it never overflows the bottom edge.
-          y: Math.max(8, Math.min(event.clientY, window.innerHeight - 200)),
-        });
+        setMenu(clampAgentMenuPos(event.clientX, event.clientY));
       }}
     >
       {/* Activity indicator (#71): far left of the row, before the label. Always
@@ -424,101 +559,14 @@ function SessionRow({
       </button>
 
       {menu && (
-        <>
-          <div
-            className={styles.menuOverlay}
-            onClick={() => setMenu(null)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setMenu(null);
-            }}
-          />
-          <div
-            className={styles.menu}
-            style={{ left: menu.x, top: menu.y }}
-            role="menu"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.menuItem}
-              onClick={() => {
-                setMenu(null);
-                beginRename();
-              }}
-            >
-              Rename
-            </button>
-            {/* Fork the agent's conversation (#131) — reuses the #126 action,
-                same as the Overview/Canvas header fork buttons. The icon+label
-                layout reuses the Views items' flex styling (#82). */}
-            <button
-              type="button"
-              role="menuitem"
-              className={`${styles.menuItem} ${styles.menuItemView}`}
-              aria-disabled={!canFork}
-              title={forkReason ?? undefined}
-              onClick={() => {
-                if (!canFork) return;
-                setMenu(null);
-                void forkSession(session.id);
-              }}
-            >
-              <GitFork
-                size={14}
-                strokeWidth={1.5}
-                className={styles.menuIcon}
-              />
-              Fork conversation
-            </button>
-            {/* Copy the claude session UUID (#131) — usable with `claude --resume`.
-                Hidden for non-resumable agents (Codex, #142) — no app-owned id. */}
-            {canResume && (
-              <button
-                type="button"
-                role="menuitem"
-                className={styles.menuItem}
-                onClick={() => {
-                  setMenu(null);
-                  void copyToClipboard(session.claudeSessionId, "session ID");
-                }}
-              >
-                Copy session ID
-              </button>
-            )}
-            {/* Open the agent in the Canvas view (#153): reuse its existing tab if
-                it's already shown there (or raise its detached window #84), else a
-                new "Canvas N" tab. Same icon+label layout as Fork (#82/#131). */}
-            <button
-              type="button"
-              role="menuitem"
-              className={`${styles.menuItem} ${styles.menuItemView}`}
-              onClick={() => {
-                setMenu(null);
-                openSessionInCanvas(session.id);
-              }}
-            >
-              <PanelsTopLeft
-                size={14}
-                strokeWidth={1.5}
-                className={styles.menuIcon}
-              />
-              Open in canvas
-            </button>
-            <div className={styles.menuSeparator} role="separator" />
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.menuItemDanger}
-              onClick={() => {
-                setMenu(null);
-                onRemove();
-              }}
-            >
-              Remove
-            </button>
-          </div>
-        </>
+        <AgentContextMenu
+          session={session}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          onRename={beginRename}
+          onRemove={onRemove}
+        />
       )}
     </div>
   );
@@ -1377,6 +1425,11 @@ function Sidebar() {
   const branches = useStore((s) => s.branches);
   const selectedId = useStore((s) => s.selectedId);
   const selectItem = useStore((s) => s.selectItem);
+  // Rail agent dots (#228): select/jump + a shared right-click menu (Remove kills the
+  // agent; Rename expands the sidebar then auto-edits via setPendingRenameSession).
+  const removeSession = useStore((s) => s.removeSession);
+  const setSidebarCollapsed = useStore((s) => s.setSidebarCollapsed);
+  const setPendingRenameSession = useStore((s) => s.setPendingRenameSession);
   const openNewSession = useStore((s) => s.openNewSession);
   const startRepoSession = useStore((s) => s.startRepoSession);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
@@ -1417,6 +1470,12 @@ function Sidebar() {
   const [menuMode, setMenuMode] = useState<
     "menu" | "confirm" | "confirm-kill" | "confirm-close" | "color"
   >("menu");
+  // Collapsed-rail agent right-click menu (#228): the clicked session + clamped pos.
+  const [railMenu, setRailMenu] = useState<{
+    session: SessionView;
+    x: number;
+    y: number;
+  } | null>(null);
   const closeMenu = () => {
     setMenu(null);
     setMenuMode("menu");
@@ -1690,17 +1749,43 @@ function Sidebar() {
           const worktreePaths = [
             ...new Set(worktreeAgents.map((s) => s.repoPath)),
           ];
-          const dot = (s: SessionView, base: string) => (
-            <BusyIndicator
-              key={s.id}
-              busy={sessionBusy[s.id] ?? false}
-              hasBeenActive={sessionActive[s.id] ?? false}
-              label={
-                sessionLabel(s.name, autoNameOn ? s.autoName : null, base)
-                  .primary
-              }
-            />
-          );
+          // Rail agent dot (#228): now a clickable, selectable target — left-click
+          // selects/jumps; right-click opens the shared agent menu (stopPropagation so
+          // it isn't the rail's background/repo menu). The BusyIndicator is the dot.
+          const dot = (s: SessionView, base: string) => {
+            const dotLabel = sessionLabel(
+              s.name,
+              autoNameOn ? s.autoName : null,
+              base,
+            ).primary;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                className={`${styles.railDot} ${s.id === selectedId ? styles.railDotSelected : ""}`}
+                onClick={() =>
+                  selectItem({
+                    kind: "agent",
+                    id: s.id,
+                    repoPath: s.repoPath,
+                  })
+                }
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const pos = clampAgentMenuPos(event.clientX, event.clientY);
+                  setRailMenu({ session: s, x: pos.x, y: pos.y });
+                }}
+                title={dotLabel}
+                aria-label={dotLabel}
+              >
+                <BusyIndicator
+                  busy={sessionBusy[s.id] ?? false}
+                  hasBeenActive={sessionActive[s.id] ?? false}
+                />
+              </button>
+            );
+          };
           return (
             <div key={repo} className={styles.railRepo}>
               <button
@@ -1749,6 +1834,27 @@ function Sidebar() {
           );
         })}
       </div>
+      {/* Shared agent right-click menu for the rail (#228). Rename has no room in the
+          narrow rail, so it expands the sidebar + requests an inline rename on the
+          now-visible row (consumed via pendingRenameSessionId). */}
+      {railMenu && (
+        <AgentContextMenu
+          session={railMenu.session}
+          x={railMenu.x}
+          y={railMenu.y}
+          onClose={() => setRailMenu(null)}
+          onRename={() => {
+            setSidebarCollapsed(false);
+            selectItem({
+              kind: "agent",
+              id: railMenu.session.id,
+              repoPath: railMenu.session.repoPath,
+            });
+            setPendingRenameSession(railMenu.session.id);
+          }}
+          onRemove={() => void removeSession(railMenu.session.id)}
+        />
+      )}
     </div>
   );
 
