@@ -824,3 +824,16 @@ segmented-control pattern. Decided autonomously (user not answering):
 **Wireframes (update):** the user later supplied two wireframes (Accordion "01" + Focused
 "03"); they're transcribed in TASK-231.md's "Wireframe spec" section (images live in the
 conversation, not committable as binaries). Earlier the plan said none existed — corrected.
+
+## TASK-232 — Scheduled task time: show only the time when the date is today
+
+Card: a scheduled task in the left panel shows full date+time; if the date is today, show
+only the time. Grounded: shared `formatFireTime` (`src/time.ts`) always renders "Jun 21,
+3:45 PM"; used by the sidebar `ScheduleRow` + Overview `ScheduleCard`. Decided
+autonomously (user not answering):
+
+- **Change the shared `formatFireTime`** (benefits sidebar + Overview consistently, not a
+  sidebar-only variant) so a same-local-calendar-day fire time formats **time-only**, else
+  the existing month/day + time. **Inject an optional `now` param** for unit-testing the
+  "today" check. Keep the sidebar's full-date hover tooltip. **Depends on: none** (small
+  tweak to the shipped #93/#94 time helper).
