@@ -3891,3 +3891,70 @@ visibility conditions (hidden when idle/checking/downloading; shown on `availabl
 
 ---
 
+### 204. [x] Schedule modal: replace the worktree checkbox with the ⌘⏎ button/keybind pattern
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-27
+
+**Description**
+
+The new-session and schedule-session flows are the **same component**
+(`NewSessionModal.tsx`, toggled by `scheduleMode`) but expressed the "start in an isolated git
+**worktree**" choice two different ways: new-session mode used a secondary **"Worktree ⌘⏎"**
+button + ⌘⏎/Ctrl+⏎ keybind on the branch step (#74/#124/#180), while schedule mode (#198) used a
+lone **"Start in an isolated worktree" checkbox** on the schedule step — an inconsistent UX
+asking for the same thing two ways. This task makes the schedule flow use the **same ⌘⏎ keybind
++ button pattern**, replacing the checkbox so both modes share one learnable affordance.
+**Frontend-only** — the backend `scheduleSession(..., useWorktree)` path (#198) already accepts
+the flag; only how the flag is collected in the modal changed.
+
+**What shipped** (commit `6ceb924`, 2026-06-27) — one component + its CSS module:
+
+- **Removed the checkbox + its state:** deleted the schedule-step `Checkbox` block and its
+  `.scheduleWorktree` wrapper, the `worktree`/`setWorktree` `useState` + its reset in the
+  modal-reset effect, the now-dead `.scheduleWorktree` class in `NewSessionModal.module.css`,
+  and the now-unused `Checkbox` import (sole use).
+- **`submitSchedule()` → `submitSchedule(asWorktree: boolean)`** computing
+  `useWorktree = asWorktree && folderIsGit` — mirroring the branch step's `create()` vs
+  `createWorktree()` split and avoiding a setState-before-submit race. All branch-arg logic is
+  preserved, so `scheduleSession`'s args are identical to what the checkbox produced.
+- **Worktree affordance placed on the schedule step (the final action step), next to
+  "Schedule"** — not the schedule flow's branch step — because the pattern copied is "the
+  worktree variant of the *primary action* button," and the schedule flow's primary action is
+  Schedule. The action row now mirrors the branch step: Cancel → (git folders only) **"Worktree
+  ⌘⏎"** (`styles.cancel`, `onClick → submitSchedule(true)`, disabled on `!cwd || busy ||
+  !fireAt`, title "Schedule into an isolated git worktree") → primary **"Schedule ⏎"**
+  (`type="submit"` → form onSubmit → `submitSchedule(false)`).
+- **⌘⏎ / Ctrl+⏎ keybind** added at the **form level** in `onTrapKeyDown` (gated on
+  `step === "schedule"`): preventDefault + `submitSchedule(true)`, catching the combo from any
+  schedule-step field via bubbling. Plain ⏎ still schedules normally, plain Enter still inserts
+  a newline in the `SkillAutocomplete` prompt textarea, and an open skill menu still intercepts
+  Enter/Escape to drive itself (#114) so the keybind only fires with the menu closed.
+- **Non-git folders:** `folderIsGit` false → no worktree button, and a ⌘⏎ there resolves
+  `useWorktree` to false → schedules normally.
+
+Backend, `scheduleSession` / `create_schedule` / `ScheduledSession`, and `ScheduledPanel` (its
+read-only "worktree" badge reads `schedule.worktree`) are untouched.
+
+**Key files touched:** `src/components/NewSessionModal/NewSessionModal.tsx`,
+`src/components/NewSessionModal/NewSessionModal.module.css`.
+
+**Dependencies:** none — pure frontend refactor over the existing #74 worktree button and #198
+schedule-worktree path.
+
+**Notes**
+
+- **Autonomous refine (2026-06-27):** decisions logged in `ASSUMPTIONS.md` under TASK-204 —
+  worktree button on the schedule step (final action) rather than the branch step; ⌘⏎ active on
+  the whole schedule step with plain ⏎ preserved for normal-schedule and newline-in-prompt; the
+  `submitSchedule(asWorktree)` param chosen over a button-toggled `worktree` state to mirror the
+  branch step's `create()`/`createWorktree()` split.
+- **Runtime-unverified** in this headless loop: the interactive "manually exercise both buttons
+  + the keybind and confirm the ScheduledPanel worktree badge" clause. The worktree-flag wiring
+  is covered by the type-check and matches the pre-existing #198 `scheduleSession(...,
+  useWorktree)` path. `npm run build`, `npm run lint`, `prettier --check` (touched files), and
+  `npm test` (288 passing) all green.
+
+---
+
