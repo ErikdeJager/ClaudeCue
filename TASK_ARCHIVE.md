@@ -4891,3 +4891,50 @@ keybind.
 
 ---
 
+### 223. [x] Add a "distribute panels evenly" button to the Template Editor
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+The live Canvas has a **"Distribute panels evenly"** button (#186) that rebalances its split layout
+to equal area, but the **Template Editor** (the BSP surface for authoring Canvas templates, #117)
+had no such affordance. This adds the same button to the Template Editor toolbar so a template's
+blocks can be evenly distributed too, reusing the shipped pure `equalize` op.
+
+**What shipped** (commit `eec0ab0`, 2026-06-28) — frontend-only, reusing #186's equal-area logic:
+
+- **`src/components/Canvas/canvasTree.ts`:** exported the `leafCount` helper (used to gate the
+  button), alongside the existing pure `equalize(node)` op.
+- **`src/components/TemplateEditor/TemplateEditor.tsx`:** imported `equalize` + `leafCount` and
+  `Grid2x2`; added a toolbar `<button>` ("Distribute panels evenly", same `Grid2x2` icon/label as
+  the live Canvas), **disabled when `leafCount(layout) < 2`** (mirrors the live `canEqualize`
+  gate). Its `distribute()` handler runs `setLayout((l) => equalize(l))` **and bumps a one-shot
+  `equalizeNonce`**; the BSP surface region (`renderNode(layout)`) is **keyed on that nonce** so it
+  remounts and each react-resizable-panels `Group` re-reads its **initial-only** `defaultLayout`
+  from the now-equalized `node.sizes`. A normal drag-resize never bumps the nonce, so interactive
+  resizing is undisturbed. Equalized sizes persist on Save like any other edit (no store/blob
+  change).
+- **`TemplateEditor.module.css`:** a `distributeBtn` style for the new toolbar button.
+
+**Key files touched:** `src/components/TemplateEditor/TemplateEditor.tsx` (button + nonce-remount),
+`src/components/Canvas/canvasTree.ts` (export `leafCount`), `TemplateEditor.module.css`.
+
+**Dependencies:** none — builds on shipped #186 (the pure `equalize` op + live-canvas button) and
+#117 (the Template Editor).
+
+**Notes**
+
+- **Why a nonce remount (not the live canvas's imperative Group-ref `setLayout`):** the Template
+  Editor's blocks are **inert** (no terminal pool to preserve), so remounting the surface is the
+  simplest reliable way to re-read the initial-only `defaultLayout` after equalize. The live canvas
+  needs the imperative path only to avoid disposing pooled terminals.
+- **Cross-platform:** pure frontend, no OS-specific code, button-only (no keyboard handler) —
+  renders identically on macOS and Windows.
+- **Out of scope:** the live Canvas button (unchanged), a border double-click equalize gesture (the
+  card asked only for the button), and `equalize`'s equal-area semantics (unchanged from #186).
+
+---
+
