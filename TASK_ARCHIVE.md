@@ -4256,3 +4256,70 @@ and the existing `open_url` Rust command).
 
 ---
 
+### 211. [x] Reorder folders in the sidebar by dragging them up and down
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-27
+
+**Description**
+
+The left sidebar's repo "folders" (repo groups) were listed in a fixed **alphabetical** order
+produced by the pure `repoOrder(recents, sessions)` (sorts by `repoName` then path), with no way
+for the user to choose the order. This task adds **drag-to-reorder**: the user grabs a folder
+header and drags it up or down to reposition that folder, and the chosen order **persists** across
+restarts. There is **no separate drag handle** — the whole repo header is the grip (a plain click
+on the title or the `+` still does its normal thing).
+
+**What shipped** (commit `ccedfd9`, 2026-06-27):
+
+- **Backend (`src-tauri/src/store.rs` + `lib.rs` + `commands.rs`):** a dedicated persisted
+  `repo_order: Vec<String>` value with `get_repo_order` / `set_repo_order` commands, mirroring
+  `sidebar_width` (#108) — kept **out of the `settings` blob** so a Settings draft can't clobber a
+  drag. Commands registered in `lib.rs`; a Rust round-trip persist/reload unit test added.
+- **Frontend IPC (`src/ipc.ts`):** `getRepoOrder()` / `setRepoOrder(order)` wrappers.
+- **Store (`src/store.ts`):** new `folderOrder: string[]` state, loaded on boot alongside
+  sidebar-width/collapsed, plus a `reorderRepos(ordered)` action (optimistic `set` + persist via
+  `setRepoOrder`). The displayed folder order is computed as `mergeRepoOrder(folderOrder,
+  repoOrder(...))` (reusing the existing pure helper) so spawning a repo appends it and forgetting
+  one drops it **without scrambling** the rest. State named `folderOrder` to avoid shadowing the
+  pure `repoOrder` function.
+- **Sidebar (`src/components/Sidebar/Sidebar.tsx` + `.module.css`):** the folder group is
+  extracted into a `RepoGroup` sortable (`useSortable({ id: 'repohead:'+repo })`) wrapped in a
+  `SortableContext` (`verticalListSortingStrategy`) that lives **inside the existing app-level
+  `DndContext`** — critically **not** a new nested context, which would rebind the sidebar's
+  draggable rows and break drag-into-Canvas. The `attributes`/`listeners` spread over the **whole
+  `repoHeader`** so the entire header is the grip; the existing 4px `PointerSensor` activation
+  distance lets a plain click/`+`/right-click through without starting a drag. The collapsed rail
+  renders the same `repos` array, so it reflects the persisted order.
+- **App (`src/App.tsx`):** `onDragStart`/`onDragEnd` detect a folder-sort drag by the `repohead:`
+  id prefix and call `reorderRepos(arrayMove(...))`, short-circuiting before the canvas-drop path
+  so other drag kinds (session/file/diff → Canvas, move-leaf) are untouched.
+- **Tests:** `store.test.ts` covers `reorderRepos` (optimistic + persist) and the displayed-order
+  merge; `store.refresh.test.ts` mocks `ipc.getRepoOrder`. `npm test` + `cargo test` pass.
+- **Docs:** the Sidebar section of `CLAUDE.md` and `README.md` updated to note folders are
+  drag-reorderable with the order persisted via the dedicated `repo_order` value.
+
+**Key files touched:** `src-tauri/src/store.rs`, `src-tauri/src/lib.rs`,
+`src-tauri/src/commands.rs`, `src/ipc.ts`, `src/store.ts`,
+`src/components/Sidebar/Sidebar.tsx` (+ `Sidebar.module.css`), `src/App.tsx`,
+`src/store.test.ts`, `src/store.refresh.test.ts`, plus `CLAUDE.md` / `README.md`.
+
+**Dependencies:** none. Reuses the app-level `DndContext` (#43/#47), the `mergeRepoOrder` helper
+(#43 Overview cluster order), and the dedicated-Rust-value persistence pattern of `sidebar_width`
+(#108).
+
+**Notes**
+
+- **Architectural key:** reuse the app-level `DndContext` — nesting a new context would break
+  sidebar→Canvas row drags. The `SortableContext` lives in the sidebar but the `onDragEnd`
+  handling lives in `App.tsx`, keyed by the `repohead:` id prefix.
+- **Out of scope (shipped as such):** drag-reordering inside the collapsed rail (it just reflects
+  the saved order), reordering within a repo group (#43), reordering worktree sub-groups, and
+  moving a session between folders.
+- **Autonomous refine (2026-06-27):** task decided in the refine loop with the user not answering
+  — see `ASSUMPTIONS.md`. Drag-into-Canvas non-regression and the persisted-order restart were
+  unit-tested but the interactive drag eyeball is **runtime-unverified** in this headless loop.
+
+---
+
