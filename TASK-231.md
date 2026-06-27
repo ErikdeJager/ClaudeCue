@@ -1,6 +1,6 @@
-### 231. [ ] Redesign the diff viewer UI with selectable display modes (Accordion + Focused single-file)
+### 231. [x] Redesign the diff viewer UI with selectable display modes (Accordion + Focused single-file)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #229, #230
 **Created:** 2026-06-28
 

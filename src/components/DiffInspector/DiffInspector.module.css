@@ -393,3 +393,222 @@
     transform: rotate(360deg);
   }
 }
+
+/* --- Redesigned file display (#231) --- */
+
+/* Small square status badge (M/A/D); color comes from glyphAdd/glyphDel/glyphMod
+   (currentColor drives the tinted border). */
+.badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-chip);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-xs);
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Filename (bold mono) with its subdirectory on a muted second line. */
+.fileLabel {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+}
+.fileName {
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fileSubpath {
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: var(--fs-meta-xs);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.countsPair {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-6);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+}
+
+/* Accordion mode: single-open file cards. */
+.accordion {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--space-8);
+  overflow-y: auto;
+  padding: var(--space-8);
+}
+.card {
+  overflow: hidden;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  background: var(--bg-elevated);
+}
+.cardOpen {
+  border-color: var(--border-strong);
+}
+.cardHeader {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.cardHeader:hover {
+  background: var(--bg-hover);
+}
+.cardBody {
+  max-height: 420px;
+  overflow: auto;
+  border-top: 1px solid var(--border-hairline);
+}
+
+/* Focused mode: nav strip + sub-header + body. */
+.focusNav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border-bottom: 1px solid var(--border-hairline);
+}
+.navArrow {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.navArrow:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.navArrow:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pickerWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.pickerPill {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-10);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.pickerPill:hover {
+  background: var(--bg-hover);
+}
+.pickerName {
+  overflow: hidden;
+  flex: 1;
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pickerIndex {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta-sm);
+}
+.pickerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+.pickerMenu {
+  position: absolute;
+  z-index: 11;
+  top: calc(100% + var(--space-4));
+  right: 0;
+  left: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+}
+.pickerItem {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pickerItem:hover {
+  background: var(--bg-hover);
+}
+.pickerItemActive {
+  background: var(--accent-dim);
+}
+.pickerItemPath {
+  overflow: hidden;
+  flex: 1;
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.focusSubheader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-12);
+  border-bottom: 1px solid var(--border-hairline);
+}
+.focusPath {
+  overflow: hidden;
+  flex: 1;
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

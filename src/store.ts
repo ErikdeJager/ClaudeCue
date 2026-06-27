@@ -514,6 +514,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultView: "overview",
   confirmDestructive: true,
   canvasCloseBehavior: "ask",
+  diffDisplayMode: "focused",
   autoName: true,
   autoSave: true,
   defaultAgent: "claude",

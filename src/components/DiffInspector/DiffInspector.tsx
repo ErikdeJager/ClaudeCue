@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+} from "lucide-react";
 
 import {
   commitDiff,
@@ -8,6 +13,7 @@ import {
   listCommits,
   workingDiff,
 } from "../../ipc";
+import { repoName } from "../../paths";
 import { useStore } from "../../store";
 import type {
   BranchList,
@@ -16,9 +22,54 @@ import type {
   HunkLine,
   WorkingDiff,
 } from "../../types";
+
 import { prismLang } from "../FileViewer/fileType";
 import { highlightToHtml } from "../FileViewer/prism";
 import styles from "./DiffInspector.module.css";
+
+type DisplayMode = "focused" | "accordion";
+
+/** Human label for a file's status code (badge tooltip, #231). */
+function statusLabel(status: FileDiff["status"]): string {
+  return status === "A" ? "Added" : status === "D" ? "Deleted" : "Modified";
+}
+
+/** A small square status badge (M/A/D) reusing the file-glyph tint (#231). */
+function StatusBadge({ status }: { status: FileDiff["status"] }) {
+  return (
+    <span
+      className={`${styles.badge} ${glyphClass(status)}`}
+      title={statusLabel(status)}
+      aria-label={statusLabel(status)}
+    >
+      {status}
+    </span>
+  );
+}
+
+/** A file's name in bold mono with its subdirectory on a muted second line (#231).
+ * Paths are repo-relative + `/`-separated (backend), so split on `/`. */
+function FileLabel({ path }: { path: string }) {
+  const slash = path.lastIndexOf("/");
+  const name = slash >= 0 ? path.slice(slash + 1) : path;
+  const dir = slash >= 0 ? path.slice(0, slash + 1) : "";
+  return (
+    <span className={styles.fileLabel}>
+      <span className={styles.fileName}>{name}</span>
+      {dir && <span className={styles.fileSubpath}>{dir}</span>}
+    </span>
+  );
+}
+
+/** Green +adds / red −dels counts (#231). */
+function CountsPair({ add, del }: { add: number; del: number }) {
+  return (
+    <span className={styles.countsPair}>
+      <span className={styles.add}>+{add}</span>
+      <span className={styles.del}>−{del}</span>
+    </span>
+  );
+}
 
 /** A diff line's code text, syntax-highlighted (#229) when `lang` is known, else
  * plain. `highlightToHtml` HTML-escapes its input (Prism + the escape fallback), so
@@ -198,6 +249,13 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
     () => diffPanel()?.commit_sha ?? null,
   );
   const setDiffCompare = useStore((s) => s.setDiffCompare);
+  // Display mode (#231): focused single-file (default) vs accordion cards. Seeded once
+  // from the global setting; the in-panel toggle overrides it for this panel/session.
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(
+    () => useStore.getState().settings.diffDisplayMode,
+  );
+  // Focused-mode file picker popover open state (#231).
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Signature of the last applied diff (skip re-render when a poll finds no
   // change) and an in-flight guard (never overlap fetches).
@@ -353,6 +411,19 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
     source === "commits" && selectedCommit
       ? `${selectedCommit.short_sha} · ${selectedCommit.subject}`
       : diff?.summary.branch || "—";
+  // Panel header (#231): "repo · branch" (the wireframe's "ClaudeCue · main").
+  const headerLabel = `${repoName(repoPath)} · ${summaryLabel}`;
+
+  // Focused-mode navigation (#231): cycle through the changed files (wraps).
+  const activeIndex = activeFile
+    ? files.findIndex((f) => f.path === activeFile.path)
+    : -1;
+  const stepFile = (delta: number) => {
+    if (files.length === 0) return;
+    const i = (activeIndex + delta + files.length) % files.length;
+    setSelectedFile(files[i]?.path ?? null);
+    setPickerOpen(false);
+  };
 
   const emptyMessage = loading
     ? "Loading…"
@@ -374,10 +445,35 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
     <div className={styles.panel}>
       <div className={styles.summary}>
         <div className={styles.summaryRow}>
-          <span className={styles.branch} title={summaryLabel}>
-            {summaryLabel}
+          <span className={styles.branch} title={headerLabel}>
+            {headerLabel}
           </span>
           <div className={styles.summaryActions}>
+            {/* Display mode (#231): focused single-file vs accordion cards. */}
+            <div className={styles.modeToggle}>
+              <button
+                type="button"
+                className={
+                  displayMode === "focused" ? styles.modeActive : styles.mode
+                }
+                aria-pressed={displayMode === "focused"}
+                onClick={() => setDisplayMode("focused")}
+                title="Focused single file"
+              >
+                Focused
+              </button>
+              <button
+                type="button"
+                className={
+                  displayMode === "accordion" ? styles.modeActive : styles.mode
+                }
+                aria-pressed={displayMode === "accordion"}
+                onClick={() => setDisplayMode("accordion")}
+                title="Accordion files"
+              >
+                Accordion
+              </button>
+            </div>
             <div className={styles.modeToggle}>
               <button
                 type="button"
@@ -510,29 +606,120 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
 
       {files.length === 0 ? (
         <div className={styles.empty}>{emptyMessage}</div>
-      ) : (
-        <>
-          <div className={styles.files}>
-            {files.map((file) => (
-              <button
+      ) : displayMode === "accordion" ? (
+        // Accordion (#231): single-open file cards — exactly one is expanded
+        // (`activeFile`); clicking another card's header switches which is open, so
+        // the diff you read is never ambiguous. Inline `DiffFile` keeps Unified/Split
+        // + #229 highlighting.
+        <div className={styles.accordion}>
+          {files.map((file) => {
+            const open = file.path === activeFile?.path;
+            return (
+              <div
                 key={file.path}
-                type="button"
-                className={`${styles.fileRow} ${file === activeFile ? styles.fileActive : ""}`}
-                onClick={() => setSelectedFile(file.path)}
-                title={file.path}
+                className={`${styles.card} ${open ? styles.cardOpen : ""}`}
               >
-                <span className={`${styles.glyph} ${glyphClass(file.status)}`}>
-                  {file.status}
+                <button
+                  type="button"
+                  className={styles.cardHeader}
+                  onClick={() => setSelectedFile(file.path)}
+                  aria-expanded={open}
+                  title={file.path}
+                >
+                  <StatusBadge status={file.status} />
+                  <FileLabel path={file.path} />
+                  <CountsPair add={file.add} del={file.del} />
+                </button>
+                {open && (
+                  <div className={styles.cardBody}>
+                    <DiffFile file={file} mode={mode} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        // Focused (#231, default): one file fills the body; a nav strip (‹ prev, a
+        // picker pill with the i/N index, › next) steps through / jumps between files.
+        <>
+          <div className={styles.focusNav}>
+            <button
+              type="button"
+              className={styles.navArrow}
+              onClick={() => stepFile(-1)}
+              disabled={files.length < 2}
+              title="Previous file"
+              aria-label="Previous file"
+            >
+              <ChevronLeft size={16} strokeWidth={1.5} />
+            </button>
+            <div className={styles.pickerWrap}>
+              <button
+                type="button"
+                className={styles.pickerPill}
+                onClick={() => setPickerOpen((o) => !o)}
+                aria-haspopup="listbox"
+                aria-expanded={pickerOpen}
+                title={activeFile?.path}
+              >
+                {activeFile && <StatusBadge status={activeFile.status} />}
+                <span className={styles.pickerName}>
+                  {activeFile ? (activeFile.path.split("/").pop() ?? "—") : "—"}
                 </span>
-                <span className={styles.filePath}>{file.path}</span>
-                <span className={styles.fileCounts}>
-                  <span className={styles.add}>+{file.add}</span>
-                  <span className={styles.del}>−{file.del}</span>
+                <span className={styles.pickerIndex}>
+                  {activeIndex + 1}/{files.length}
                 </span>
+                <ChevronDown size={14} strokeWidth={1.5} />
               </button>
-            ))}
+              {pickerOpen && (
+                <>
+                  <div
+                    className={styles.pickerBackdrop}
+                    onClick={() => setPickerOpen(false)}
+                  />
+                  <div className={styles.pickerMenu} role="listbox">
+                    {files.map((file) => (
+                      <button
+                        key={file.path}
+                        type="button"
+                        role="option"
+                        aria-selected={file.path === activeFile?.path}
+                        className={`${styles.pickerItem} ${file.path === activeFile?.path ? styles.pickerItemActive : ""}`}
+                        onClick={() => {
+                          setSelectedFile(file.path);
+                          setPickerOpen(false);
+                        }}
+                        title={file.path}
+                      >
+                        <StatusBadge status={file.status} />
+                        <span className={styles.pickerItemPath}>
+                          {file.path}
+                        </span>
+                        <CountsPair add={file.add} del={file.del} />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              className={styles.navArrow}
+              onClick={() => stepFile(1)}
+              disabled={files.length < 2}
+              title="Next file"
+              aria-label="Next file"
+            >
+              <ChevronRight size={16} strokeWidth={1.5} />
+            </button>
           </div>
-
+          {activeFile && (
+            <div className={styles.focusSubheader}>
+              <span className={styles.focusPath}>{activeFile.path}</span>
+              <CountsPair add={activeFile.add} del={activeFile.del} />
+            </div>
+          )}
           <div className={styles.body}>
             {activeFile && <DiffFile file={activeFile} mode={mode} />}
           </div>

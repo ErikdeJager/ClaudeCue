@@ -245,6 +245,10 @@ export interface Settings {
    * `kill` tears down its agents/items, `keep` just drops the tab (today's behavior).
    * Self-contained — independent of `confirmDestructive`. */
   canvasCloseBehavior: "ask" | "kill" | "keep";
+  /** Default diff-viewer display mode (#231): `focused` (one file fills the panel,
+   * prev/next + picker) or `accordion` (single-open file cards). Each diff panel seeds
+   * its in-panel toggle from this. */
+  diffDisplayMode: "focused" | "accordion";
   // Sessions
   /** Use claude's `ai-title` (#97) for unnamed agents; off → the branch label. */
   autoName: boolean;

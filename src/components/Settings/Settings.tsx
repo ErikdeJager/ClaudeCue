@@ -352,6 +352,31 @@ function SettingsModal() {
                     ))}
                   </div>
                 </div>
+                <div className={styles.field}>
+                  <span className={styles.fieldLabel}>Diff display mode</span>
+                  <div className={styles.segmented}>
+                    {(
+                      [
+                        ["focused", "Focused single file"],
+                        ["accordion", "Accordion files"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={`${styles.segment} ${draft.diffDisplayMode === v ? styles.segmentActive : ""}`}
+                        onClick={() => update("diffDisplayMode", v)}
+                        aria-pressed={draft.diffDisplayMode === v}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className={styles.helpText}>
+                    How the diff viewer lays out changed files. Each diff panel
+                    can still be toggled independently.
+                  </p>
+                </div>
               </>
             )}
 
