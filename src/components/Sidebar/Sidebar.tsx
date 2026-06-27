@@ -1301,7 +1301,9 @@ function RepoGroup({
         // only, no live agent) fall back to the schedule's intended branch so the
         // header reads the real branch, not the sanitized folder basename.
         const wtBranch =
-          (branches[wt] ?? "") || (wtSchedules[0]?.branch ?? "") || repoName(wt);
+          (branches[wt] ?? "") ||
+          (wtSchedules[0]?.branch ?? "") ||
+          repoName(wt);
         const wtLabels = dedupeBranchLabels(wtAgents.map(() => wtBranch));
         return (
           <div key={wt} className={styles.worktreeGroup}>
@@ -1820,9 +1822,13 @@ function Sidebar() {
         >
           <Bug size={16} strokeWidth={1.5} />
         </button>
+        {/* Collapse/expand (#168) sits at the far right of the expanded footer row
+            (#219, `margin-left:auto`); Settings + Feedback stay grouped left. The
+            `.footerCollapsed` rail neutralizes that margin so the icon stays centered
+            in the vertical stack. */}
         <button
           type="button"
-          className={styles.footerButton}
+          className={`${styles.footerButton} ${styles.footerCollapseToggle}`}
           onClick={() => toggleSidebarCollapsed()}
           title={`${sidebarCollapsed ? "Expand" : "Collapse"} sidebar ${kbdHint(
             platform,

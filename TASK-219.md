@@ -1,6 +1,6 @@
-### 219. [ ] Move the sidebar collapse button to the far right of the footer button row
+### 219. [x] Move the sidebar collapse button to the far right of the footer button row
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 

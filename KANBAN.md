@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Terminal font renders strangely on Windows. In terminal output some characters look weird/jiggly (the "C" character especially), though still readable. Likely the bundled font (JetBrains Mono) isn't installed/loading properly in the terminal on Windows. This issue is Windows-only — ensure the terminal font works correctly on Windows.
-
 - [ ] Revert where a user creates a canvas from a template. The "new canvas tab" plus button should be a simple plus that just creates a new empty canvas, nothing else. Move all the create-from-template logic back into the Templates dropdown menu.
 
 - [ ] Add an "evenly distribute" button inside the template editor. The canvas already has a button to evenly distribute its panels; add the same option in the template editor so all items in a template can be evenly distributed too.
@@ -24,18 +22,23 @@ kanban-plugin: board
 
 - [ ] When the left panel is collapsed, keep agents clickable with their usual left- and right-click behavior. Currently the collapsed rail shows them as status indicators only — they should still respond to clicks like they do when expanded.
 
-## READY
+- [ ] Extend the syntax highlighting (same languages as the file viewer task) to the diff viewer, so diffs are syntax-highlighted too.
 
-- [ ] #219 — Move the sidebar collapse button to the far right of the footer row
-	Plan: TASK-219.md
-	Depends on: none
+## READY
 
 - [ ] #220 — Make Ctrl+V paste (text + images) work in terminals on Windows
 	Plan: TASK-220.md
+	Depends on: none
+
+- [ ] #221 — Fix the terminal font rendering "jiggly" on Windows (JetBrains Mono / WebGL atlas)
+	Plan: TASK-221.md
 	Depends on: none
 
 ## DONE
 
 - [x] #218 — Nest scheduled worktree sessions under a worktree sub-group + Overview badge
 	Plan: TASK-218.md
+
+- [x] #219 — Move the sidebar collapse button to the far right of the footer row
+	Plan: TASK-219.md
 
