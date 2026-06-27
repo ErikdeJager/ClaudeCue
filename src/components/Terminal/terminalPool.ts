@@ -281,7 +281,45 @@ function createHost(sessionId: string): TerminalHost {
   // window resize, or a reparent into a differently-sized slot).
   const observer = new ResizeObserver(scheduleResize);
   observer.observe(container);
-  void document.fonts?.ready.then(safeFit);
+
+  // Make JetBrains Mono actually load + apply in the terminal (#221, worst on Windows).
+  // A canvas/WebGL renderer draws glyphs into a texture rather than laying out DOM text,
+  // so the bundled webfont is never fetched on xterm's behalf and `document.fonts.ready`
+  // can resolve before (or without) it — leaving the WebGL glyph atlas built with
+  // fallback-font metrics (the subtly "jiggly" look, "C" especially). So explicitly load
+  // the faces, then rebuild the atlas + re-measure the character cell with the now-loaded
+  // font. OS-neutral and harmless on macOS (already crisp — re-measuring after the real
+  // font loads stays correct there). Guarded against a host disposed mid-load.
+  void (async () => {
+    const size = currentTerminalSettings.fontSize;
+    try {
+      await Promise.all(
+        [400, 500, 700].map((weight) =>
+          document.fonts.load(`${weight} ${size}px "JetBrains Mono"`),
+        ),
+      );
+    } catch {
+      // a missing/unsupported face rejects load(); fall through to a best-effort refit
+    }
+    try {
+      await document.fonts?.ready;
+    } catch {
+      // ignore — proceed to the best-effort rebuild regardless
+    }
+    if (disposed) return;
+    // Rebuild the GL atlas and force xterm to re-measure the cell with the loaded font.
+    // Re-applying fontFamily (via a transient that never paints — both writes are
+    // synchronous within this frame) triggers xterm's char-size service to re-measure;
+    // clearing the atlas makes the next render re-rasterize glyphs at the corrected
+    // metrics. `refresh` repaints every row; `safeFit` recomputes cols/rows for the
+    // possibly-changed cell size.
+    webgl?.clearTextureAtlas();
+    const family = term.options.fontFamily;
+    term.options.fontFamily = "monospace";
+    term.options.fontFamily = family;
+    term.refresh(0, term.rows - 1);
+    safeFit();
+  })();
 
   host.dispose = () => {
     disposed = true;

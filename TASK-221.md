@@ -1,6 +1,6 @@
-### 221. [ ] Fix the terminal font rendering "jiggly" on Windows (JetBrains Mono not loaded into the WebGL atlas)
+### 221. [x] Fix the terminal font rendering "jiggly" on Windows (JetBrains Mono not loaded into the WebGL atlas)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 

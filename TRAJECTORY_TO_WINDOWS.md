@@ -326,3 +326,31 @@ shared paths beyond the `isWindows` gate.
   image branch to forward whatever `claude` consumes — the **text** paste stands
   regardless. Verify the temp PNG is created and (after an hour) opportunistically swept
   by `cleanup_stale_paste_images`.
+
+### Terminal font "jiggly" on Windows (#221)
+
+Implemented the **primary** fix: explicit webfont load + WebGL glyph-atlas rebuild in
+`terminalPool.ts` `createHost`. A canvas/WebGL renderer draws glyphs into a texture
+rather than laying out DOM text, so bundled **JetBrains Mono** was never fetched on
+xterm's behalf and `document.fonts.ready` could resolve before/without it — leaving the
+GL atlas built with fallback-font metrics (the subtly malformed glyphs, "C" especially).
+Now `createHost` explicitly `document.fonts.load(...)`s the 400/500/700 faces at the
+configured size, then (guarded against a disposed host) `webgl?.clearTextureAtlas()`,
+re-applies `fontFamily` (via a transient that never paints) to force xterm's char-size
+service to re-measure the cell, `term.refresh(0, rows-1)`, and refits. OS-neutral and a
+no-op on macOS (already crisp). WebGL is **kept** on Windows by this path.
+
+#### Still needs manual Windows verification (#221)
+
+- On a Windows build, open an agent + a shell terminal and confirm glyphs render crisp
+  in JetBrains Mono (notably "C"), box-drawing aligns, and **resize / view re-tile /
+  reparent** keeps it crisp (no regression to a fallback after a reflow). Confirm macOS
+  is visually identical before/after.
+- **Documented fallback if the jiggle persists** (i.e. it's a deeper WebGL atlas /
+  devicePixelRatio artifact, the same class already worked around for detached windows):
+  generalize the main-window WebGL gate `if (IS_MAIN_WINDOW)` to `if (IS_MAIN_WINDOW &&
+  !isWindows(useStore.getState().platform))` so the main window also uses the **DOM
+  renderer on Windows** — it lays out real text (loads the webfont, no GL atlas),
+  visually equivalent at the cost of GPU acceleration on Windows. `isWindows` is already
+  imported (from the #220 paste handler). Apply only if the primary fix doesn't fully
+  resolve it on a real box; record which path won here.

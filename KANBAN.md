@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Show a subtle, slightly grayed-out branch badge next to each folder name in the left panel, displaying that folder's current branch. It should stay in sync when the branch changes from any source (agent, user typing in a terminal, etc.), so it likely needs polling/checking to pick up checkouts.
-
 - [ ] Replace the worktree badge on agent headers with a folder + branch indicator. Like the Kanban board header shows its folder, every agent's header should show the folder and branch that specific agent is working on. Remove the separate worktree badge in favor of this.
 
 - [ ] In the folder context menu, make the file tree the top option.
@@ -22,10 +20,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #221 — Fix the terminal font rendering "jiggly" on Windows (JetBrains Mono / WebGL atlas)
-	Plan: TASK-221.md
-	Depends on: none
-
 - [ ] #222 — Revert Canvas "+" to a plain new-tab button; move "from template" into Templates menu
 	Plan: TASK-222.md
 	Depends on: none
@@ -38,6 +32,10 @@ kanban-plugin: board
 	Plan: TASK-224.md
 	Depends on: none
 
+- [ ] #225 — Subtle current-branch badge next to each sidebar folder, synced from any source
+	Plan: TASK-225.md
+	Depends on: none
+
 ## DONE
 
 - [x] #219 — Move the sidebar collapse button to the far right of the footer row
@@ -45,4 +43,7 @@ kanban-plugin: board
 
 - [x] #220 — Make Ctrl+V paste (text + images) work in terminals on Windows
 	Plan: TASK-220.md
+
+- [x] #221 — Fix the terminal font rendering "jiggly" on Windows (JetBrains Mono / WebGL atlas)
+	Plan: TASK-221.md
 
