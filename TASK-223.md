@@ -1,6 +1,6 @@
-### 223. [ ] Add a "distribute panels evenly" button to the Template Editor
+### 223. [x] Add a "distribute panels evenly" button to the Template Editor
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 

@@ -96,6 +96,34 @@
   border-color: var(--accent-hover);
 }
 
+/* Icon-only "Distribute panels evenly" button (#223), styled like the bordered
+   cancel button but square for the Grid2x2 glyph. */
+.distributeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.distributeBtn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.distributeBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .workspace {
   display: flex;
   flex: 1;

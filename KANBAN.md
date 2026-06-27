@@ -15,9 +15,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #223 — Add a "distribute panels evenly" button to the Template Editor
-	Plan: TASK-223.md
-	Depends on: none
 - [ ] #224 — Canvas template file block: support full paths + relative/absolute path choice
 	Plan: TASK-224.md
 	Depends on: none
@@ -26,3 +23,6 @@ kanban-plugin: board
 	Depends on: none
 
 ## DONE
+
+- [x] #223 — Add a "distribute panels evenly" button to the Template Editor
+	Plan: TASK-223.md

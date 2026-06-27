@@ -9,7 +9,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { type LucideIcon, X } from "lucide-react";
+import { Grid2x2, type LucideIcon, X } from "lucide-react";
 import { Group, type Layout, Panel, Separator } from "react-resizable-panels";
 
 import { noAutoCapitalize } from "../../inputProps";
@@ -17,6 +17,8 @@ import { useStore } from "../../store";
 import type { CanvasContent, CanvasEdge, CanvasNode } from "../../types";
 import canvasStyles from "../Canvas/Canvas.module.css";
 import {
+  equalize,
+  leafCount,
   removeLeaf,
   splitLeaf,
   updateLeafContent,
@@ -241,6 +243,19 @@ function TemplateEditor() {
     return source ? (JSON.parse(JSON.stringify(source)) as CanvasNode) : null;
   });
   const [dragActive, setDragActive] = useState(false);
+  // One-shot remount nonce for "Distribute panels evenly" (#223): bumped only by the
+  // equalize action so the BSP surface re-reads each Group's initial-only
+  // `defaultLayout` from the now-equalized sizes. Drag-resize never bumps it, so
+  // interactive resizing is undisturbed. The editor's blocks are inert (no terminal
+  // pool), so a remount is harmless — unlike the live canvas's imperative approach.
+  const [equalizeNonce, setEqualizeNonce] = useState(0);
+  // Nothing to distribute with fewer than 2 panels — mirrors the live canvas's gate.
+  const canEqualize = layout ? leafCount(layout) >= 2 : false;
+
+  const distribute = () => {
+    setLayout((l) => (l ? equalize(l) : l));
+    setEqualizeNonce((n) => n + 1);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -345,6 +360,18 @@ function TemplateEditor() {
             aria-label="Template name"
           />
           <span className={styles.spacer} />
+          {/* Distribute panels evenly (#223): the same op + icon/label as the live
+              Canvas (#186), rebalancing the template's blocks to equal area. */}
+          <button
+            type="button"
+            className={styles.distributeBtn}
+            onClick={distribute}
+            disabled={!canEqualize}
+            title="Distribute panels evenly"
+            aria-label="Distribute panels evenly"
+          >
+            <Grid2x2 size={14} strokeWidth={1.5} />
+          </button>
           <button type="button" className={styles.cancelBtn} onClick={close}>
             Cancel
           </button>
@@ -375,7 +402,11 @@ function TemplateEditor() {
                 run when you use the template — nothing is launched here.
               </p>
             </aside>
-            <div className={canvasStyles.area}>
+            {/* Keyed on the equalize nonce (#223) so a "Distribute panels evenly"
+                click remounts the BSP surface, forcing each Group to re-read its
+                initial-only `defaultLayout` from the equalized sizes. A normal
+                drag-resize doesn't bump the nonce, so it never remounts here. */}
+            <div className={canvasStyles.area} key={equalizeNonce}>
               {layout ? renderNode(layout) : <CenterDrop />}
             </div>
           </div>
