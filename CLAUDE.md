@@ -5,6 +5,49 @@ app (#139/#140/#143) for running and managing many live `claude` CLI sessions at
 Per-OS divergence is `#[cfg(...)]`-gated in Rust and a single store-cached `platform`
 signal in the frontend; the macOS arm is always the original behavior.
 
+## ⚠️ Cross-platform is a hard requirement (read this first)
+
+**ClaudeCue ships on BOTH macOS and Windows. Every feature, fix, and refactor MUST
+be functional on both platforms — no exceptions.** This is not aspirational; it is a
+release constraint. macOS-only and Windows-only are both bugs.
+
+When you implement *anything*, treat "does this work on the other OS?" as part of the
+definition of done — before you consider the task complete, walk the change against
+Windows **and** macOS in your head (and verify on a real box when the path can't be
+unit-tested). Concretely:
+
+- **Never assume one OS.** No hardcoded `/`-paths, POSIX-only shell-outs, `$HOME`,
+  `open`/`explorer.exe`, `Cmd`-only key handling, or macOS-only system calls in a
+  code path that runs on both. If a primitive differs by OS, it gets an abstraction.
+- **Gate genuine divergence explicitly** — `#[cfg(windows)]` / `#[cfg(unix)]` /
+  `#[cfg(target_os = "macos")]` in Rust (with the *other* arm always provided, never
+  left to fail to compile), and the store-cached **`platform`** signal +
+  `src/platform.ts` helpers in the frontend. The macOS arm always preserves the
+  original behavior byte-for-byte; the Windows arm is additive.
+- **Reuse the established cross-platform seams instead of re-deriving them** — Rust:
+  `path_env::home_dir()` (`%USERPROFILE%` on Windows, never raw `$HOME`),
+  `git::hidden_command()` (the `CREATE_NO_WINDOW` console-flash guard — **every**
+  shelled-out `git`/CLI probe goes through it), `pty::resolve_command()` /
+  `find_on_path` / `launch_target` (PATHEXT + `cmd.exe /C` for `.cmd` agents),
+  `commands.rs` path-segment guards (`windows_safe_seg` for reserved device names);
+  Frontend: `joinPath` / `splitPath` (split on `/` **or** `\`), `kbdHint` /
+  `revealLabel` (⌘↔Ctrl, "Reveal in Finder"↔"Reveal in Explorer"), `openUrl`→the
+  http/https-only `open_url`, and `metaKey || ctrlKey` for **every** shortcut handler.
+- **CSS / WebView too:** WKWebView (macOS) and WebView2/Chromium (Windows) diverge —
+  prefer `::-webkit-scrollbar` styling, ship plain-color fallbacks alongside
+  `color-mix`, and avoid macOS-only `-webkit-`/vibrancy effects without a fallback.
+- **Mirror docs across the OS divide.** User-facing copy that names a platform reads
+  "macOS and Windows" (or routes through `kbdHint`/`revealLabel`), never "macOS only."
+- **When a path genuinely can't be unit-tested on CI** (GUI spawn, installer, ConPTY
+  reflow), implement it for both OSes anyway and record what still needs a real-box
+  check in **`TRAJECTORY_TO_WINDOWS.md`** (the running log of Windows parity work) —
+  do not silently ship a macOS-only path.
+
+If a task as written would only work on one OS, that is a defect in the task: build
+the cross-platform version (gating divergence as above), not the single-OS shortcut.
+The detailed per-subsystem notes throughout this doc and `TRAJECTORY_TO_WINDOWS.md`
+show how each existing feature already honors this.
+
 ## What this app is
 
 An **Overview** "agent wall" of real terminals, a **Canvas** split-panel workspace
@@ -23,7 +66,7 @@ even though it works in `tauri dev`.
 
 ## Stack
 
-- **Tauri 2** desktop shell (macOS only)
+- **Tauri 2** desktop shell (macOS + Windows — see the cross-platform requirement above)
 - **Frontend:** React + TypeScript + Vite, **Zustand** for state, plain CSS with
   CSS-variable design tokens (CSS Modules), **xterm.js** terminals (⌘-clickable
   `http`/`https` links via `@xterm/addon-web-links`, #109), **Lucide**

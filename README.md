@@ -1,8 +1,10 @@
 # ClaudeCue
 
-A **macOS** desktop app for running and managing many live `claude` CLI sessions at
-once — an **Overview** "agent wall" of real terminals, a **Canvas** split-panel
-workspace (with file, git-diff, and terminal viewers), and a repo-grouped **sidebar**.
+A **macOS and Windows** desktop app for running and managing many live `claude` CLI
+sessions at once — an **Overview** "agent wall" of real terminals, a **Canvas**
+split-panel workspace (with file, git-diff, and terminal viewers), and a repo-grouped
+**sidebar**. Every feature works on both platforms (OS-specific behavior is gated
+behind a single platform abstraction; see [`CLAUDE.md`](CLAUDE.md)).
 
 Each session is a real PTY running the Claude Code CLI. ClaudeCue provides the window
 chrome, navigation, persistence, and read-only git reading; the terminals come from
@@ -64,7 +66,7 @@ chrome, navigation, persistence, and read-only git reading; the terminals come f
 
 ## Prerequisites
 
-- macOS
+- macOS or Windows
 - [`claude`](https://docs.claude.com/en/docs/claude-code) (Claude Code CLI)
   **installed and authenticated** on your `PATH` — ClaudeCue runs `claude` for every
   session and shows a clear error if it is missing.
@@ -81,15 +83,21 @@ npm run tauri dev      # launch the app (Vite + Rust) with hot reload
 ## Build
 
 ```bash
-npm run tauri build    # produces an unsigned macOS .app and .dmg
+npm run tauri build    # builds for the host OS (run it on each platform you target)
 ```
 
-Artifacts land in `src-tauri/target/release/bundle/` (`macos/ClaudeCue.app` and
-`dmg/ClaudeCue_<version>_<arch>.dmg`).
+Artifacts land in `src-tauri/target/release/bundle/`:
 
-> No code signing or notarization — Gatekeeper warns on first open (right-click →
-> **Open**, or allow it under **System Settings → Privacy & Security**). The build is a
-> **local, unsigned** artifact.
+- **macOS** — `macos/ClaudeCue.app` and `dmg/ClaudeCue_<version>_<arch>.dmg`
+- **Windows** — an **NSIS** installer (`nsis/ClaudeCue_<version>_<arch>-setup.exe`) and
+  an **MSI** (`msi/ClaudeCue_<version>_<arch>_<lang>.msi`)
+
+Each `tauri build` produces the bundle for the OS it runs on; build on a macOS host for
+the macOS artifacts and on a Windows host for the Windows installers.
+
+> No code signing or notarization — first open warns (macOS Gatekeeper: right-click →
+> **Open**, or allow it under **System Settings → Privacy & Security**; Windows
+> SmartScreen: **More info → Run anyway**). The build is a **local, unsigned** artifact.
 >
 > An **in-app auto-update skeleton** (#190) is wired but **inert until a minisign signing
 > keypair is generated** (deferred): the Tauri updater/process plugins, a sidebar update

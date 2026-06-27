@@ -103,6 +103,14 @@ ideally proposing a recommended path alongside the question.
   and record their answers in the plan. Reserve assumptions for the trivial and obvious; when you do
   assume, pick the most reasonable option and note it. Never skip a card for being big, risky, or
   unclear — clarify it, don't drop it.
+- **Plan for both macOS AND Windows — ClaudeCue ships on both.** Every plan you write must be
+  implementable on **both** platforms; a macOS-only (or Windows-only) plan is incomplete. When a
+  card touches paths, shell-outs, the filesystem, keyboard shortcuts, native open/reveal, the
+  installer, or platform-divergent CSS/WebView behavior, spell out the cross-platform handling in
+  the plan (the `#[cfg(...)]` gating + which `CLAUDE.md` seam — `home_dir`, `hidden_command`,
+  `joinPath`/`splitPath`, `kbdHint`/`revealLabel`, etc. — to reuse) and add the "works on both
+  OSes" expectation to the acceptance criteria. Don't author a single-OS shortcut. The default
+  target platform is **both**; only narrow it if the user explicitly says so (record it in Notes).
 
 
 ---
@@ -155,6 +163,18 @@ You implement one ready, unblocked task end-to-end.
 - **Be autonomous.** There is no human to ask. Ground every decision in the repo (read the code,
   `referances/`, design docs, git history); when you must assume, choose the most reasonable option
   and record it in the plan/commit. Never skip a card for being big, risky, or unclear.
+- **Cross-platform is mandatory — ClaudeCue ships on macOS AND Windows.** Every task you
+  implement MUST be functional on **both** platforms; macOS-only or Windows-only behavior is a
+  defect, never a finished task. Follow `CLAUDE.md`'s "Cross-platform is a hard requirement"
+  section: never assume one OS (no hardcoded `/`-paths, POSIX-only shell-outs, `$HOME`,
+  `open`/`explorer.exe`, or `Cmd`-only key handling on a shared path); gate genuine divergence
+  with `#[cfg(...)]` (always provide the other arm) in Rust and the `platform` signal +
+  `src/platform.ts` helpers in the frontend, keeping the macOS arm's behavior unchanged; and
+  reuse the established seams (`home_dir`, `hidden_command`, `resolve_command`/`find_on_path`,
+  `joinPath`/`splitPath`, `kbdHint`/`revealLabel`, `openUrl`, `metaKey || ctrlKey`). When a path
+  can't be unit-tested on CI (GUI spawn, installer, ConPTY), implement it for both OSes anyway and
+  record the manual-verification note in `TRAJECTORY_TO_WINDOWS.md`. If a card as written would
+  only work on one OS, build the cross-platform version instead of the single-OS shortcut.
 
 
 ---
