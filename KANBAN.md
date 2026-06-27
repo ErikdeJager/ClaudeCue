@@ -11,9 +11,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #232 — Scheduled task time: show only the time when the date is today
-	Plan: TASK-232.md
-	Depends on: none
 - [ ] #233 — Redesign the in-app Kanban board UI (cards, columns, inline composer, per-column accents)
 	Plan: TASK-233.md
 	Depends on: none
@@ -25,3 +22,5 @@ kanban-plugin: board
 
 - [x] #231 — Redesign the diff viewer UI with selectable display modes (Accordion + Focused single-file)
 	Plan: TASK-231.md
+- [x] #232 — Scheduled task time: show only the time when the date is today
+	Plan: TASK-232.md

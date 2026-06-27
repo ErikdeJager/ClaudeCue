@@ -66,7 +66,11 @@ describe("toLocalInput (#93/#94)", () => {
   });
 });
 
-describe("formatFireTime (#93/#94)", () => {
+describe("formatFireTime (#93/#94/#232)", () => {
+  // A fixed "now" on a DIFFERENT day than the fire times below, so the date-included
+  // path is exercised deterministically (independent of the real clock).
+  const otherDay = new Date(2026, 5, 28, 9, 0); // Jun 28 2026, 9:00 AM
+
   it("interprets the input as epoch SECONDS (×1000 → ms)", () => {
     // The value is stored in seconds; the helper must multiply to ms. Compare
     // against the same locale-aware formatting so the assertion is timezone- and
@@ -79,12 +83,27 @@ describe("formatFireTime (#93/#94)", () => {
       hour: "numeric",
       minute: "2-digit",
     });
-    expect(formatFireTime(fireAtSecs)).toBe(expected);
+    expect(formatFireTime(fireAtSecs, otherDay)).toBe(expected);
   });
 
-  it("includes the day-of-month in the rendered string", () => {
+  it("includes the day-of-month for a fire time on another day (#232)", () => {
     const local = new Date(2026, 5, 21, 15, 45);
     const fireAtSecs = Math.floor(local.getTime() / 1000);
-    expect(formatFireTime(fireAtSecs)).toContain("21");
+    expect(formatFireTime(fireAtSecs, otherDay)).toContain("21");
+  });
+
+  it("shows only the time when the fire time is today (#232)", () => {
+    const now = new Date(2026, 5, 28, 9, 0); // Jun 28 2026, 9:00 AM
+    const fireAt = new Date(2026, 5, 28, 15, 45); // same day, 3:45 PM
+    const fireAtSecs = Math.floor(fireAt.getTime() / 1000);
+    const out = formatFireTime(fireAtSecs, now);
+    // Time-only: matches the locale time and omits the month/day.
+    const timeOnly = fireAt.toLocaleString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    expect(out).toBe(timeOnly);
+    expect(out).not.toContain("28");
+    expect(out).not.toMatch(/Jun/);
   });
 });

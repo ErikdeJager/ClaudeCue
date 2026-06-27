@@ -8,14 +8,22 @@ export function toLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** Compact local fire time for a schedule (e.g. "Jun 21, 3:45 PM"). */
-export function formatFireTime(fireAt: number): string {
-  return new Date(fireAt * 1000).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+/** Compact local fire time for a schedule. When the fire time is on the **same local
+ * calendar day** as `now`, show only the time (e.g. "3:45 PM") to keep the UI cleaner
+ * (#232); any other day keeps the date + time (e.g. "Jun 21, 3:45 PM"). `now` is
+ * injectable so the "today" check is unit-testable with a fixed clock. */
+export function formatFireTime(fireAt: number, now: Date = new Date()): string {
+  const at = new Date(fireAt * 1000);
+  const isToday =
+    at.getFullYear() === now.getFullYear() &&
+    at.getMonth() === now.getMonth() &&
+    at.getDate() === now.getDate();
+  return at.toLocaleString(
+    [],
+    isToday
+      ? { hour: "numeric", minute: "2-digit" }
+      : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
+  );
 }
 
 /** Convert a raw `resets_at` from the usage endpoint (#154) — an ISO-8601 string,

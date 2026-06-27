@@ -1,6 +1,6 @@
-### 232. [ ] Scheduled task time: show only the time when the date is today
+### 232. [x] Scheduled task time: show only the time when the date is today
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 
