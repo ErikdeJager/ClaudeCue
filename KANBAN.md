@@ -21,6 +21,3 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #205 — Canvas tab bar: + becomes a "New tab" dropdown; move distribute control to the right
-	Plan: TASK-205.md
-

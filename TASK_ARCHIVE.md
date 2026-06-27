@@ -3958,3 +3958,64 @@ schedule-worktree path.
 
 ---
 
+### 205. [x] Canvas tab bar: turn + into a "New tab" dropdown; move the distribute control to the right
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-27
+
+**Description**
+
+The Canvas tab strip (`CanvasTabs.tsx`) crowded several icon-buttons together at the left right
+after the tabs: a `+` (add empty tab), a distribute-evenly button (#186), and a Templates ▾
+dropdown (#117). This task **declutters and reorganizes** that toolbar — turning the `+` into a
+small dropdown offering the two ways to create a tab, and moving the distribute control to the
+right side of the bar so the left stays focused on tabs + creation. **Frontend-only** UI reorg
+of one component (+ its CSS); no store/backend change and no change to what the underlying
+actions *do* — only *where* and *how* they're triggered.
+
+**What shipped** (commit `54d1083`, 2026-06-27):
+
+- **Factored the #117 Templates-menu mechanics** (open/anchor/outside-click/Escape) into a
+  reusable `useDropdownMenu()` hook returning `{open, menuPos, wrapRef, btnRef, toggle, close}`,
+  and gave the strip **two independent instances** — `addMenu` and `templatesMenu` — so they
+  don't fight over open state.
+- **`+` is now a dropdown** (Plus + ChevronDown trigger, `aria-haspopup="menu"`) with **New
+  tab** (`addCanvas`) and **New tab from template…** (`openTemplateUse`, disabled when
+  `!hasTemplates`). The template item **moved out of** the Templates ▾ menu so it lives in
+  exactly one place (no duplication).
+- **Templates ▾ trimmed to template management:** New template… / Save current canvas as
+  template… (disabled when `!canSaveAsTemplate`) / Manage templates…
+- **Distribute (`Grid2x2`) moved to the far right:** rendered as the **last** child of
+  `.tabStrip` with a new `.tabDistribute` class adding `margin-left: auto`. Its
+  `equalizeCanvas()` action, `disabled={!canEqualize}` gating (`<2` panels), tooltip, and
+  aria-label are unchanged.
+- **CSS:** renamed the shared dropdown classes `.templatesWrap/.templatesMenu/.templatesItem` →
+  neutral `.menuWrap/.menu/.menuItem` (now used by both dropdowns), preserving their
+  `position: fixed` so they escape the strip's `overflow-x` clip (#129), and added
+  `.tabDistribute`.
+
+The `Tab` component + its DnD/tear-off and all store actions are untouched.
+
+**Key files touched:** `src/components/Canvas/CanvasTabs.tsx`,
+`src/components/Canvas/Canvas.module.css`.
+
+**Dependencies:** none — pure UI reorg over shipped code (#58 tabs, #117/#118 templates, #186
+distribute). Forward ref: the "New tab" dropdown item is the natural place for TASK-206's ⌘T
+hint (which depends on this).
+
+**Notes**
+
+- **Autonomous refine (2026-06-27):** decisions logged in `ASSUMPTIONS.md` under TASK-205 — the
+  `+` dropdown holds the two tab-creation items only; the Templates ▾ menu is kept for template
+  management (rejected folding everything into `+` — "Manage templates…" under an add affordance
+  is semantically off and exceeds the card's ask); "New tab from template…" relocates into the
+  `+` dropdown (single home); distribute moves right via `margin-left: auto`.
+- **Runtime-unverified** in this headless loop: the interactive eyeball (both dropdowns open
+  below their trigger without clipping, close on outside-click/Escape, the right-aligned
+  distribute survives many-tab horizontal scroll). The reorg is pure markup/CSS over unchanged
+  store actions. `npm run build`, `npm run lint`, `prettier --check` (touched files), and
+  `npm test` (288 passing) all green.
+
+---
+
