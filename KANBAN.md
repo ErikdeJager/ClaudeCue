@@ -17,6 +17,3 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #216 — One-time attention animation on the update indicator's first appearance
-	Plan: TASK-216.md
-

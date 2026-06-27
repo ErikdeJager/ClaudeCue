@@ -4513,3 +4513,53 @@ conflicts).
 
 ---
 
+### 216. [x] One-time attention animation on the update indicator when it first appears
+
+**Status:** Done
+**Depends on:** #215
+**Created:** 2026-06-27
+
+**Description**
+
+When the update indicator first appears on app open (the first time it becomes visible in a
+session because an update is available), play a **one-time attention-grabbing animation** — a
+ping / glow / border pulse — to draw the eye, then let it settle to its **normal** #215 resting
+look. The animation must **not** loop or replay on every re-render; it plays once per app session.
+
+**What shipped** (commit `53820ac`, 2026-06-27) — frontend-only:
+
+- **`Update.module.css`:** a new `@keyframes update-announce` — an accent ring + glow that pulses
+  **3×** (animating `box-shadow` + `border` only, so there is **no layout shift / reflow** in the
+  sidebar column) and settles to the #215 resting look — applied via a transient
+  `.indicatorAnnounce` class (mirroring the #202 `reveal-flash` one-shot pattern).
+- **`UpdateIndicator.tsx`:** the announce class is applied on the chip's **first *available*
+  appearance per session**, guarded by a **module-level flag set on `animationend`** (robust to
+  React StrictMode's dev double-mount) so it never replays on re-render, collapse toggle, or a
+  status flip away-and-back.
+- **Reduced motion:** auto-disabled via the global `body.reduce-motion *` killswitch — no
+  per-rule guard needed. It composes with #215's hover light-up (announce runs once on mount;
+  hover takes over after). The "announced" state is intentionally **not persisted** — it plays
+  once per app open.
+
+**Key files touched:** `src/components/Update/Update.module.css`,
+`src/components/Update/UpdateIndicator.tsx`.
+
+**Dependencies:** **#215** — both edit the same `.indicator` element + `Update.module.css`, so
+#216 was sequenced after #215 (it builds on #215's resting style; not a cycle). Reduced-motion
+killswitch (#102) and the #202 `reveal-flash` one-shot precedent; driven/tested via the #193 dev
+mock.
+
+**Notes**
+
+- **Per-session one-shot, not persisted:** a module-level flag (set on `animationend`) prevents
+  replays; the animation plays once per app open.
+- **Glow/border pulse over a scale "ping"** chosen to avoid sidebar reflow.
+- **Out of scope (as shipped):** the margin/hover restyle (#215) and persisting "announced"
+  across restarts.
+- **Autonomous refine (2026-06-27):** decided in the refine loop with the user not answering — see
+  `ASSUMPTIONS.md`. Exercised via the #193 dev mock (`clearUpdate()` then `mockUpdate(...)`, plus
+  a collapse toggle to confirm no replay); the visual eyeball is **runtime-unverified** in this
+  headless loop. `npm run lint` + `npm run build` pass.
+
+---
+
