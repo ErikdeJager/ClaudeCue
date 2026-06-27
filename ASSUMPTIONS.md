@@ -802,3 +802,25 @@ panel state; the backend has `working_diff`/`compare_branches` + the shared
   cross-platform `run_git`/hidden-command helper. **Depends on: none**; the later diff-viewer
   **redesign** card depends on this (must keep commits available), and #229 highlighting
   applies to commit diffs for free.
+
+## TASK-231 — Redesign the diff viewer UI with selectable display modes
+
+Card: redesign the diff viewer with two display modes (Accordion + Focused single-file) +
+a setting to pick the default (default = focused), keeping all existing functionality
+(working/compare/commits/worktree + Unified/Split). Grounded: `FileDiff`/`WorkingDiff`
+already carry status + +/− counts + the summary (no backend change); Settings has a clear
+segmented-control pattern. Decided autonomously (user not answering):
+
+- **Mode setting = global `diffDisplayMode: "focused" | "accordion"` (default "focused")**
+  in Settings → Behavior (a "default …" setting like `defaultView`), **plus an in-panel
+  quick toggle** (local, seeded from the setting). Per-panel persisted override deferred.
+- **Accordion = single-open cards** (status badge + filename + muted subpath line + +/−
+  counts), inline diff on expand. **Focused = single file + ‹ ›/picker-pill (i/N) nav.**
+- **All sources preserved** (Working/Compare/**Commits #230**/worktree); diff rows inherit
+  **#229 highlighting**. **No backend/type change** (data already present).
+- **Depends on #229, #230** — must preserve commits + inherit highlighting; all three edit
+  `DiffInspector` → land after them, lowest-number-first.
+
+**Wireframes (update):** the user later supplied two wireframes (Accordion "01" + Focused
+"03"); they're transcribed in TASK-231.md's "Wireframe spec" section (images live in the
+conversation, not committable as binaries). Earlier the plan said none existed — corrected.
