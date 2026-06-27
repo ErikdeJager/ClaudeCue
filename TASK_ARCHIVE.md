@@ -4019,3 +4019,54 @@ hint (which depends on this).
 
 ---
 
+### 206. [x] Add a ⌘T keybind to create a new Canvas tab, and surface it in the UI
+
+**Status:** Done
+**Depends on:** #205
+**Created:** 2026-06-27
+
+**Description**
+
+There was no keyboard shortcut to create a new Canvas tab — only clicking the `+` in the tab
+strip. This binds **⌘T / Ctrl+T** to "new Canvas tab" and surfaces the `⌘T` hint where the user
+creates tabs (the `+` dropdown's "New tab" item from #205), so the shortcut is discoverable.
+The app's global shortcuts live in `useKeyboardNav.ts` (a single capture-phase `keydown`
+listener on `window`, so ⌘-combos are intercepted before xterm forwards them to a focused PTY);
+⌘T was unused.
+
+**What shipped** (commit `ed1d95c`, 2026-06-27):
+
+- **`useKeyboardNav.ts`:** added a `(metaKey||ctrlKey) && !shift && !alt && key==="t"` handler
+  (after the ⌘K block) that `preventDefault()` + `stopPropagation()`s and — **main window**,
+  with neither `createPanelOpen` nor `newSessionOpen` — calls `setView("canvas")` then
+  `addCanvas()`. ⌘T is a **create** action available from anywhere in the main window (like
+  ⌘N/⌘K), switching to Canvas so the new tab is actually seen (rather than a Canvas-view-only
+  scoping like ⌘1–9, which would dead-end from Overview); inert while the new-session/
+  create-panel modals are open; swallowed (no webview/PTY side effect) when a terminal is
+  focused. The top-of-file shortcut legend gained the ⌘T line; ⌘T confirmed unclaimed.
+- **`CanvasTabs.tsx`:** added a right-aligned `<kbd className={styles.menuKbd}>⌘T</kbd>` to the
+  `+` dropdown's **New tab** item, and updated the `+` trigger `title`/`aria-label` to "New tab
+  (⌘T)".
+- **`Canvas.module.css`:** made `.menuItem` a `space-between` flex row (so a trailing kbd aligns
+  right; label-only items unaffected) and added a muted-mono `.menuKbd`.
+
+**Key files touched:** `src/useKeyboardNav.ts`, `src/components/Canvas/CanvasTabs.tsx`,
+`src/components/Canvas/Canvas.module.css`.
+
+**Dependencies:** **#205** — the `+` dropdown's "New tab" item (introduced by #205) is the home
+for the ⌘T hint. *Builds on* #205's reworked dropdown (per the iteration-task-dependency rule —
+not a cycle).
+
+**Notes**
+
+- **Autonomous refine (2026-06-27):** decisions logged in `ASSUMPTIONS.md` under TASK-206 — ⌘T
+  (conventional "new tab", unused here) as a global create action that switches to Canvas;
+  surfaced on the `+` dropdown's "New tab" item → depends on #205.
+- **Runtime-unverified** in this headless loop: the interactive eyeball (⌘T from Overview/Canvas
+  opens an active tab, inert under modals, never reaches a focused terminal, hint visible). The
+  handler mirrors the existing ⌘K guard and the swallow (preventDefault + capture-phase
+  stopPropagation) is identical to the other ⌘-combos. `npm run build`, `npm run lint`,
+  `prettier --check` (touched files), and `npm test` (288 passing) all pass.
+
+---
+
