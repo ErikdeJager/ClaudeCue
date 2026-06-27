@@ -729,3 +729,23 @@ panels already show `repoName · branch` via `.meta`/`.panelMeta`. Decided auton
   possible follow-up. Minor name/branch redundancy when an agent has no custom name is
   accepted (matches non-agent panels). **Depends on: none** (builds on #213/#96/#212;
   independent of #225's sidebar-folder badge).
+
+## TASK-227 — Extend file-viewer syntax highlighting to more languages
+
+Card: add syntax highlighting in the file viewer for a list of common languages; "keep it
+fast/non-blocking; consider lazy loading if a naive approach is slow or hard to maintain;
+pick the best approach." Grounded: highlighting already exists (Prism, #44/#150) via
+`fileType.ts` (ext→lang map) + `prism.ts` (static imports + `highlightToHtml`); Java/Rust/
+JS-TS/HTML/CSS/JSON/YAML/Python/POM(xml) already covered. Decided autonomously (user not
+answering):
+
+- **Static imports, not lazy loading.** Per the card's own criterion (lazy only if naive
+  is slow/hard-to-maintain): a Tauri **desktop** app loads its bundle from local disk and
+  the missing Prism components are tiny (~KB each), so static is neither slow nor hard to
+  maintain, and it preserves the deterministic **no-async-flash** UX the current code
+  chose. Lazy would re-highlight after load (a regression).
+- **Add:** C#(`cs`), Go(`go`), Lua(`lua`), SQL(`sql`), Ruby(`rb`), PHP(`php`), Gradle
+  (`gradle`→groovy, `kts`/`kt`→kotlin). **POM** = existing `xml`→markup (no change).
+- **Mind Prism dependency order** (markup-templating before php; clike-extenders after
+  core) — wrong order silently disables a grammar. **Depends on: none**; the later
+  diff-viewer highlighting card depends on **this** (reuses `prismLang`/`highlightToHtml`).
