@@ -109,7 +109,11 @@ even though it works in `tauri dev`.
 - **Overview customization:** columns are grouped by repo (#36) — by a session's
   pure **`effectiveRepo`** (`paths.ts`), so a worktree agent (#74) sits in its
   **parent repo's** cluster sharing its color, text-badged "worktree" rather than
-  reading as a foreign-colored stray (#96). Per repo, a
+  reading as a foreign-colored stray (#96). On an Overview card / Canvas panel
+  **header**, a worktree agent uses the **same** `OpenViewButton` (the views /
+  new-session popover, scoped to its worktree folder) as a normal agent, and
+  "worktree" is a **static, non-clickable badge** styled like the "fork" badge (#213
+  — superseding the earlier clickable `WorktreeViewsBadge`, now removed). Per repo, a
   user-managed list of extra panels (diff #39 / markdown #41 / terminal #72) follows the agent
   terminals, and the whole cluster is **drag-reorderable within the repo** (#43,
   dnd-kit) — each column is a sortable keyed by session/panel id, so a reorder

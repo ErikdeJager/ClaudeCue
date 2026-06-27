@@ -25,7 +25,6 @@ import FileSwitcher from "../FileSwitcher/FileSwitcher";
 import ItemContent from "../ItemContent/ItemContent";
 import { itemTitle, panelTitle } from "../ItemContent/itemTitle";
 import OpenViewButton from "../OpenViewButton/OpenViewButton";
-import WorktreeViewsBadge from "../WorktreeViewsBadge/WorktreeViewsBadge";
 import { focusTerminal } from "../Terminal/terminalPool";
 import {
   collectLeaves,
@@ -272,11 +271,11 @@ function LeafPanel({
             </span>
           )}
           {metaText && <span className={styles.panelMeta}>{metaText}</span>}
-          {/* Worktree agent (#74/#96): the "worktree" cue is a clickable badge
-              (#164) opening worktree-scoped add-view actions (`repoPath` is the
-              worktree folder). */}
+          {/* Worktree agent (#74/#96): "worktree" is a static, non-clickable badge
+              (#213) — the add-view actions live on the standard OpenViewButton below,
+              same as a normal agent. Styled like the "fork" badge. */}
           {content.kind === "agent" && session?.worktreeParent && (
-            <WorktreeViewsBadge repoPath={session.repoPath} />
+            <span className={styles.worktreeBadge}>worktree</span>
           )}
           {/* A fork (#126) shares the source's auto-title — a badge distinguishes them. */}
           {content.kind === "agent" && session?.forkedFrom && (
@@ -287,9 +286,10 @@ function LeafPanel({
           className={styles.panelActions}
           onPointerDown={(event) => event.stopPropagation()}
         >
-          {/* "Open view" in the agent's folder (#165) — normal agents only; a
-              worktree agent uses its clickable badge (#164) instead. */}
-          {content.kind === "agent" && session && !session.worktreeParent && (
+          {/* "Open view or start a session" in the agent's folder (#165/#213) — now
+              for worktree agents too (`repoPath` is the worktree folder, so views
+              open there); "worktree" is a static badge in the title instead. */}
+          {content.kind === "agent" && session && (
             <OpenViewButton repoPath={repoPath} className={styles.panelClose} />
           )}
           {/* "Open view or start a session" in a non-agent panel's folder (#177)

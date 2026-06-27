@@ -1,6 +1,6 @@
-### 213. [ ] Worktree agent header — use the normal "open view" button + a static "worktree" badge
+### 213. [x] Worktree agent header — use the normal "open view" button + a static "worktree" badge
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-27
 
@@ -56,30 +56,30 @@ a static `<span className={styles.worktreeBadge}>worktree</span>`.
 
 **Subtasks**
 
-1. [ ] `Overview.tsx`: remove the `!session.worktreeParent` gate so `OpenViewButton`
+1. [x] `Overview.tsx`: remove the `!session.worktreeParent` gate so `OpenViewButton`
    renders for worktree agents too (scoped to `session.repoPath`); replace
    `<WorktreeViewsBadge …>` with a static
    `<span className={styles.worktreeBadge}>worktree</span>`.
-2. [ ] `CanvasSurface.tsx`: make the same two changes.
-3. [ ] Verify the worktree `OpenViewButton` opens the Views / "New session here"
+2. [x] `CanvasSurface.tsx`: make the same two changes.
+3. [x] Verify the worktree `OpenViewButton` opens the Views / "New session here"
    popover scoped to the worktree folder (`session.repoPath`).
-4. [ ] If `WorktreeViewsBadge` is now unused anywhere (grep importers), delete the
+4. [x] If `WorktreeViewsBadge` is now unused anywhere (grep importers), delete the
    component + its CSS module; otherwise leave it.
-5. [ ] Confirm the static "worktree" badge matches the "fork" badge styling and the
+5. [x] Confirm the static "worktree" badge matches the "fork" badge styling and the
    two read cleanly together when an agent is both a worktree **and** a fork.
-6. [ ] Docs: update `CLAUDE.md` (worktree agents now use the standard
+6. [x] Docs: update `CLAUDE.md` (worktree agents now use the standard
    `OpenViewButton`; "worktree" on Overview/Canvas headers is a static badge).
 
 **Acceptance criteria**
 
-- [ ] A worktree agent's Overview card and Canvas panel header show the **same**
+- [x] A worktree agent's Overview card and Canvas panel header show the **same**
       "open view" icon button as a normal agent, and it opens the Views / new-session
       popover scoped to the worktree folder.
-- [ ] "worktree" appears as a **non-clickable** badge (no pointer cursor, no hover
+- [x] "worktree" appears as a **non-clickable** badge (no pointer cursor, no hover
       affordance, no `onClick`), styled like the "fork" badge.
-- [ ] Normal agents are unchanged; the sidebar is unchanged.
-- [ ] `WorktreeViewsBadge` is removed if it became unused (no dangling import).
-- [ ] `npm run lint`, `npm run build`, and `npm test` pass.
+- [x] Normal agents are unchanged; the sidebar is unchanged.
+- [x] `WorktreeViewsBadge` is removed if it became unused (no dangling import).
+- [x] `npm run lint`, `npm run build`, and `npm test` pass.
 
 **Notes**
 

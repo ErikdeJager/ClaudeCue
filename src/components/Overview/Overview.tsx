@@ -44,7 +44,6 @@ import FileSwitcher from "../FileSwitcher/FileSwitcher";
 // big-mode placeholder — one source of truth shared with Canvas + the modal.
 import ItemContent from "../ItemContent/ItemContent";
 import OpenViewButton from "../OpenViewButton/OpenViewButton";
-import WorktreeViewsBadge from "../WorktreeViewsBadge/WorktreeViewsBadge";
 import styles from "./Overview.module.css";
 
 /**
@@ -234,8 +233,11 @@ function SessionCard({
       >
         {primary}
       </span>
+      {/* Worktree agent (#74/#96): "worktree" is a static, non-clickable badge
+          (#213) — the add-view actions live on the standard OpenViewButton below,
+          same as a normal agent. Styled like the "fork" badge. */}
       {session.worktreeParent && (
-        <WorktreeViewsBadge repoPath={session.repoPath} />
+        <span className={styles.worktreeBadge}>worktree</span>
       )}
       {/* A fork (#126) shares the source's auto-title, so a badge distinguishes them. */}
       {session.forkedFrom && <span className={styles.worktreeBadge}>fork</span>}
@@ -247,15 +249,15 @@ function SessionCard({
   const canFork = session.forkable !== false;
   const actions = (
     <>
-      {/* "Open view" in the agent's folder (#165) — normal agents only; a worktree
-          agent uses its clickable badge (#164) instead. */}
-      {!session.worktreeParent && (
-        <OpenViewButton
-          repoPath={session.repoPath}
-          className={styles.action}
-          iconSize={15}
-        />
-      )}
+      {/* "Open view or start a session" in the agent's folder (#165/#213) — now for
+          worktree agents too: `session.repoPath` is the worktree folder, so views
+          open against the worktree (the old clickable "worktree" badge is now a
+          static indicator in the title). */}
+      <OpenViewButton
+        repoPath={session.repoPath}
+        className={styles.action}
+        iconSize={15}
+      />
       {/* Fork the conversation into a new parallel session (#126); gated (#138). */}
       <button
         type="button"

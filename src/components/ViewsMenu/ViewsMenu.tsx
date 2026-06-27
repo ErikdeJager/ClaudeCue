@@ -24,8 +24,8 @@ import styles from "./ViewsMenu.module.css";
  * `includeNewSession` (default `true`) renders the leading **"New session here"**
  * instant-spawn action + its separator (#177). Host menus that already render their
  * own top-level "New session" — the repo context menu and the worktree header menu
- * — pass `false` to avoid the duplicate (#201); the standalone `WorktreeViewsBadge`
- * popover (#164) keeps the default so it remains the sole new-session affordance there.
+ * — pass `false` to avoid the duplicate (#201); the header `OpenViewButton` (#165/#213,
+ * including worktree agents) keeps the default so it remains a new-session affordance.
  */
 function ViewsMenu({
   repoPath,
