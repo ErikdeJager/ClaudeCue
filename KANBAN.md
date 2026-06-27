@@ -25,6 +25,3 @@ kanban-plugin: board
 	Depends on: #233
 
 ## DONE
-
-- [x] #230 — Add a "Commits" source to the diff viewer (list commits → show a commit's diff)
-	Plan: TASK-230.md

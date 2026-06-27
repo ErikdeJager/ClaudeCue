@@ -5239,3 +5239,57 @@ token CSS).
 
 ---
 
+### 230. [x] Add a "Commits" source to the diff viewer (list commits → show a commit's diff)
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+Adds a third **"Commits"** source to the diff viewer alongside the existing **Working** (working
+tree vs HEAD) and **Compare** (two-branch, #81) sources. In Commits mode the viewer lists recent
+commits, and selecting one shows that commit's diff in the same diff body — a read-only feature
+consistent with the read-mostly git rule (#27/#81).
+
+**What shipped** (commit `085b355`, 2026-06-28):
+
+- **Backend — two new read-only git commands (`src-tauri/src/git.rs`, `commands.rs`, `lib.rs`):**
+  - **`list_commits(cwd, limit)`** → `Vec<CommitInfo>` (`{ sha, short_sha, author, date, subject }`)
+    via a NUL-delimited `git log` (`--pretty=format:%H%x00…%x00%s --date=short`), **bounded to
+    100** with the cap surfaced; empty/non-git/no-commits → empty list (no error wall).
+  - **`commit_diff(cwd, sha)`** → the same `WorkingDiff`/`FileDiff` shape via `git show
+    --format= <sha>` parsed by the existing shared **`parse_unified_diff`**, handling both normal
+    and **root** commits. Both go through the cross-platform `run_git`/hidden-command helper;
+    unit-tested against a temp repo (normal + root commit, and the non-git empty case).
+- **Persistence (`src-tauri/src/store.rs` + `src/store.ts` + `src/types/index.ts`):** the repo's
+  diff panel gains `commit_sha: Option<String>` and `diff_source: "commits"`, so a configured
+  Commits view (source + selected sha) survives view switches / restart — mirroring how compare
+  base/target persist.
+- **Frontend (`src/components/DiffInspector/DiffInspector.tsx` + `.module.css`, `src/ipc.ts`):**
+  added `"commits"` to `DiffSource` + a **Commits** toggle entry, a **commit picker** (short sha +
+  subject + author · date), and selected-commit diff rendering reusing the existing
+  `DiffFile`/file-list/body. The Unified/Split toggle works unchanged, and #229's syntax
+  highlighting applies to commit diffs for free. Typed `commitList`/`commitDiff` IPC wrappers +
+  `CommitInfo` type added.
+
+**Key files touched:** `src-tauri/src/git.rs` (`list_commits` + `commit_diff` + tests),
+`src-tauri/src/commands.rs` + `lib.rs` (command registration), `src-tauri/src/store.rs` +
+`src/store.ts` + `src/types/index.ts` (`commit_sha` persistence + `CommitInfo`), `src/ipc.ts` (IPC
+wrappers), `src/components/DiffInspector/DiffInspector.tsx` + `.module.css` (Commits toggle +
+picker + rendering).
+
+**Dependencies:** none — a new read-only feature on the shipped `DiffInspector` (#39/#81), reusing
+`parse_unified_diff`. Note: #229's diff highlighting applies to commit diffs automatically, and the
+later **diff-viewer redesign (#231)** depends on this task to keep "commits" available.
+
+**Notes**
+
+- **Cross-platform:** all git access uses the existing `run_git`/hidden-command helper (the
+  `CREATE_NO_WINDOW` console-flash guard on Windows); the parser + UI are platform-neutral.
+- **Out of scope (as shipped):** the broader diff-viewer UI redesign (#231), pagination / "load
+  more" beyond the bounded 100 (cap surfaced), and combined/merge-commit multi-parent diffs beyond
+  git's default `show` behavior. Read-only — no checkout-to-commit or any git write.
+
+---
+
