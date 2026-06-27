@@ -119,6 +119,20 @@ const clampSidebarWidth = (w: number): number =>
 // Debounce the persist so a drag's many updates don't spam IPC (state updates live).
 let sidebarWidthPersistTimer: ReturnType<typeof setTimeout> | undefined;
 
+// Branch-label refresh debounce (#212): an in-terminal `git checkout` settles on a
+// session's busy→idle edge, so re-read branch labels then (mirrors the #97 title
+// reader's cadence). Coalesce a burst of sessions settling together into a single
+// `current_branches` call, like `sidebarWidthPersistTimer`.
+const BRANCH_REFRESH_DEBOUNCE_MS = 600;
+let branchRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleBranchRefresh(): void {
+  if (branchRefreshTimer) clearTimeout(branchRefreshTimer);
+  branchRefreshTimer = setTimeout(() => {
+    branchRefreshTimer = undefined;
+    void useStore.getState().refreshBranches();
+  }, BRANCH_REFRESH_DEBOUNCE_MS);
+}
+
 /** Copy of `map` without `key` — returns the same ref when `key` is absent so
  * callers don't trigger needless re-renders. */
 function omitKey<T>(map: Record<string, T>, key: string): Record<string, T> {
@@ -1509,7 +1523,8 @@ export const useStore = create<AppState>()((set, get) => ({
       sessionBusy: omitKey(s.sessionBusy, id),
     })),
 
-  setBusy: (id, busy) =>
+  setBusy: (id, busy) => {
+    const wasBusy = get().sessionBusy[id] ?? false;
     set((s) => {
       if ((s.sessionBusy[id] ?? false) === busy) return {}; // no-op, skip re-render
       // First activity marks the session "has been active" (#112): it stays set
@@ -1526,7 +1541,13 @@ export const useStore = create<AppState>()((set, get) => ({
           : omitKey(s.sessionBusy, id),
         sessionActive,
       };
-    }),
+    });
+    // Busy→idle settle (#212): a turn just finished, so an in-terminal `git checkout`
+    // during it has completed — re-read branch labels (debounced) so the sidebar
+    // worktree/repo label tracks the new branch without an app restart. This is the
+    // single transition point (the `session://state` handler's only caller).
+    if (wasBusy && !busy) scheduleBranchRefresh();
+  },
 
   setAutoName: (id, autoName) =>
     set((s) => {
@@ -1751,6 +1772,8 @@ export const useStore = create<AppState>()((set, get) => ({
           },
           onState: ({ id, busy }) => {
             // Busy/idle from the backend heuristic (#42); emitted only on change.
+            // `setBusy` also schedules a debounced branch-label refresh on the
+            // busy→idle edge (#212) so an in-terminal `git checkout` is reflected.
             get().setBusy(id, busy);
           },
           onName: ({ id, name }) => {

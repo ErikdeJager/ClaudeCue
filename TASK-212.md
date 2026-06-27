@@ -1,6 +1,6 @@
-### 212. [ ] Keep the worktree branch label in the sidebar in sync after an in-terminal checkout
+### 212. [x] Keep the worktree branch label in the sidebar in sync after an in-terminal checkout
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-27
 
@@ -50,30 +50,30 @@ covers **both** worktree labels and normal repo headers (a normal agent's in-ter
 
 **Subtasks**
 
-1. [ ] In `src/store.ts`, find where `sessionBusy` is updated from the backend
+1. [x] In `src/store.ts`, find where `sessionBusy` is updated from the backend
    `session://state` event (the busy/idle handler). Detect the **busy→idle** edge
    (previous busy `true` → now `false`).
-2. [ ] On that edge, schedule a **debounced** `refreshBranches()` (module-level timer,
+2. [x] On that edge, schedule a **debounced** `refreshBranches()` (module-level timer,
    ~500ms–1s, like `sidebarWidthPersistTimer`) so multiple sessions settling together
    coalesce into a single `current_branches` call.
-3. [ ] Confirm no backend change is needed: `refreshBranches` already passes worktree
+3. [x] Confirm no backend change is needed: `refreshBranches` already passes worktree
    paths (via `repoOrder(recents, sessions)`) and `current_branches` resolves them.
-4. [ ] Tests (`store.test.ts`): mock `ipc.currentBranches`; drive a session
+4. [x] Tests (`store.test.ts`): mock `ipc.currentBranches`; drive a session
    busy→idle and assert `refreshBranches` runs (after the debounce) and that a changed
    branch returned by the mock updates `branches[worktreePath]` (and a repo path).
-5. [ ] Docs: add a one-line note to the Git/branch section of `CLAUDE.md` that branch
+5. [x] Docs: add a one-line note to the Git/branch section of `CLAUDE.md` that branch
    labels refresh on the busy→idle edge (like the title reader), so an in-terminal
    `git checkout` is reflected.
 
 **Acceptance criteria**
 
-- [ ] After an agent checks out a different branch inside its worktree (in the
+- [x] After an agent checks out a different branch inside its worktree (in the
       terminal), the sidebar worktree label updates to the new branch by the next
       busy→idle settle — no app restart required.
-- [ ] Repo headers' branch labels likewise track in-terminal checkouts.
-- [ ] Branch refresh is debounced/coalesced — no per-event git spawn storm when many
+- [x] Repo headers' branch labels likewise track in-terminal checkouts.
+- [x] Branch refresh is debounced/coalesced — no per-event git spawn storm when many
       sessions toggle.
-- [ ] `npm run lint`, `npm run build`, and `npm test` pass.
+- [x] `npm run lint`, `npm run build`, and `npm test` pass.
 
 **Notes**
 

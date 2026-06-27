@@ -251,3 +251,29 @@ describe("startRepoSession (#127)", () => {
     expect(ipc.spawnSession).toHaveBeenCalledWith("/repo/err", undefined);
   });
 });
+
+describe("branch labels refresh on busy→idle (#212)", () => {
+  it("re-reads branches after the debounce, updating a (worktree) label", async () => {
+    // A worktree folder + its parent live in recents, so refreshBranches passes both
+    // to current_branches (it already includes worktree paths). Label starts stale.
+    useStore.setState({
+      recents: ["/repo/a-wt", "/repo/a"],
+      branches: { "/repo/a-wt": "old-branch", "/repo/a": "main" },
+      sessionBusy: { wt1: true },
+    });
+    // After the in-terminal checkout, current_branches reports the new branch.
+    m(ipc.currentBranches).mockResolvedValue({
+      "/repo/a-wt": "new-branch",
+      "/repo/a": "main",
+    });
+
+    // Busy→idle settle schedules the debounced refresh (not fired immediately).
+    useStore.getState().setBusy("wt1", false);
+    expect(ipc.currentBranches).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(ipc.currentBranches).toHaveBeenCalled();
+    expect(useStore.getState().branches["/repo/a-wt"]).toBe("new-branch");
+  });
+});

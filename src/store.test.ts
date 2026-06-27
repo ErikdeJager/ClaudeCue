@@ -186,6 +186,39 @@ describe("app store", () => {
     expect(useStore.getState().sessionBusy.s1).toBeUndefined();
   });
 
+  it("re-reads branch labels on a busy→idle settle, debounced (#212)", () => {
+    vi.useFakeTimers();
+    const refresh = vi.fn();
+    // Replace refreshBranches so we observe the debounced call (the real one hits
+    // the host-less ipc); restore via real timers + the beforeEach reset.
+    useStore.setState({ refreshBranches: refresh });
+    const setBusy = useStore.getState().setBusy;
+
+    setBusy("s1", true); // idle→busy: no refresh
+    expect(refresh).not.toHaveBeenCalled();
+    setBusy("s1", false); // busy→idle: schedules a debounced refresh
+    expect(refresh).not.toHaveBeenCalled(); // still debounced
+    vi.advanceTimersByTime(600);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it("coalesces a burst of busy→idle settles into one branch refresh (#212)", () => {
+    vi.useFakeTimers();
+    const refresh = vi.fn();
+    useStore.setState({ refreshBranches: refresh });
+    const setBusy = useStore.getState().setBusy;
+
+    setBusy("s1", true);
+    setBusy("s2", true);
+    setBusy("s1", false); // schedules
+    vi.advanceTimersByTime(200); // within the window
+    setBusy("s2", false); // resets the debounce
+    vi.advanceTimersByTime(600);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it("setOverviewRepoFilter toggles, switches, and clears (#34)", () => {
     useStore.getState().setOverviewRepoFilter("/repo/x");
     expect(useStore.getState().overviewRepoFilter).toBe("/repo/x");

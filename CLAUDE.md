@@ -87,7 +87,12 @@ even though it works in `tauri dev`.
   `*/HEAD` excluded) branches (#180); `fetch_remotes(cwd)` runs a best-effort `git
   fetch --prune` (the app's first git **network** read, `GIT_TERMINAL_PROMPT=0` so a
   private remote fails fast) to refresh them before the new-session branch picker lists
-  them.
+  them. The store's `branches` map (path → current branch) is re-read by
+  `refreshBranches` → `current_branches` not only on the top-level repo set changing and
+  after app-initiated checkouts, but also on each session's **busy→idle edge**
+  (debounced ~600ms, #212 — mirroring the #97 title reader's cadence), so an
+  **in-terminal `git checkout`** (incl. inside a worktree) updates the sidebar's
+  branch/worktree label by the next idle settle without an app restart.
 - **Views:** the store holds `sessions / selectedId / view / recents / branches /
   canvases / activeCanvasId / claudeMissing / toasts / schedules / settings /
   sidebarWidth / folderOrder`; the app mounts one of
