@@ -1,6 +1,6 @@
-### 203. [ ] Restyle the sidebar-footer update indicator: inset, slimmer, less prominent
+### 203. [x] Restyle the sidebar-footer update indicator: inset, slimmer, less prominent
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-27
 
@@ -92,45 +92,45 @@ as today; this is just making sure the new margins/centering don't misalign the 
 
 **Subtasks**
 
-1. [ ] Restyle `.indicator` in `Update.module.css`: remove `width: 100%`; add
+1. [x] Restyle `.indicator` in `Update.module.css`: remove `width: 100%`; add
    `margin: 0 var(--space-8) var(--space-8)`; reduce padding to `var(--space-4)
    var(--space-8)`; swap `border: 1px solid var(--accent)` → `1px solid
    var(--border-hairline)`; remove the `background: var(--accent-dim)` fill (transparent);
    tighten `gap` to `var(--space-6)`.
-2. [ ] Restyle `.indicator:hover`: subtle `background: var(--bg-hover)` +
+2. [x] Restyle `.indicator:hover`: subtle `background: var(--bg-hover)` +
    `color: var(--text-primary)` (drop the accent flood); keep `.indicatorIcon` accent-tinted
    and not forced to `inherit` on hover (so the accent touch persists), or tune as looks best.
-3. [ ] Make the label single-line: in `UpdateIndicator.tsx` (and/or CSS) lay out
+3. [x] Make the label single-line: in `UpdateIndicator.tsx` (and/or CSS) lay out
    `.indicatorText` as a baseline-aligned **row** (`flex-direction: row; align-items:
    baseline; gap: var(--space-4)`); keep title (`--fs-meta-sm`) + version (mono,
    `--fs-meta-xs`, `--text-secondary`) and ellipsis-truncation.
-4. [ ] Shrink the `Download` icon to ~13px (`size={13}`) in `UpdateIndicator.tsx`.
-5. [ ] Apply the same slim treatment to `.indicatorError` / `.indicatorError:hover`:
+4. [x] Shrink the `Download` icon to ~13px (`size={13}`) in `UpdateIndicator.tsx`.
+5. [x] Apply the same slim treatment to `.indicatorError` / `.indicatorError:hover`:
    inset, single-line, reduced padding; `var(--status-error)` icon + subtle error hairline
    border; transparent bg; subtle hover.
-6. [ ] Ensure the **collapsed rail** icon-only state stays centered and tidy with the new
+6. [x] Ensure the **collapsed rail** icon-only state stays centered and tidy with the new
    margins (e.g. `justify-content: center` and/or a collapsed modifier class driven by the
    existing `collapsed` flag); confirm text stays hidden as today.
-7. [ ] Run `npm run build`, `npm run lint`, `npm run format:check` (or `npm run format`),
+7. [x] Run `npm run build`, `npm run lint`, `npm run format:check` (or `npm run format`),
    and (since this is GUI-only and the updater is inert) exercise both states via the dev
    mock (#193) — `setUpdateState` to `available` and `error` — to eyeball the result in the
    expanded sidebar **and** the collapsed rail.
 
 **Acceptance criteria**
 
-- [ ] The indicator no longer spans edge-to-edge: it is visibly **inset** from the
+- [x] The indicator no longer spans edge-to-edge: it is visibly **inset** from the
   sidebar's left/right borders (and its bottom is inset from the footer), aligned with the
   footer's content inset.
-- [ ] It is **thinner** (single-line label, reduced vertical padding) and **smaller** (icon
+- [x] It is **thinner** (single-line label, reduced vertical padding) and **smaller** (icon
   ~13px) than before.
-- [ ] It reads as **less prominent**: no solid accent fill, hairline border, accent
+- [x] It reads as **less prominent**: no solid accent fill, hairline border, accent
   reserved to the icon; hover is a subtle background change, not a full accent flood.
-- [ ] The **error** state matches the new slim, inset, low-prominence treatment.
-- [ ] In the **collapsed rail** the chip shows the icon only, centered, with no overflow or
+- [x] The **error** state matches the new slim, inset, low-prominence treatment.
+- [x] In the **collapsed rail** the chip shows the icon only, centered, with no overflow or
   misalignment.
-- [ ] Behavior is unchanged: hidden when idle; appears on `available`/`error`; click opens
+- [x] Behavior is unchanged: hidden when idle; appears on `available`/`error`; click opens
   Settings → Updates; same `title`/`aria-label`.
-- [ ] `npm run build`, `npm run lint`, and Prettier all pass.
+- [x] `npm run build`, `npm run lint`, and Prettier all pass.
 
 **Notes**
 
@@ -157,3 +157,27 @@ as today; this is just making sure the new margins/centering don't misalign the 
   `src/styles/tokens.css`.
 - The updater is inert today (no signed release → `checkForUpdate` returns null), so the
   only way to see the indicator at runtime is the dev mock (#193, `setUpdateState`).
+
+**Implementation (done 2026-06-27)**
+
+- `Update.module.css` `.indicator`: dropped `width: 100%`; `margin: 0 var(--space-8)
+  var(--space-8)`; `padding: var(--space-4) var(--space-8)`; `gap: var(--space-6)`; border
+  `1px solid var(--border-hairline)`; `background: transparent`. Hover →
+  `var(--bg-hover)` + `var(--text-primary)` (no accent flood). Removed the
+  `.indicator:hover .indicatorIcon { color: inherit }` and
+  `.indicator:hover .indicatorVersion { color: inherit }` rules so the **accent stays on
+  the icon** through hover.
+- `.indicatorText` is now a baseline-aligned **row** (`gap: var(--space-4)`); title keeps
+  `--fs-meta-sm` + ellipsis truncation, version is mono `--fs-meta-xs` `--text-secondary`
+  with `flex-shrink: 0` so the title truncates first.
+- New `.indicatorCollapsed { justify-content: center }` applied via the existing
+  `collapsed` flag in `UpdateIndicator.tsx`; `Download` icon shrunk to `size={13}`. No
+  behavior/store/IPC change — same onClick, title, aria-label, and visibility conditions.
+- **Error-border tuning:** the plan recommended a "subtle error-tinted hairline border."
+  There is no error-dim token and CLAUDE.md forbids off-system colors, so `.indicatorError`
+  keeps `border-color: var(--status-error)` — a thin on-system red hairline — rather than a
+  bespoke rgba. Within the plan's stated "implementer may tune within intent" latitude.
+- Verified: `npm run build`, `npm run lint`, and `prettier --check` on both touched files
+  all pass. The pre-existing `markdownCheckboxes.tsx` Prettier warning is untouched/unrelated.
+  The interactive dev-mock eyeball (subtask 7's last clause) can't run in the headless loop;
+  the change is a pure CSS/markup restyle fully covered by the build/lint/format checks.

@@ -1,15 +1,15 @@
-/* Sidebar-footer update box (#190): a compact accent-tinted chip above the
-   Settings gear. Hidden unless an update is available / failed. */
+/* Sidebar-footer update box (#190, restyled #203): a quiet, inset single-line
+   hint above the Settings gear — hairline border, transparent fill, accent
+   reserved to the icon. Hidden unless an update is available / failed. */
 .indicator {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
-  width: 100%;
-  margin-bottom: var(--space-6);
-  padding: var(--space-6) var(--space-8);
-  border: 1px solid var(--accent);
+  gap: var(--space-6);
+  margin: 0 var(--space-8) var(--space-8);
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid var(--border-hairline);
   border-radius: var(--radius-control);
-  background: var(--accent-dim);
+  background: transparent;
   color: var(--text-primary);
   font: inherit;
   text-align: left;
@@ -18,8 +18,13 @@
 }
 
 .indicator:hover {
-  background: var(--accent);
-  color: var(--accent-fg);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Collapsed rail: icon-only, centered in the inset chip (#203). */
+.indicatorCollapsed {
+  justify-content: center;
 }
 
 .indicatorError {
@@ -32,13 +37,10 @@
   color: var(--text-primary);
 }
 
+/* Accent stays on the icon through hover — the only color touch on the chip. */
 .indicatorIcon {
   flex-shrink: 0;
   color: var(--accent);
-}
-
-.indicator:hover .indicatorIcon {
-  color: inherit;
 }
 
 .indicatorError .indicatorIcon {
@@ -48,8 +50,8 @@
 .indicatorText {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 1px;
+  align-items: baseline;
+  gap: var(--space-4);
 }
 
 .indicatorTitle {
@@ -61,16 +63,11 @@
 }
 
 .indicatorVersion {
-  overflow: hidden;
+  flex-shrink: 0;
   color: var(--text-secondary);
   font-family: var(--mono);
   font-size: var(--fs-meta-xs);
-  text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.indicator:hover .indicatorVersion {
-  color: inherit;
 }
 
 /* Confirm dialog + install overlay scrim (#190): full-window dim, centered. The

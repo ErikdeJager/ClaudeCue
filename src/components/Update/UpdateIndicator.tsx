@@ -27,7 +27,9 @@ function UpdateIndicator() {
   return (
     <button
       type="button"
-      className={`${styles.indicator} ${isError ? styles.indicatorError : ""}`}
+      className={`${styles.indicator} ${isError ? styles.indicatorError : ""} ${
+        collapsed ? styles.indicatorCollapsed : ""
+      }`}
       onClick={() => setSettingsOpen(true, "updates")}
       title={
         isError
@@ -40,7 +42,7 @@ function UpdateIndicator() {
           : `Update available version ${version}, open Updates settings`
       }
     >
-      <Download size={15} strokeWidth={1.5} className={styles.indicatorIcon} />
+      <Download size={13} strokeWidth={1.5} className={styles.indicatorIcon} />
       {!collapsed && (
         <span className={styles.indicatorText}>
           <span className={styles.indicatorTitle}>
