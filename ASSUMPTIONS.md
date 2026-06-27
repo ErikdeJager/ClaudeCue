@@ -707,3 +707,25 @@ Besides the dev pipeline implementing READY cards, a DONE→archive process is m
 completed cards out of `KANBAN.md`'s DONE into `TASK_ARCHIVE.md`. Refine commits continue
 to stage only `TASK-<N>.md` + `KANBAN.md` + `ASSUMPTIONS.md` explicitly and never touch
 DONE/code/`TASK_ARCHIVE.md`, so the loops don't collide.
+
+## TASK-226 — Replace agent-header worktree badge with a folder + branch indicator
+
+Card: remove the "worktree" badge on agent headers; instead every agent header shows the
+folder + branch that agent works on (like the Kanban header shows its folder). Grounded
+via Explore: Overview `SessionCard` + Canvas `LeafPanel` show a `worktreeParent`-gated
+"worktree" badge and (Canvas) explicitly null the folder·branch meta for agents; non-agent
+panels already show `repoName · branch` via `.meta`/`.panelMeta`. Decided autonomously
+(user not answering):
+
+- **Folder = `repoName(effectiveRepo(session))` (parent repo), branch =
+  `branches[session.repoPath]`** — so a worktree agent reads "myrepo · feature-x" (its repo
+  + isolated branch), not the sanitized worktree-folder basename. Shown for **every** agent.
+- **Remove the worktree badge from both agent-header sites; keep the `worktreeBadge` CSS
+  class** (still used by the fork badge + the #218 ScheduleCard badge).
+- **Keep the fork badge** (distinct provenance concept); the explicit "worktree" word is
+  intentionally dropped in favor of folder·branch.
+- **ScheduleCard's #218 worktree badge left as-is** (card = agent headers only; scheduled
+  cards already show `repoName(cwd) · branch`); accepted minor inconsistency, flagged for a
+  possible follow-up. Minor name/branch redundancy when an agent has no custom name is
+  accepted (matches non-agent panels). **Depends on: none** (builds on #213/#96/#212;
+  independent of #225's sidebar-folder badge).

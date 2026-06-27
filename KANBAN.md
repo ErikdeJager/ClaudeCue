@@ -6,7 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Replace the worktree badge on agent headers with a folder + branch indicator. Like the Kanban board header shows its folder, every agent's header should show the folder and branch that specific agent is working on. Remove the separate worktree badge in favor of this.
 - [ ] Add lightweight syntax highlighting in the file viewer for common languages: Java, Rust, JavaScript, HTML, CSS, C#, JSON, YAML, POM, Gradle, Go, Lua, SQL, Python, Ruby, PHP. Keep it fast and non-blocking — consider lazy loading languages on demand if a naive approach is slow or hard to maintain. Pick the best approach.
 - [ ] When the left panel is collapsed, keep agents clickable with their usual left- and right-click behavior. Currently the collapsed rail shows them as status indicators only — they should still respond to clicks like they do when expanded.
 - [ ] Extend the syntax highlighting (same languages as the file viewer task) to the diff viewer, so diffs are syntax-highlighted too.
@@ -20,6 +19,9 @@ kanban-plugin: board
 	Depends on: none
 - [ ] #225 — Subtle current-branch badge next to each sidebar folder, synced from any source
 	Plan: TASK-225.md
+	Depends on: none
+- [ ] #226 — Replace agent-header worktree badge with a folder + branch indicator
+	Plan: TASK-226.md
 	Depends on: none
 
 ## DONE
