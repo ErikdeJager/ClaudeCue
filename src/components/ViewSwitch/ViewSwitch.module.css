@@ -33,7 +33,7 @@
 }
 
 /* Compact (icon-only) mode for the collapsed sidebar rail (#168): two stacked
-   icon buttons sized to the ~56px rail. */
+   icon buttons sized to the narrow rail (~44px, #214). */
 .groupCompact {
   display: flex;
   flex-direction: column;

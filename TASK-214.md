@@ -1,6 +1,6 @@
-### 214. [ ] Make the collapsed sidebar rail much narrower
+### 214. [x] Make the collapsed sidebar rail much narrower
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-27
 
@@ -45,27 +45,27 @@ recommended minimal change.
 
 **Subtasks**
 
-1. [ ] Change `SIDEBAR_RAIL_WIDTH` from `56` to `44` in
+1. [x] Change `SIDEBAR_RAIL_WIDTH` from `56` to `44` in
    `src/components/Sidebar/Sidebar.tsx`.
-2. [ ] In `Sidebar.module.css`, verify the rail contents center within 44px with a
+2. [x] In `Sidebar.module.css`, verify the rail contents center within 44px with a
    small gutter; adjust button/folder/worktree widths only if needed so nothing
    clips. Confirm the collapsed footer and the collapsed `UpdateIndicator` icon fit.
-3. [ ] Sanity-check the active-filter box (`.railFolderActive`), hover backgrounds,
+3. [x] Sanity-check the active-filter box (`.railFolderActive`), hover backgrounds,
    and the activity dots are not clipped at the narrower width.
-4. [ ] Grep for any test/snapshot referencing the old `56` rail width and update it
+4. [x] Grep for any test/snapshot referencing the old `56` rail width and update it
    (the constant is local to `Sidebar.tsx`; likely none).
-5. [ ] Docs: update `CLAUDE.md` only if it cites a rail width (it currently does not).
+5. [x] Docs: update `CLAUDE.md` only if it cites a rail width (it currently does not).
 
 **Acceptance criteria**
 
-- [ ] The collapsed sidebar rail is ~44px wide (down from 56) — only slightly wider
+- [x] The collapsed sidebar rail is ~44px wide (down from 56) — only slightly wider
       than its 36px buttons.
-- [ ] All rail elements (New / Schedule / view-switch buttons, repo folder icons,
+- [x] All rail elements (New / Schedule / view-switch buttons, repo folder icons,
       activity dots, worktree glyphs, footer gear / feedback / chevron, collapsed
       update icon) remain centered, fully visible, and clickable; right-click menus
       still open.
-- [ ] The expanded sidebar width is unaffected.
-- [ ] `npm run lint`, `npm run build`, and `npm test` pass.
+- [x] The expanded sidebar width is unaffected.
+- [x] `npm run lint`, `npm run build`, and `npm test` pass.
 
 **Notes**
 

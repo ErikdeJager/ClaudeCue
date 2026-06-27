@@ -51,9 +51,10 @@ import ViewSwitch from "../ViewSwitch/ViewSwitch";
 import ViewsMenu from "../ViewsMenu/ViewsMenu";
 import styles from "./Sidebar.module.css";
 
-/** Fixed width of the collapsed sidebar icon rail (#168). The persisted
- * `sidebarWidth` is left untouched while collapsed, so expanding restores it. */
-const SIDEBAR_RAIL_WIDTH = 56;
+/** Fixed width of the collapsed sidebar icon rail (#168/#214). Snug around its
+ * ~36px buttons (a ~4px gutter each side). The persisted `sidebarWidth` is left
+ * untouched while collapsed, so expanding restores it. */
+const SIDEBAR_RAIL_WIDTH = 44;
 
 /** Bug-report / feature-request Google Form, opened by the footer feedback button
  * (#210) in the default browser via the http/https-only `open_url` (#109). */

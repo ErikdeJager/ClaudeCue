@@ -10,9 +10,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #214 — Make the collapsed sidebar rail much narrower
-	Plan: TASK-214.md
-	Depends on: none
 - [ ] #215 — Tighten the update indicator margin + hover light-up
 	Plan: TASK-215.md
 	Depends on: none
@@ -28,4 +25,6 @@ kanban-plugin: board
 
 - [ ] #213 — Worktree agent header: normal open-view button + static "worktree" badge
 	Plan: TASK-213.md
+- [ ] #214 — Make the collapsed sidebar rail much narrower
+	Plan: TASK-214.md
 
