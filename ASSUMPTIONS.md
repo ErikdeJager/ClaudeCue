@@ -586,3 +586,38 @@ byte `^V` (0x16) and never pastes. Decided autonomously (user not answering):
 - **Assumption:** the Windows `claude` attaches an image given its file path in the
   prompt (per its image-paste / drag-drop support). **Depends on: none** (self-contained;
   it adds its own clipboard dependency).
+
+## TASK-221 — Fix the terminal font rendering "jiggly" on Windows
+
+Card: terminal glyphs look weird/jiggly on Windows (esp. "C"); JetBrains Mono likely not
+loading in the terminal. Grounded: the main window renders xterm via the **WebGL addon**,
+and the only post-font-load step is `document.fonts.ready.then(safeFit)` — which re-fits
+size but never rebuilds the WebGL glyph atlas or re-measures the cell; a canvas/WebGL
+renderer also never triggers the browser to fetch the `@font-face`. Decided autonomously
+(user not answering):
+
+- **Primary fix = explicit `document.fonts.load()` for JetBrains Mono + rebuild the WebGL
+  atlas / re-measure after it loads** (`webgl.clearTextureAtlas()`, re-apply font options,
+  `term.refresh`, `fit.fit()`), replacing the bare `safeFit`. Chosen because it addresses
+  the most likely root cause (atlas built with fallback metrics before the webfont loads)
+  and **keeps GPU rendering**; harmless on macOS.
+- **Documented fallback = DOM renderer on Windows** (generalize the existing
+  `IS_MAIN_WINDOW` WebGL gate to `IS_MAIN_WINDOW && !isWindows(platform)`), mirroring the
+  detached-window precedent that already drops WebGL for "a known WebGL glyph-atlas /
+  devicePixelRatio artifact." Applied only if the primary fix doesn't fully resolve the
+  jiggle on a real Windows box; trades GPU acceleration on Windows for guaranteed-correct
+  text.
+- **Windows-only GUI rendering path — not unit-testable here** (no Windows box / live
+  WebView2 + ConPTY) → implement-for-both, verify on a real box, log the resolving path to
+  `TRAJECTORY_TO_WINDOWS.md`. **Assumption:** the `@fontsource` bundle is intact (works on
+  macOS); the defect is in *applying* it under WebGL on Windows, not a corrupt font.
+  **Depends on: none.**
+
+### Process note (concurrent dev pipeline)
+
+While refining #218–#221, a concurrent dev pipeline implemented **#218** in the **same
+working tree** (uncommitted: `commands.rs`, `store.rs`, `Overview.tsx`, `Sidebar.tsx`,
+`paths.ts`, `paths.test.ts`, `types/index.ts`, plus its `TASK-218.md` `[x]` + `KANBAN.md`
+#218→DONE move). To avoid the shared-worktree race, every refine commit stages **only its
+own explicit paths** (`TASK-<N>.md`, `KANBAN.md`, `ASSUMPTIONS.md`) — never `git add -A`,
+never the pipeline's code files or `TASK-218.md`.
