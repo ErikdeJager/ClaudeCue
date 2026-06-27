@@ -104,8 +104,10 @@ even though it works in `tauri dev`.
   `claude`'s width-specific TUI redraw). Scrollback replays once at creation;
   resizes are debounced + applied only while visible. The pool's `createHost`
   **linkifies `http`/`https` URLs** (a `WebLinksAddon`) so a **⌘-click** opens the
-  default browser via the dependency-free Rust `open_url` (http/https only, shells out
-  to macOS `open` without a shell) — for both agent and shell terminals (#109).
+  default browser via the dependency-free Rust `open_url` (http/https only, no shell) —
+  for both agent and shell terminals (#109). `open_url` is **cross-platform** (#217):
+  macOS `open`, Windows `cmd /C start`, else `xdg-open` — so the same path (and the
+  #210 feedback button) opens the browser on Windows too, not a folder.
 - **Overview customization:** columns are grouped by repo (#36) — by a session's
   pure **`effectiveRepo`** (`paths.ts`), so a worktree agent (#74) sits in its
   **parent repo's** cluster sharing its color, text-badged "worktree" rather than

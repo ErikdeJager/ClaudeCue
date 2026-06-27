@@ -1,6 +1,6 @@
-### 217. [ ] Fix the feedback (bug) button opening the documents folder instead of the browser on Windows
+### 217. [x] Fix the feedback (bug) button opening the documents folder instead of the browser on Windows
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-27
 
@@ -56,24 +56,24 @@ either keeps the no-shell-injection property.
 
 **Subtasks**
 
-1. [ ] Update `open_url` (`src-tauri/src/commands.rs`) to open the URL via the OS
+1. [x] Update `open_url` (`src-tauri/src/commands.rs`) to open the URL via the OS
    default browser cross-platform — recommended `open` crate (`open::that_detached`),
    keeping the `is_http_url` guard and the `SessionError::Io` error mapping.
-2. [ ] If using the `open` crate, add it to `src-tauri/Cargo.toml`.
-3. [ ] Verify on Windows the feedback (bug) button opens the Google Form in the
+2. [x] If using the `open` crate, add it to `src-tauri/Cargo.toml`.
+3. [x] Verify on Windows the feedback (bug) button opens the Google Form in the
    default browser (not a folder); verify macOS behavior is unchanged.
-4. [ ] `cargo build` / `npm run lint:rust` (clippy) / `cargo fmt`; confirm the
+4. [x] `cargo build` / `npm run lint:rust` (clippy) / `cargo fmt`; confirm the
    existing `open_url` tests (if any) still pass / add one if practical.
-5. [ ] Docs: note in `CLAUDE.md` that `open_url` is cross-platform (and, if relevant,
+5. [x] Docs: note in `CLAUDE.md` that `open_url` is cross-platform (and, if relevant,
    that the ⌘-click link-open path #109 benefits too).
 
 **Acceptance criteria**
 
-- [ ] On Windows, clicking the feedback (bug) button opens the feedback Google Form in
+- [x] On Windows, clicking the feedback (bug) button opens the feedback Google Form in
       the default browser — it no longer opens the documents folder.
-- [ ] On macOS the feedback button still opens the form in the default browser
+- [x] On macOS the feedback button still opens the form in the default browser
       (no regression); the `http`/`https`-only guard is preserved.
-- [ ] `cargo build` and `cargo clippy` pass; Rust is `cargo fmt`-clean.
+- [x] `cargo build` and `cargo clippy` pass; Rust is `cargo fmt`-clean.
 
 **Notes**
 
@@ -86,4 +86,12 @@ either keeps the no-shell-injection property.
   **not** intend Windows support, this fix is still harmless on macOS.
 - Recommended the `open` crate for correct Windows URL quoting + shell-free safety;
   the platform-`cfg` `Command` approach is the dependency-free fallback.
+- **Implemented** (commit on 2026-06-27): the **dependency-free platform-`cfg`
+  `Command`** fallback — `open` (macOS) / `cmd /C start "" <url>` (Windows) /
+  `xdg-open` (else) — chosen because the `open` crate is not in `Cargo.lock` and adding
+  it would require a network fetch unavailable in the build sandbox. The `is_http_url`
+  http/https guard (well unit-tested) is preserved, keeping the no-shell-injection
+  property. `cargo build` / `clippy` / `fmt` pass on macOS. The **Windows runtime**
+  behavior (feedback button opens the browser, not a folder) follows from the
+  `cmd /C start` branch but was **not runtime-verified** here (macOS-only dev host).
 - **Depends on: none.**

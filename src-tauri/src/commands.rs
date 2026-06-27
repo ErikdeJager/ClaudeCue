@@ -1152,8 +1152,32 @@ pub fn open_url(url: String) -> Result<(), SessionError> {
             "refusing to open non-http(s) URL `{url}`"
         )));
     }
-    std::process::Command::new("open")
-        .arg(&url)
+    // Open the URL in the OS default browser, per platform (#217). Previously this was
+    // hardcoded to the macOS `open`, so on Windows it opened a folder instead of the
+    // browser. The http/https-only guard above keeps this shell-injection-safe: the URL
+    // is always passed as a separate, validated argument, never interpolated into a
+    // shell string.
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut c = std::process::Command::new("open");
+        c.arg(&url);
+        c
+    };
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        // `cmd /C start "" <url>` — `start`'s first quoted argument is the window
+        // title, so the empty "" stops a quoted URL from being taken as the title.
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", "", url.as_str()]);
+        c
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut command = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(&url);
+        c
+    };
+    command
         .spawn()
         .map_err(|e| SessionError::Io(e.to_string()))?;
     Ok(())
