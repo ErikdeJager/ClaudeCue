@@ -6,8 +6,6 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Revert where a user creates a canvas from a template. The "new canvas tab" plus button should be a simple plus that just creates a new empty canvas, nothing else. Move all the create-from-template logic back into the Templates dropdown menu.
-
 - [ ] Add an "evenly distribute" button inside the template editor. The canvas already has a button to evenly distribute its panels; add the same option in the template editor so all items in a template can be evenly distributed too.
 
 - [ ] In Canvas templates, support full paths (folders + filename) for a file block, not just a bare filename, plus a choice between relative and absolute path. Relative resolves from the project root; absolute resolves from the filesystem root.
@@ -32,6 +30,10 @@ kanban-plugin: board
 
 - [ ] #221 — Fix the terminal font rendering "jiggly" on Windows (JetBrains Mono / WebGL atlas)
 	Plan: TASK-221.md
+	Depends on: none
+
+- [ ] #222 — Revert Canvas "+" to a plain new-tab button; move "from template" into Templates menu
+	Plan: TASK-222.md
 	Depends on: none
 
 ## DONE

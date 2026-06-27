@@ -621,3 +621,20 @@ working tree** (uncommitted: `commands.rs`, `store.rs`, `Overview.tsx`, `Sidebar
 #218→DONE move). To avoid the shared-worktree race, every refine commit stages **only its
 own explicit paths** (`TASK-<N>.md`, `KANBAN.md`, `ASSUMPTIONS.md`) — never `git add -A`,
 never the pipeline's code files or `TASK-218.md`.
+
+## TASK-222 — Revert Canvas "+" to a plain new-tab button; move "from template" into Templates menu
+
+Card: revert #205 — the "new canvas tab" + should be a simple plus that creates an empty
+canvas; move create-from-template back into the Templates dropdown. Grounded in
+`CanvasTabs.tsx` (current post-#205 state: + is a dropdown with "New tab" / "New tab from
+template…"; Templates ▾ holds management only). Decided autonomously (user not answering):
+
+- **Revert scope = only the "+" dropdown + the template-entry relocation** (exactly the
+  card). The other #205 change — distribute-evenly moved to the right edge — is **left
+  intact** because the card doesn't mention it.
+- **"New tab from template…" placement = top of the Templates ▾ menu** (primary "use"
+  action above the management items); implementer may instead match the exact pre-#205
+  order via `git show 54d1083^:src/components/Canvas/CanvasTabs.tsx`.
+- **#206 (⌘T) preserved** — the keybind still creates a new tab; its hint stays on the +
+  tooltip + keyboard legend; only the `<kbd>` inside the removed + menu item is dropped.
+- **Depends on: none** — refines shipped #205/#206/#117/#118 code.
