@@ -4211,3 +4211,48 @@ nothing to distribute and the text node `"Current version"` sits directly adjace
 
 ---
 
+### 210. [x] Add a feedback button (bug icon) in the sidebar footer that opens the feedback Google Form
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-27
+
+**Description**
+
+Add a **feedback / bug-report button** to the sidebar footer, next to the Settings gear in the
+bottom-left, that opens the bug-report / feature-request **Google Form** in the user's default
+browser. Reuses the existing external-URL path (`openUrl` → the dependency-free Rust `open_url`,
+http/https only via macOS `open`, #109) — no new backend command.
+
+**What shipped** (commit `f835b4b`, 2026-06-27) — frontend-only, one component:
+
+- **`Sidebar.tsx`:** imported `Bug` (lucide-react) + `openUrl` (ipc), added a module-level
+  `FEEDBACK_FORM_URL` constant (the user-supplied Google Form URL verbatim, incl. its
+  `?usp=publish-editor` param), and inserted a third footer button (`styles.footerButton`, `Bug
+  size={16} strokeWidth={1.5}`, `title`/`aria-label` "Send feedback") **between** the Settings
+  gear and the collapse chevron, wired to `onClick={() => void openUrl(FEEDBACK_FORM_URL)}`. No
+  confirm gate (opening a URL is non-destructive).
+- **No CSS change:** `.footerCollapsed` already stacks footer children, so the button lays out
+  correctly in both the expanded footer and the collapsed rail. No in-app form/modal, no
+  telemetry/prefill, no settings entry or shortcut — it deliberately opens the external form.
+
+**Key files touched:** `src/components/Sidebar/Sidebar.tsx` (reuses `openUrl` in `src/ipc.ts`
+and the existing `open_url` Rust command).
+
+**Dependencies:** none — reuses `open_url` (#109) and the existing footer-button styling.
+
+**Notes**
+
+- **Autonomous refine (2026-06-27):** decisions logged in `ASSUMPTIONS.md` under TASK-210 —
+  placement after the Settings gear; Lucide `Bug` icon; `openUrl` (no new command); no confirm
+  gate. **URL caveat:** `?usp=publish-editor` looks like a Google Forms *publish-editor preview*
+  param rather than the public response link — used verbatim per the user and **flagged** for a
+  swap to the public `…/viewform` share URL if the button opens the editor/preview instead of the
+  live form.
+- **Runtime-unverified** in this headless loop: the interactive eyeball (the bug button appears
+  next to Settings in both expanded + collapsed states and opens the form in the default
+  browser). `npm run build`, `npm run lint`, `prettier --check`, and `npm test` (288 passing) all
+  pass.
+
+---
+
