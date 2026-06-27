@@ -19,6 +19,3 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #203 — Restyle the sidebar-footer update indicator: inset, slimmer, less prominent
-	Plan: TASK-203.md
-

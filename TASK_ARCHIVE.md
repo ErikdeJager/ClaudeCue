@@ -3826,3 +3826,68 @@ file-open actions.
 
 ---
 
+### 203. [x] Restyle the sidebar-footer update indicator: inset, slimmer, less prominent
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-27
+
+**Description**
+
+The in-app **update indicator** chip in the sidebar footer (#190) read as a primary
+call-to-action — a full-width box with a solid accent border, an accent-tinted fill, a 15px
+icon, and a stacked two-line label, flooding to a solid accent fill on hover. For something
+that is *available-but-optional* (and inert until a signed release exists) that over-emphasized.
+This is a **pure visual restyle** of one shipped component — no behavior, store, or IPC changes
+— making it **inset, smaller, thinner, slicker, and less prominent**: a quiet, tasteful hint
+rather than a banner.
+
+**What shipped** (commit `be68068`, 2026-06-27) — frontend-only, two files:
+
+- **`Update.module.css` `.indicator`:** dropped `width: 100%` (the sidebar is a column flex, so
+  it no longer stretches edge-to-edge); added `margin: 0 var(--space-8) var(--space-8)` so it is
+  **inset** from the sidebar's left/right borders, aligned with the footer's `0 var(--space-8)`
+  content inset directly below it; reduced padding to `var(--space-4) var(--space-8)` and `gap`
+  to `var(--space-6)`; swapped `border: 1px solid var(--accent)` → `1px solid
+  var(--border-hairline)`; removed the `background: var(--accent-dim)` fill (now transparent).
+- **Hover de-emphasized:** `.indicator:hover` → subtle `var(--bg-hover)` + `var(--text-primary)`
+  (no accent flood). The `.indicator:hover .indicatorIcon { color: inherit }` and version
+  `color: inherit` rules were removed so the **accent stays on the icon** through hover — the
+  icon is the only accent touch.
+- **Single-line label** (the main "thinner" move): `.indicatorText` is now a baseline-aligned
+  **row** (`gap: var(--space-4)`); the title keeps `--fs-meta-sm` + ellipsis truncation, the
+  version is mono `--fs-meta-xs` `--text-secondary` with `flex-shrink: 0` so the title truncates
+  first.
+- **Smaller icon:** the `Download` icon shrank to `size={13}` in `UpdateIndicator.tsx`.
+- **Collapsed rail:** a new `.indicatorCollapsed { justify-content: center }` applied via the
+  existing `collapsed` flag so the icon-only rail state stays centered and tidy with the new
+  margins; text stays hidden as before.
+- **Error variant restyled to match** for consistency: same slim/inset/single-line shape;
+  `.indicatorError` keeps `border-color: var(--status-error)` (a thin on-system red hairline —
+  there is no error-dim token and CLAUDE.md forbids off-system colors), transparent bg, subtle
+  hover.
+
+Behavior is unchanged: same `onClick` (open Settings → Updates), `title`/`aria-label`, and
+visibility conditions (hidden when idle/checking/downloading; shown on `available`/`error`).
+
+**Key files touched:** `src/components/Update/Update.module.css`,
+`src/components/Update/UpdateIndicator.tsx`.
+
+**Dependencies:** none — a pure restyle of the shipped #190 component.
+
+**Notes**
+
+- **Autonomous refine (2026-06-27):** per the standing `ASSUMPTIONS.md` directive (2026-06-26)
+  the design decisions were made autonomously (logged in `ASSUMPTIONS.md` under TASK-203): 8px
+  side/bottom margin tying the chip to the footer below it; single-line label as the primary
+  "thinner" move; hairline border + transparent fill with accent reserved to the icon as the
+  "less-prominent/slicker" treatment; error variant restyled to match. The error-border kept
+  `var(--status-error)` rather than a bespoke error-dim rgba (no such token; on-system only).
+- **Runtime-unverified** in this autonomous loop: the dev-mock (#193, `setUpdateState`) eyeball
+  of the `available`/`error` states in the expanded sidebar and collapsed rail can't run
+  headless. The change is a pure CSS/markup restyle fully covered by `npm run build`, `npm run
+  lint`, and `prettier --check` on both touched files (all green; the pre-existing
+  `markdownCheckboxes.tsx` Prettier warning is unrelated).
+
+---
+
