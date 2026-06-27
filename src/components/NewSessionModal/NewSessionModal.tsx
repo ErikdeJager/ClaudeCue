@@ -20,7 +20,6 @@ import { repoName } from "../../paths";
 import { useStore } from "../../store";
 import { toLocalInput } from "../../time";
 import type { BranchList, SkillInfo } from "../../types";
-import Checkbox from "../Checkbox/Checkbox";
 import SkillAutocomplete from "../SkillAutocomplete/SkillAutocomplete";
 import { moveFolderHighlight } from "./folderNav";
 import styles from "./NewSessionModal.module.css";
@@ -104,9 +103,6 @@ function NewSessionModal() {
   const [fireAt, setFireAt] = useState("");
   const [prompt, setPrompt] = useState("");
   const [schedName, setSchedName] = useState("");
-  // Launch the scheduled agent into an isolated worktree (#198) — created at fire
-  // time on the chosen branch. Git folders only (a worktree needs a branch).
-  const [worktree, setWorktree] = useState(false);
   // Slash-command skills for the chosen folder (#114) — feeds the prompt
   // autocomplete; best-effort, so it degrades to an empty list (no dropdown).
   const [skills, setSkills] = useState<SkillInfo[]>([]);
@@ -148,7 +144,6 @@ function NewSessionModal() {
     setFireAt(toLocalInput(new Date(Date.now() + DEFAULT_LEAD_MS)));
     setPrompt("");
     setSchedName("");
-    setWorktree(false);
     setPickerActive(false);
     setAddBranchActive(false);
     setNewBranchName("");
@@ -626,14 +621,17 @@ function NewSessionModal() {
   // Create the schedule from the launch-time step (#93): parse the local
   // datetime-local value → unix secs, carry the optional branch/name/prompt. A
   // "+ add branch" intent (#125) records the new branch (created at fire time).
-  const submitSchedule = async () => {
+  // `asWorktree` is the worktree variant of the action (#204) — the "Worktree ⌘⏎"
+  // button / keybind, mirroring the branch step's create() vs createWorktree()
+  // split. Git folders only (a worktree needs a branch), so it's gated on folderIsGit.
+  const submitSchedule = async (asWorktree: boolean) => {
     if (!cwd || busy) return;
     const ms = new Date(fireAt).getTime();
     if (!Number.isFinite(ms)) return;
     const useNewBranch = addBranchActive && !!newBranchName.trim();
     // A worktree schedule (#198) always needs a branch (its worktree is on one),
     // even the current branch — so pass `selectedBranch` regardless of `willCheckout`.
-    const useWorktree = worktree && folderIsGit;
+    const useWorktree = asWorktree && folderIsGit;
     const branchArg = useNewBranch
       ? newBranchName.trim()
       : useWorktree || willCheckout
@@ -804,6 +802,20 @@ function NewSessionModal() {
   // Keep Tab focus inside the dialog (focus-trap, a11y #49). Excludes roving
   // tabindex=-1 elements (e.g. unselected branch buttons, #61).
   const onTrapKeyDown = (event: ReactKeyboardEvent<HTMLFormElement>) => {
+    // Schedule step (#204): ⌘⏎ / Ctrl+⏎ schedules into an isolated worktree —
+    // mirroring the branch step's worktree keybind. Plain ⏎ submits a normal
+    // schedule via the form's onSubmit. Handled at the form level so it fires from
+    // any schedule-step field; when the prompt's skill menu is open SkillAutocomplete
+    // intercepts Enter to drive the menu (#114), so this only runs with it closed.
+    if (
+      step === "schedule" &&
+      event.key === "Enter" &&
+      (event.metaKey || event.ctrlKey)
+    ) {
+      event.preventDefault();
+      void submitSchedule(true);
+      return;
+    }
     if (event.key !== "Tab" || !formRef.current) return;
     const focusable = formRef.current.querySelectorAll<HTMLElement>(
       'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -845,7 +857,8 @@ function NewSessionModal() {
             else if (selectedRemote !== null) void confirmRemoteCheckout();
             else void create();
           } else {
-            void submitSchedule();
+            // Plain ⏎ = normal schedule; ⌘⏎ (worktree) is handled in onTrapKeyDown.
+            void submitSchedule(false);
           }
         }}
       >
@@ -1271,23 +1284,25 @@ function NewSessionModal() {
               aria-label="Custom name"
             />
 
-            {/* Isolated worktree (#198): a scheduled flow has no live keypress at fire
-                time, so an explicit toggle replaces the immediate path's ⌘⏎. Git folders
-                only — a worktree is created on the chosen branch at fire time. */}
-            {folderIsGit && (
-              <div className={styles.scheduleWorktree}>
-                <Checkbox
-                  checked={worktree}
-                  onChange={setWorktree}
-                  label="Start in an isolated worktree"
-                />
-              </div>
-            )}
-
             <div className={styles.actions}>
               <button type="button" className={styles.cancel} onClick={close}>
                 Cancel <kbd className={styles.btnKbd}>esc</kbd>
               </button>
+              {/* Isolated worktree (#198/#204): the worktree variant of the primary
+                  Schedule action — mirroring the new-session branch step's "Worktree ⌘⏎"
+                  button + keybind, replacing the old schedule-step checkbox. Git folders
+                  only; the worktree is created on the chosen branch at fire time. */}
+              {folderIsGit && (
+                <button
+                  type="button"
+                  className={styles.cancel}
+                  onClick={() => void submitSchedule(true)}
+                  disabled={!cwd || busy || !fireAt}
+                  title="Schedule into an isolated git worktree"
+                >
+                  Worktree <kbd className={styles.btnKbd}>⌘⏎</kbd>
+                </button>
+              )}
               <button
                 type="submit"
                 className={styles.create}

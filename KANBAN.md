@@ -12,10 +12,9 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #204 — Schedule modal: replace the worktree checkbox with the ⌘⏎ button/keybind pattern
-	Plan: TASK-204.md
-	Depends on: none
-
 
 ## DONE
+
+- [ ] #204 — Schedule modal: replace the worktree checkbox with the ⌘⏎ button/keybind pattern
+	Plan: TASK-204.md
 

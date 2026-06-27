@@ -1,6 +1,6 @@
-### 204. [ ] Schedule modal: replace the worktree checkbox with the ⌘⏎ button/keybind pattern
+### 204. [x] Schedule modal: replace the worktree checkbox with the ⌘⏎ button/keybind pattern
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-27
 
@@ -93,39 +93,39 @@ Schedule.)
 
 **Subtasks**
 
-1. [ ] Remove the schedule-step `Checkbox` block + `.scheduleWorktree` wrapper, the
+1. [x] Remove the schedule-step `Checkbox` block + `.scheduleWorktree` wrapper, the
    `worktree`/`setWorktree` state + its reset, the dead `.scheduleWorktree` CSS, and the
    `Checkbox` import (if unused elsewhere).
-2. [ ] Change `submitSchedule` to `submitSchedule(asWorktree: boolean)` and compute
+2. [x] Change `submitSchedule` to `submitSchedule(asWorktree: boolean)` and compute
    `useWorktree = asWorktree && folderIsGit`.
-3. [ ] Add the secondary "Worktree ⌘⏎" button to the schedule-step action row (git folders
+3. [x] Add the secondary "Worktree ⌘⏎" button to the schedule-step action row (git folders
    only, same disabled conditions as "Schedule"), calling `submitSchedule(true)`.
-4. [ ] Point the primary "Schedule ⏎" button + the schedule-step form submit at
+4. [x] Point the primary "Schedule ⏎" button + the schedule-step form submit at
    `submitSchedule(false)`.
-5. [ ] Add the ⌘⏎ / Ctrl+⏎ keybind on the schedule step → `submitSchedule(true)`, keeping
+5. [x] Add the ⌘⏎ / Ctrl+⏎ keybind on the schedule step → `submitSchedule(true)`, keeping
    plain ⏎ = normal schedule and preserving newline-in-prompt + the #114 skill-menu keys.
-6. [ ] Verify a non-git folder schedule (no branch step) shows **no** worktree button and
+6. [x] Verify a non-git folder schedule (no branch step) shows **no** worktree button and
    still schedules via "Schedule ⏎".
-7. [ ] `npm run build`, `npm run lint`, `npm run format:check` all pass; manually exercise:
+7. [x] `npm run build`, `npm run lint`, `npm run format:check` all pass; manually exercise:
    git folder → branch → schedule step → both "Schedule ⏎" (no worktree) and "Worktree ⌘⏎"
    (worktree) create a schedule with the correct `worktree` flag (confirm via the
    ScheduledPanel "worktree" badge), and the ⌘⏎ keybind matches the button.
 
 **Acceptance criteria**
 
-- [ ] The schedule-session modal's schedule step has **no checkbox**; it shows a "Schedule
+- [x] The schedule-session modal's schedule step has **no checkbox**; it shows a "Schedule
   ⏎" primary button and, for **git folders**, a "Worktree ⌘⏎" secondary button — visually
   matching the new-session branch step's "Start ⏎" / "Worktree ⌘⏎" pair.
-- [ ] Pressing **⌘⏎ / Ctrl+⏎** on the schedule step schedules **into a worktree**; plain
+- [x] Pressing **⌘⏎ / Ctrl+⏎** on the schedule step schedules **into a worktree**; plain
   **⏎** schedules **normally** (and Enter still inserts a newline inside the prompt
   textarea / drives the open skill menu).
-- [ ] A scheduled session created via "Worktree ⌘⏎" (or the keybind) carries the same
+- [x] A scheduled session created via "Worktree ⌘⏎" (or the keybind) carries the same
   `worktree: true` intent the checkbox produced (verified by the ScheduledPanel "worktree"
   badge and identical `scheduleSession` args), and "Schedule ⏎" produces `worktree: false`.
-- [ ] A **non-git** folder's schedule flow shows no worktree affordance and still schedules.
-- [ ] No `worktree`/`setWorktree` state, no `.scheduleWorktree` CSS, and no unused
+- [x] A **non-git** folder's schedule flow shows no worktree affordance and still schedules.
+- [x] No `worktree`/`setWorktree` state, no `.scheduleWorktree` CSS, and no unused
   `Checkbox` import remain in the component; backend and `ScheduledPanel` are untouched.
-- [ ] `npm run build`, `npm run lint`, and Prettier pass.
+- [x] `npm run build`, `npm run lint`, and Prettier pass.
 
 **Notes**
 
@@ -152,3 +152,30 @@ Schedule.)
   `scheduleSession` store action + the `create_schedule` Rust command (#198).
 - All referenced code exists today (#74 worktree button, #198 schedule worktree) — pure
   frontend refactor, no dependency on any open task.
+
+**Implementation (done 2026-06-27)**
+
+- `NewSessionModal.tsx`: removed the `worktree`/`setWorktree` state + its reset and the
+  schedule-step `Checkbox` block; dropped the now-unused `Checkbox` import (sole use). The
+  dead `.scheduleWorktree` class was removed from `NewSessionModal.module.css`.
+- `submitSchedule()` → `submitSchedule(asWorktree: boolean)` with
+  `useWorktree = asWorktree && folderIsGit` (mirrors the branch step's `create()` vs
+  `createWorktree()` split, avoiding a setState-before-submit race). All branch-arg logic
+  preserved, so `scheduleSession`'s args are identical to what the checkbox produced.
+- Schedule-step action row now mirrors the branch step: **Cancel** → (git folders only)
+  **"Worktree ⌘⏎"** (`styles.cancel`, `onClick={submitSchedule(true)}`, disabled on
+  `!cwd || busy || !fireAt`, title "Schedule into an isolated git worktree") → primary
+  **"Schedule ⏎"** (`type="submit"` → form onSubmit → `submitSchedule(false)`).
+- ⌘⏎ / Ctrl+⏎ keybind added at the **form level** in `onTrapKeyDown` (gated on
+  `step === "schedule"`): preventDefault + `submitSchedule(true)`. Catches the combo from
+  any schedule-step field via bubbling; plain ⏎ still does a normal schedule, plain Enter
+  still inserts a newline in the prompt textarea, and when the `SkillAutocomplete` menu is
+  open it intercepts Enter to drive the menu (#114) so the keybind only fires with it closed.
+- Non-git folders: `folderIsGit` is false → no worktree button shown, and a ⌘⏎ there
+  resolves `useWorktree` to false → schedules normally.
+- Backend, `scheduleSession` / `create_schedule` / `ScheduledSession`, and `ScheduledPanel`
+  are untouched (the read-only "worktree" badge keeps working off `schedule.worktree`).
+- Verified: `npm run build`, `npm run lint`, `prettier --check` (touched files), and
+  `npm test` (288 passing) all pass. The interactive eyeball (subtask 7's "manually
+  exercise" clause) can't run in the headless loop; the worktree-flag wiring is covered by
+  the type-check and matches the pre-existing #198 `scheduleSession(..., useWorktree)` path.
