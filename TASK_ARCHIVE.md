@@ -4998,3 +4998,51 @@ parent-dir-as-root pattern, and the cross-platform `splitPath` / `pickFile` help
 
 ---
 
+### 225. [x] Show a subtle current-branch badge next to each sidebar folder, kept in sync from any source
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+In the left sidebar, show a **subtle, grayed-out branch badge next to each top-level folder (repo)
+name** displaying that folder's current git branch, kept **in sync when the branch changes from any
+source** — an app agent, an in-terminal `git checkout`, or an external tool. The existing #212
+busy→idle edge refresh covered in-app changes but missed **external** checkouts and **idle repos
+with no busy session**, so this adds focus/visibility + interval polling on top.
+
+**What shipped** (commit `d9f7606`, 2026-06-28) — frontend-only, reusing the shipped `branches`
+map (no backend change):
+
+- **Badge UI (`src/components/Sidebar/Sidebar.tsx` + `Sidebar.module.css`):** the repo header now
+  renders `<span className={styles.repoBranch} title={branches[repo]}>{branches[repo]}</span>`
+  next to the folder name, shown only when `branches[repo]` is non-empty (non-git/unknown folders
+  show nothing). The `.repoBranch` style is muted/small and truncates with ellipsis so it doesn't
+  crowd the name/count/`+`. Expanded sidebar only (the collapsed icon rail is unchanged).
+- **Sync from any source (a main-window-only `useEffect`):** keeps the #212 edge refresh and adds
+  (a) a `focus` + `visibilitychange` listener that calls `refreshBranches()` when the window
+  becomes focused/visible (catches "changed it elsewhere, came back"), and (b) a **~15s interval
+  poll** (`BRANCH_POLL_MS`) that runs only while the window is visible and is **paused when
+  `document.hidden`**. `refreshBranches` already batches all repos into one `currentBranches` IPC
+  call, so each tick is a single call; listeners + interval are cleaned up on unmount.
+
+**Key files touched:** `src/components/Sidebar/Sidebar.tsx` (repo-header badge + focus/visibility/
+poll effect), `src/components/Sidebar/Sidebar.module.css` (`.repoBranch`).
+
+**Dependencies:** none — builds on the shipped `branches` map + `refreshBranches` (#212) and the
+repo header.
+
+**Notes**
+
+- **Cross-platform:** pure frontend; the branch reads go through the existing cross-platform
+  `current_branches` git shell-out, and the focus/visibility/interval APIs are standard DOM working
+  in both WKWebView and WebView2. Plain-CSS badge renders identically on macOS and Windows.
+- **Deliberately augments #212:** #212 chose no poll timer; this task's broader "any source"
+  requirement adds one (visible-only, paused when hidden, all-repos-batched) so external/idle-repo
+  changes are caught.
+- **Out of scope:** the collapsed icon rail (no room for a text badge), worktree sub-headers
+  (already show their branch), the session-row label behavior, and any backend change.
+
+---
+

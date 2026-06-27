@@ -25,6 +25,3 @@ kanban-plugin: board
 	Depends on: #227
 
 ## DONE
-
-- [x] #225 — Subtle current-branch badge next to each sidebar folder, synced from any source
-	Plan: TASK-225.md
