@@ -8,6 +8,7 @@ import {
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  Bug,
   Clock,
   FileDiff,
   FileText,
@@ -26,7 +27,7 @@ import {
 } from "lucide-react";
 
 import { noAutoCapitalize } from "../../inputProps";
-import { revealFileInFinder, revealPath } from "../../ipc";
+import { openUrl, revealFileInFinder, revealPath } from "../../ipc";
 import { FORK_UNAVAILABLE_REASON, repoName, sessionLabel } from "../../paths";
 import { formatFireTime } from "../../time";
 import {
@@ -46,6 +47,11 @@ import styles from "./Sidebar.module.css";
 /** Fixed width of the collapsed sidebar icon rail (#168). The persisted
  * `sidebarWidth` is left untouched while collapsed, so expanding restores it. */
 const SIDEBAR_RAIL_WIDTH = 56;
+
+/** Bug-report / feature-request Google Form, opened by the footer feedback button
+ * (#210) in the default browser via the http/https-only `open_url` (#109). */
+const FEEDBACK_FORM_URL =
+  "https://docs.google.com/forms/d/e/1FAIpQLSf-EOSBcCTLUN-00UhBGj4XJ27ky7d2ZQp8YcOLwAVvTUkXGw/viewform?usp=publish-editor";
 
 /** Shared right-click menu state for the non-agent sidebar rows (#132). Mirrors
  * `SessionRow`'s pattern — a cursor-positioned, viewport-clamped `{x,y}` that
@@ -1661,6 +1667,17 @@ function Sidebar() {
           aria-label="Settings"
         >
           <SettingsIcon size={16} strokeWidth={1.5} />
+        </button>
+        {/* Feedback (#210): opens the bug-report / feature-request Google Form in
+            the default browser. Stacks with the others in the collapsed rail. */}
+        <button
+          type="button"
+          className={styles.footerButton}
+          onClick={() => void openUrl(FEEDBACK_FORM_URL)}
+          title="Send feedback"
+          aria-label="Send feedback"
+        >
+          <Bug size={16} strokeWidth={1.5} />
         </button>
         <button
           type="button"

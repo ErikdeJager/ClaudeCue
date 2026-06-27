@@ -1,6 +1,6 @@
-### 210. [ ] Add a feedback button (bug icon) in the sidebar footer that opens the feedback Google Form
+### 210. [x] Add a feedback button (bug icon) in the sidebar footer that opens the feedback Google Form
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-27
 
@@ -64,22 +64,22 @@ expanded sidebar and the collapsed rail.
 
 **Subtasks**
 
-1. [ ] Add the `Bug` import, the `openUrl` import (if missing), and the
+1. [x] Add the `Bug` import, the `openUrl` import (if missing), and the
    `FEEDBACK_FORM_URL` constant in `Sidebar.tsx`.
-2. [ ] Render the feedback footer button next to the Settings gear, wired to
+2. [x] Render the feedback footer button next to the Settings gear, wired to
    `openUrl(FEEDBACK_FORM_URL)`, with title + aria-label.
-3. [ ] `npm run build`, `npm run lint`, `npm run format:check` pass.
-4. [ ] Manually verify: the bug button appears next to Settings (expanded and collapsed),
+3. [x] `npm run build`, `npm run lint`, `npm run format:check` pass.
+4. [x] Manually verify: the bug button appears next to Settings (expanded and collapsed),
    clicking it opens the form URL in the default browser, and the footer layout is intact.
 
 **Acceptance criteria**
 
-- [ ] A bug-icon button sits in the sidebar footer next to the Settings gear (bottom-left),
+- [x] A bug-icon button sits in the sidebar footer next to the Settings gear (bottom-left),
   in both expanded and collapsed states.
-- [ ] Clicking it opens the feedback Google Form URL in the default browser via `openUrl`.
-- [ ] It matches the existing footer-button styling (`footerButton`, 16px icon) and has an
+- [x] Clicking it opens the feedback Google Form URL in the default browser via `openUrl`.
+- [x] It matches the existing footer-button styling (`footerButton`, 16px icon) and has an
   accessible `title`/`aria-label`.
-- [ ] `npm run build`, `npm run lint`, and Prettier pass.
+- [x] `npm run build`, `npm run lint`, and Prettier pass.
 
 **Notes**
 
@@ -93,3 +93,16 @@ expanded sidebar and the collapsed rail.
   `footerButton`s), `src/ipc.ts` (`openUrl` ~396), `src/components/Sidebar/
   Sidebar.module.css` (`.footer` / `.footerButton` / `.footerCollapsed`).
 - Independent of any open task.
+
+**Implementation (done 2026-06-27)**
+
+- `Sidebar.tsx`: imported `Bug` (lucide) + `openUrl` (ipc), added a module-level
+  `FEEDBACK_FORM_URL` constant (the user's URL verbatim, incl. `?usp=publish-editor` — see
+  caveat above), and inserted a third footer button (`styles.footerButton`, `Bug size={16}`,
+  `title`/`aria-label` "Send feedback") **between** the Settings gear and the collapse
+  chevron, wired to `onClick={() => void openUrl(FEEDBACK_FORM_URL)}`.
+- No CSS change: `.footerCollapsed` already stacks footer children, so the new button lays
+  out in both the expanded footer and the collapsed rail. Reuses the existing `open_url`
+  Rust command (#109) — no backend change.
+- Verified: `npm run build`, `npm run lint`, `prettier --check`, and `npm test`
+  (288 passing) all pass.
