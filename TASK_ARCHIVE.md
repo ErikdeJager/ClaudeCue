@@ -4938,3 +4938,63 @@ blocks can be evenly distributed too, reusing the shipped pure `equalize` op.
 
 ---
 
+### 224. [x] Canvas template file block: support full paths + a relative/absolute path choice
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+A Canvas template's **"open-file" block** (#117/#118) previously took only a **bare relative
+filename** resolved inside the folder chosen at template-use time. This extends it to accept a
+**full relative path** (folders + filename, resolved from the chosen project root) or an **absolute
+path** (from the filesystem root), via an explicit **relative ⇄ absolute** choice in the block
+config — with **no backend change** (relative subpaths already validate via `repo.join`; absolute
+resolves through the shipped #163 parent-dir-as-root pattern).
+
+**What shipped** (commit `2659b12`, 2026-06-28) — frontend-only:
+
+- **`src/types/index.ts`:** added `filePathMode?: "relative" | "absolute"` to the open-file block
+  content (optional; **absent / undefined → relative**, so existing templates are unchanged).
+- **Pure `fileBlockTarget(block, cwd)` helper (`src/components/Canvas/templateInstantiate.ts`):**
+  maps **relative** → `{ repoPath: cwd, file }` (subpaths allowed; backend joins, `/`-separated so
+  it's cross-platform) and **absolute** → `splitPath(file)` → `{ repoPath: dir, file: base }` (the
+  file's own parent dir as the root — the #163 trick — so the containment check passes). Used by
+  **both** `resolvedContent` (instantiation mapping) and `store.ts resolveTemplateBlock` for the
+  `fileExists` check, the live content, and `registerOverviewPanel`.
+- **Template Editor UI (`TemplateEditor.tsx` + `TemplateEditor.module.css`):** a relative ⇄
+  absolute segmented control bound to `filePathMode`; relative mode keeps the text input with an
+  updated label/placeholder/helper making clear subfolders are allowed; absolute mode adds a
+  text input + **"Browse…"** button (reusing `pickFile()`, mirroring #163) and a portability-caveat
+  helper.
+- **Tests (`templateInstantiate.test.ts`):** +6 covering bare relative (no `filePathMode`),
+  explicit relative subpath, POSIX absolute, Windows-backslash absolute, and the unset-file
+  fallback.
+
+**Key files touched:** `src/components/Canvas/templateInstantiate.ts` (the `fileBlockTarget` helper
++ mapping), `src/store.ts` (`resolveTemplateBlock` uses the helper), `src/components/TemplateEditor/
+TemplateEditor.tsx` + `.module.css` (mode toggle + Browse), `src/types/index.ts` (the
+`filePathMode` field), `src/components/Canvas/templateInstantiate.test.ts` (tests).
+
+**Dependencies:** none — builds on shipped templates (#117/#118), the #163 absolute-file
+parent-dir-as-root pattern, and the cross-platform `splitPath` / `pickFile` helpers.
+
+**Notes**
+
+- **No backend change:** relative subpaths already validate via `repo.join` (treats `/` as a
+  separator on both OSes); absolute reuses the #163 parent-dir-as-root containment trick — so
+  `files.rs` was untouched.
+- **Cross-platform:** relative paths stored `/`-separated → portable across macOS and Windows;
+  absolute paths are inherently machine/OS-specific (`splitPath` handles `/` and `\`, `pickFile`
+  returns an OS-native path), with the portability caveat documented in the editor helper text. A
+  missing absolute file fails gracefully (the panel stays `pending` with inline error + Retry,
+  #118).
+- **Autonomous decision (logged in `ASSUMPTIONS.md`):** an explicit `filePathMode` field
+  (default relative) over inferring absolute-ness from the path string — matches the card's
+  "choice", clearer on re-edit, back-compatible.
+- **Out of scope:** the other block kinds (new-agent / new-terminal / open-diff), and making
+  absolute-path templates portable across machines (machine-specific by design).
+
+---
+
