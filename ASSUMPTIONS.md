@@ -784,3 +784,21 @@ autonomously (user not answering):
 - **Depends on #227** — it provides the extended language set + the
   `prismLang`/`highlightToHtml` surface, and both touch the shared highlight infra, so #229
   lands after #227. (First task in this batch with a non-`none` dependency.)
+
+## TASK-230 — Add a "Commits" source to the diff viewer
+
+Card: add a "commits" option that lists previous commits; clicking one shows its diff.
+Grounded: the DiffInspector has a `DiffSource` toggle (working/compare #81) + persisted
+panel state; the backend has `working_diff`/`compare_branches` + the shared
+`parse_unified_diff`; no commit commands exist. Decided autonomously (user not answering):
+
+- **Commits = a third `DiffSource`** (Working/Compare/Commits), reusing the existing diff
+  body. Two new **read-only** git commands: `list_commits(cwd, limit)` (bounded `git log`,
+  ~100, cap surfaced) + `commit_diff(cwd, sha)` (`git show --format=` → `parse_unified_diff`;
+  handles root + normal commits; merge commits accept git's default).
+- **Persist the source + selected sha** on the repo's diff panel (ephemeral fallback
+  allowed).
+- **Reads only** — consistent with the read-mostly git rule; all git via the
+  cross-platform `run_git`/hidden-command helper. **Depends on: none**; the later diff-viewer
+  **redesign** card depends on this (must keep commits available), and #229 highlighting
+  applies to commit diffs for free.
