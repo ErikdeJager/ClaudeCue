@@ -4070,3 +4070,53 @@ not a cycle).
 
 ---
 
+### 207. [x] Sidebar click in Canvas mode: jump to Overview when the item isn't in the canvas
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-27
+
+**Description**
+
+Clicking a sidebar row routes through the store action `selectItem` (#79 "select/jump in the
+current view"). In Canvas view it looked for the item as a leaf in the **active** canvas tab and
+jumped to that panel if found; **if not found it was a dead end** — `set({ selectedId: null })`
++ a *"Item not present in canvas — drag to add"* toast. Since Overview renders **every** sidebar
+item as a column (agents and non-agent panels and pending schedules, #174), this changes the
+not-present case to **switch to Overview and select/jump to that item there** — the user is
+taken to the thing they clicked instead of a toast.
+
+**What shipped** (commit `af627f7`, 2026-06-27) — a one-line branch swap in a pure store action:
+
+- **`src/store.ts` `selectItem`:** the not-present branch now does `set({ view: "overview",
+  selectedId: item.id })` instead of `set({ selectedId: null })` + the *"not present in canvas"*
+  `pushToast`. The present-in-active-tab jump (`set({ selectedId, activeLeafId })`) and the
+  non-canvas (Overview) branch are unchanged; the inline comment was updated to describe the new
+  Canvas behavior.
+- **Generalized to all item kinds** (the action is generic over `SidebarItem`), so it covers
+  agents and non-agent items (files/diffs/terminals/kanban/schedules) alike — Overview has a
+  column for each (#174). This **intentionally reverses #79's "never auto-switch
+  Overview↔Canvas" rule for the not-present case only** (the present case still never switches).
+- `openSessionInCanvas` (#153, the agent-row context-menu cross-tab "Open in canvas" path) is
+  untouched and remains the way to bring an agent into a canvas across tabs. No test asserted the
+  old toast/deselect, so none needed updating.
+
+**Key files touched:** `src/store.ts` (`selectItem`).
+
+**Dependencies:** none — independent of #205/#206; a self-contained change to one store branch.
+
+**Notes**
+
+- **Autonomous refine (2026-06-27):** decisions logged in `ASSUMPTIONS.md` under TASK-207 —
+  generalized from "agent" to all item kinds (Overview has a column for each, #174); "present in
+  canvas" = the **active** tab (selectItem's existing scope; cross-tab jumps stay with
+  `openSessionInCanvas` #153); no toast on the switch; reverses #79's no-auto-switch rule for the
+  not-present case only.
+- **Runtime-unverified** in this headless loop: the interactive eyeball (Canvas click on a
+  present item still jumps to its panel; a not-present item switches to Overview and scrolls its
+  column in; the Overview click path unchanged). The change is a one-line branch swap in a pure
+  store action. `npm run build`, `npm run lint`, `prettier --check src/store.ts`, and `npm test`
+  (288 passing) all pass.
+
+---
+

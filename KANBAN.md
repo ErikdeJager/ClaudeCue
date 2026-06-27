@@ -22,6 +22,3 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #207 — Sidebar click in Canvas mode: jump to Overview when the item isn't in the canvas
-	Plan: TASK-207.md
-
