@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 
 import { noAutoCapitalize } from "../../inputProps";
+import { kbdHint } from "../../platform";
 import { useStore } from "../../store";
 import type { CanvasTab } from "../../types";
 import styles from "./Canvas.module.css";
@@ -193,6 +194,7 @@ function useDropdownMenu() {
 function CanvasTabs() {
   const canvases = useStore((s) => s.canvases);
   const activeCanvasId = useStore((s) => s.activeCanvasId);
+  const platform = useStore((s) => s.platform);
   const addCanvas = useStore((s) => s.addCanvas);
   const reorderCanvases = useStore((s) => s.reorderCanvases);
   const popOutCanvas = useStore((s) => s.popOutCanvas);
@@ -268,8 +270,8 @@ function CanvasTabs() {
           ref={addMenu.btnRef}
           className={styles.tabAdd}
           onClick={addMenu.toggle}
-          title="New tab (⌘T)"
-          aria-label="New tab (⌘T)"
+          title={`New tab (${kbdHint(platform, "⌘T", "Ctrl+T")})`}
+          aria-label={`New tab (${kbdHint(platform, "⌘T", "Ctrl+T")})`}
           aria-haspopup="menu"
           aria-expanded={addMenu.open}
         >
@@ -292,7 +294,9 @@ function CanvasTabs() {
               }}
             >
               New tab
-              <kbd className={styles.menuKbd}>⌘T</kbd>
+              <kbd className={styles.menuKbd}>
+                {kbdHint(platform, "⌘T", "Ctrl+T")}
+              </kbd>
             </button>
             <button
               type="button"

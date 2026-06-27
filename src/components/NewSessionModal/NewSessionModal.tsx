@@ -1305,7 +1305,10 @@ function NewSessionModal() {
                   disabled={!cwd || busy || !fireAt}
                   title="Schedule into an isolated git worktree"
                 >
-                  Worktree <kbd className={styles.btnKbd}>⌘⏎</kbd>
+                  Worktree{" "}
+                  <kbd className={styles.btnKbd}>
+                    {kbdHint(platform, "⌘⏎", "Ctrl+↵")}
+                  </kbd>
                 </button>
               )}
               <button

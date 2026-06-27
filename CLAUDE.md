@@ -449,8 +449,13 @@ cargo llvm-cov --manifest-path src-tauri/Cargo.toml --html   # html report
 > **`splitPath`** splits on `/` **or** `\` (#163); **reveal-a-file** uses `open -R` on macOS
 > and `explorer.exe /select,<path>` (separators normalized to `\`) on Windows (#171); and any
 > new shortcut hint / "Reveal in Finder" label routes through `kbdHint` / `revealLabel` so it
-> reads `Ctrl+…` / "Reveal in Explorer" on Windows (e.g. #162 ⌘S, #168 ⌘B, #172 ⌘N). New
-> keyboard *handling* stays `metaKey || ctrlKey`, so a Ctrl shortcut fires on Windows for free.
+> reads `Ctrl+…` / "Reveal in Explorer" on Windows (e.g. #162 ⌘S, #168 ⌘B, #172 ⌘N, the #204
+> schedule-step **Worktree ⌘⏎** button, and the #206 **New tab ⌘T** add-button hint + menu kbd).
+> New keyboard *handling* stays `metaKey || ctrlKey`, so a Ctrl shortcut fires on Windows for
+> free. A new feature that **opens a URL** reuses the http/https-only `open_url` (`os_open` →
+> `explorer.exe` on Windows), so the #210 sidebar **feedback button** works unchanged; and
+> user-facing copy that names the platform (the #208 first-release patch note) reads "macOS and
+> Windows".
 
 ## v1 scope decisions / out of scope
 
