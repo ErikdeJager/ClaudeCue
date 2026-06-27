@@ -277,6 +277,74 @@
   color: var(--text-primary);
 }
 
+/* Prism syntax highlighting in the diff (#229), mirroring the FileViewer's token
+   palette so the two viewers match. Same `--syn-*` Catppuccin tokens (the single
+   source of truth in tokens.css) as `FileViewer.module.css`, scoped to the diff's
+   highlighted `.content` spans. The add/del/context row backgrounds are untouched —
+   only the code text is re-colored. */
+.content :global(.token.comment),
+.content :global(.token.prolog),
+.content :global(.token.doctype),
+.content :global(.token.cdata) {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.content :global(.token.punctuation),
+.content :global(.token.operator),
+.content :global(.token.entity) {
+  color: var(--syn-punct);
+}
+.content :global(.token.keyword),
+.content :global(.token.atrule),
+.content :global(.token.rule),
+.content :global(.token.selector) {
+  color: var(--syn-keyword);
+}
+.content :global(.token.string),
+.content :global(.token.char),
+.content :global(.token.attr-value),
+.content :global(.token.inserted) {
+  color: var(--syn-string);
+}
+.content :global(.token.number),
+.content :global(.token.boolean),
+.content :global(.token.constant),
+.content :global(.token.symbol) {
+  color: var(--syn-number);
+}
+.content :global(.token.function),
+.content :global(.token.property) {
+  color: var(--syn-function);
+}
+.content :global(.token.tag),
+.content :global(.token.class-name),
+.content :global(.token.builtin),
+.content :global(.token.attr-name) {
+  color: var(--syn-type);
+}
+.content :global(.token.regex),
+.content :global(.token.variable),
+.content :global(.token.important),
+.content :global(.token.url) {
+  color: var(--syn-accent);
+}
+.content :global(.token.deleted) {
+  color: var(--status-error);
+}
+.content :global(.token.key) {
+  color: var(--syn-function);
+}
+.content :global(.token.section),
+.content :global(.token.section-name) {
+  color: var(--syn-keyword);
+}
+.content :global(.token.value) {
+  color: var(--syn-string);
+}
+.content :global(.token.annotation) {
+  color: var(--syn-accent);
+}
+
 .addRow {
   background: var(--diff-add-bg);
 }

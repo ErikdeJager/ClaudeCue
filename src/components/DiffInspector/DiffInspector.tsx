@@ -4,7 +4,31 @@ import { RefreshCw } from "lucide-react";
 import { compareBranches, listBranches, workingDiff } from "../../ipc";
 import { useStore } from "../../store";
 import type { BranchList, FileDiff, HunkLine, WorkingDiff } from "../../types";
+import { prismLang } from "../FileViewer/fileType";
+import { highlightToHtml } from "../FileViewer/prism";
 import styles from "./DiffInspector.module.css";
+
+/** A diff line's code text, syntax-highlighted (#229) when `lang` is known, else
+ * plain. `highlightToHtml` HTML-escapes its input (Prism + the escape fallback), so
+ * the injected markup carries no raw file HTML — safe to `dangerouslySetInnerHTML`.
+ * Per-line tokenization (lightweight; cross-line constructs aren't stitched). */
+function CodeContent({
+  text,
+  lang,
+}: {
+  text: string;
+  lang: string | undefined;
+}) {
+  if (lang) {
+    return (
+      <span
+        className={styles.content}
+        dangerouslySetInnerHTML={{ __html: highlightToHtml(text, lang) }}
+      />
+    );
+  }
+  return <span className={styles.content}>{text}</span>;
+}
 
 // Poll the working-tree diff while the inspector is open so agent edits appear
 // on their own (#29). ~1.5s feels live without hammering `git`.
@@ -24,7 +48,13 @@ type DiffSource = "working" | "compare";
 // virtualization in v1 — see the pass-2 punch list).
 const MAX_DIFF_ROWS = 600;
 
-function UnifiedRow({ line }: { line: HunkLine }) {
+function UnifiedRow({
+  line,
+  lang,
+}: {
+  line: HunkLine;
+  lang: string | undefined;
+}) {
   if (line.type === "hunk") {
     return <div className={styles.hunkHeader}>{line.text}</div>;
   }
@@ -40,12 +70,18 @@ function UnifiedRow({ line }: { line: HunkLine }) {
       <span className={styles.gutter}>{line.old_no ?? ""}</span>
       <span className={styles.gutter}>{line.new_no ?? ""}</span>
       <span className={styles.marker}>{marker}</span>
-      <span className={styles.content}>{line.text}</span>
+      <CodeContent text={line.text} lang={lang} />
     </div>
   );
 }
 
-function SplitRow({ line }: { line: HunkLine }) {
+function SplitRow({
+  line,
+  lang,
+}: {
+  line: HunkLine;
+  lang: string | undefined;
+}) {
   if (line.type === "hunk") {
     return <div className={styles.hunkHeader}>{line.text}</div>;
   }
@@ -59,7 +95,7 @@ function SplitRow({ line }: { line: HunkLine }) {
         {showLeft && (
           <>
             <span className={styles.gutter}>{line.old_no ?? ""}</span>
-            <span className={styles.content}>{line.text}</span>
+            <CodeContent text={line.text} lang={lang} />
           </>
         )}
       </div>
@@ -69,7 +105,7 @@ function SplitRow({ line }: { line: HunkLine }) {
         {showRight && (
           <>
             <span className={styles.gutter}>{line.new_no ?? ""}</span>
-            <span className={styles.content}>{line.text}</span>
+            <CodeContent text={line.text} lang={lang} />
           </>
         )}
       </div>
@@ -82,12 +118,14 @@ function DiffFile({ file, mode }: { file: FileDiff; mode: DiffMode }) {
     return <div className={styles.binary}>Binary file — no preview.</div>;
   }
   const Row = mode === "split" ? SplitRow : UnifiedRow;
+  // Detect the language once per file (#229) from its path; undefined → plain text.
+  const lang = prismLang(file.path);
   const truncated = file.hunks.length > MAX_DIFF_ROWS;
   const rows = truncated ? file.hunks.slice(0, MAX_DIFF_ROWS) : file.hunks;
   return (
     <div className={styles.code}>
       {rows.map((line, i) => (
-        <Row key={i} line={line} />
+        <Row key={i} line={line} lang={lang} />
       ))}
       {truncated && (
         <div className={styles.truncated}>

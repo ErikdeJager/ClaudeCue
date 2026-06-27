@@ -1,6 +1,6 @@
-### 229. [ ] Syntax-highlight the diff viewer (reusing the file viewer's languages)
+### 229. [x] Syntax-highlight the diff viewer (reusing the file viewer's languages)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #227
 **Created:** 2026-06-28
 
