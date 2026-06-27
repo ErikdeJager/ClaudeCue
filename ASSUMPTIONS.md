@@ -767,3 +767,20 @@ Decided autonomously (user not answering):
   expanded `SessionRow` consumes. Documented fallback: omit Rename in the rail.
 - **Drag-into-Canvas from the rail is out of scope** (card is click-only). **Depends on:
   none** (builds on the shipped rail #168/#214 + the SessionRow menu #57/#131/#142/#153).
+
+## TASK-229 — Syntax-highlight the diff viewer
+
+Card: extend syntax highlighting (same languages as the file-viewer task) to the diff
+viewer. Grounded: `DiffInspector`'s `UnifiedRow`/`SplitRow` render line code as plain text;
+the file's `path` is available; #227 exposes pure `prismLang` + `highlightToHtml`. Decided
+autonomously (user not answering):
+
+- **Reuse #227's `prismLang(file.path)` + `highlightToHtml`** (no duplicated language
+  config); highlight via `dangerouslySetInnerHTML` (safe — `highlightToHtml` escapes input
+  and falls back to plain escaped text for uncurated types). Keep the `+`/`−` markers and
+  add/del/context row backgrounds unchanged; share the FileViewer's Prism token CSS.
+- **Per-line highlighting** (lightweight; accepts imperfect cross-line tokenization of
+  block comments/template strings) — matches the card's "lightweight" intent.
+- **Depends on #227** — it provides the extended language set + the
+  `prismLang`/`highlightToHtml` surface, and both touch the shared highlight infra, so #229
+  lands after #227. (First task in this batch with a non-`none` dependency.)
