@@ -9,9 +9,6 @@ kanban-plugin: board
 - [ ] Reduce the update button's margin (keep a little) and add a hover light-up effect
 - [ ] Play a one-time attention-grabbing animation (ping/glow/border) on the update button when it first appears on app open, then leave it looking normal
 - [ ] Fix the bug button on Windows opening the documents folder instead of the feedback forum in the browser
-- [ ] Reduce the update button's margin (keep a little) and add a hover light-up effect
-- [ ] Play a one-time attention-grabbing animation (ping/glow/border) on the update button when it first appears on app open, then leave it looking normal
-- [ ] Fix the bug button on Windows opening the documents folder instead of the feedback forum in the browser
 
 
 ## READY
