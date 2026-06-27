@@ -6,11 +6,18 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Rework the Canvas tab-bar button ordering: turn the + button into a dropdown menu offering "New tab" or a template option, and move the layout/distribute control elsewhere (e.g. the right side of the bar)
-- [ ] Add a keybind to create a new Canvas tab, and surface the keybind in the UI
-- [ ] When clicking a sidebar agent in Canvas mode that isn't present in the canvas, jump to that agent in Overview mode instead of doing nothing
 
 ## READY
+
+- [ ] #205 — Canvas tab bar: + becomes a "New tab" dropdown; move distribute control to the right
+	Plan: TASK-205.md
+	Depends on: none
+- [ ] #206 — Add a ⌘T keybind to create a new Canvas tab, and surface it in the UI
+	Plan: TASK-206.md
+	Depends on: #205
+- [ ] #207 — Sidebar click in Canvas mode: jump to Overview when the item isn't in the canvas
+	Plan: TASK-207.md
+	Depends on: none
 
 
 ## DONE

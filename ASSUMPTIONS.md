@@ -333,3 +333,44 @@ answering):
 - **Backend + `ScheduledPanel` untouched** — `scheduleSession(..., useWorktree)` (#198)
   already takes the flag; ScheduledPanel only shows a read-only "worktree" badge.
   **Depends on: none** (all referenced code ships today).
+
+## TASK-205 — Canvas tab bar: + dropdown + move distribute right
+
+Reorg of the `CanvasTabs` toolbar (+ / distribute / Templates ▾). Card: turn + into a
+dropdown offering "New tab" or a template option; move distribute elsewhere (right). Decided
+autonomously (refine loop, user not answering):
+
+- **+ dropdown holds the two tab-creation items only** — "New tab" (`addCanvas`) and "New
+  tab from template…" (`openTemplateUse`); the latter **moves out of** Templates ▾ into +.
+- **Templates ▾ kept for template management** (New template… / Save current canvas as
+  template… / Manage templates…). Rejected folding everything into + (a + "add" affordance
+  housing "Manage templates…" is semantically off, and broader than the card asked).
+- **Distribute (Grid2x2) moves to the far right** via `margin-left: auto`, action/gating
+  unchanged. Dropdowns stay `position: fixed` (escape the strip's overflow-x clip, #129).
+  **Depends on: none.**
+
+## TASK-206 — ⌘T new-Canvas-tab keybind + UI hint
+
+- **⌘T / Ctrl+T** (unused; conventional "new tab"). Treated as a *create* action (like
+  ⌘N/⌘K) → works from anywhere in the **main window** and **switches to Canvas** then
+  `addCanvas()` (over a Canvas-view-only scoping like ⌘1–9, which would dead-end from
+  Overview). Main-window only, inert while new-session/create-panel modals are open.
+- **Surfaced** as a `⌘T` `<kbd>` on the **"New tab"** item of #205's + dropdown + the
+  trigger tooltip + the useKeyboardNav legend. **Depends on #205** (the dropdown item is the
+  hint's home; #206 builds on #205, not a cycle).
+
+## TASK-207 — Sidebar click in Canvas: jump to Overview if not in canvas
+
+`selectItem` (store.ts) in Canvas view: present-in-active-tab → jump to panel; **not present
+→ today deselects + toasts "not present in canvas"** (a dead end). Change the not-present
+branch to `set({ view: "overview", selectedId: item.id })`. Decided autonomously:
+
+- **Applies to all item kinds, not just agents** (card says "agent", but the dead-end is
+  identical for file/diff/terminal/kanban/schedule and Overview has a column for each, #174).
+  Easy to scope to agents later.
+- **"Present" = the active canvas tab** (selectItem's existing scope; never switches tabs);
+  cross-tab jumps stay with the "Open in canvas" context action / `openSessionInCanvas`
+  (#153).
+- **No toast on switch**; intentionally reverses #79's "never auto-switch Overview↔Canvas"
+  for the not-present case only. selectItem is main-window only (no detached edge).
+  **Depends on: none.**
