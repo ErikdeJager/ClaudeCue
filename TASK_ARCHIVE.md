@@ -4120,3 +4120,52 @@ taken to the thing they clicked instead of a toast.
 
 ---
 
+### 208. [x] Rewrite the v0.0.1 patch notes to introduce the app as the first release
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-27
+
+**Description**
+
+The patch notes for the current version live at `src/patchnotes/0.0.1.json` (the #192 patch-notes
+system, rendered in **Settings → Updates → "What's new"** and used to generate the GitHub release
+body). They read like an **internal changelog** — enumerating recently implemented features. For
+a **0.0.1 first release** a brand-new user has no prior version to diff against, so the notes
+should **introduce what ClaudeCue is** and frame this as the initial release, presenting the core
+capabilities as a product pitch rather than a task-by-task changelog. **Content-only** edit of
+one JSON file — no code/pipeline change.
+
+**What shipped** (commit `b5a1ef7`, 2026-06-27):
+
+- Replaced `src/patchnotes/0.0.1.json`'s changelog-style entries with two intro categories
+  (keeping `version: "0.0.1"`, `date: "2026-06-26"`, and the `{version, date, changes:[{category,
+  items[]}]}` schema):
+  - **"welcome"** — what ClaudeCue is (a macOS app for running/managing many live `claude`
+    coding sessions side by side; each session a real terminal running the Claude Code CLI
+    wrapped with navigation/persistence/git-reading) + an explicit "This is the first release."
+  - **"highlights"** — the headline surfaces at a welcoming level: Overview (the agent wall,
+    grouped by repo, busy/idle status), Canvas (split-panel workspace mixing terminals with
+    file/git-diff/terminal/Kanban viewers, poppable tabs), and the repo-grouped sidebar
+    (searchable file tree, scheduled sessions, Canvas templates, worktree-isolated agents).
+- The schema has no free-text intro field, so the introduction is expressed through these two
+  arbitrary categories, which Title-Case cleanly via `categoryLabel` ("Welcome"/"Highlights")
+  and render as `<h4>` headers over bulleted lists. No change to `patchnotes.ts`,
+  `PatchNotes.tsx`, the Settings pane, or `scripts/patchnotes-to-md.mjs`.
+
+**Key files touched:** `src/patchnotes/0.0.1.json` (the only edit).
+
+**Dependencies:** none — content-only, independent of any task.
+
+**Notes**
+
+- **Autonomous refine (2026-06-27):** decisions logged in `ASSUMPTIONS.md` under TASK-208 — two
+  categories ("welcome" + "highlights") since the schema has no free-text intro field; `version`/
+  `date` kept unchanged.
+- **Runtime-unverified** in this headless loop: the Settings → Updates "What's new" eyeball. Vite
+  eagerly globs + parses the JSON (a malformed file would be dropped), so a clean `npm run build`
+  confirms it loads; `prettier --check` and `npm test` (288 passing, incl. patchnotes
+  normalization tests) all pass.
+
+---
+
