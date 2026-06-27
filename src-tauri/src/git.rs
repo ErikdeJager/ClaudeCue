@@ -247,6 +247,90 @@ pub fn compare_branches(
     })
 }
 
+/// One commit in a folder's history (#230) — the diff viewer's "Commits" source list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CommitInfo {
+    pub sha: String,
+    pub short_sha: String,
+    pub author: String,
+    pub date: String,
+    pub subject: String,
+}
+
+/// The latest `limit` commits on the folder's HEAD (#230), newest first. Fields are
+/// NUL-delimited (`%x00`) so a subject can hold any character; `%s` is single-line so
+/// records split cleanly on `\n`. Non-git / no-commits → empty (no error, like
+/// `working_diff`). The caller bounds `limit`.
+pub fn list_commits(cwd: impl AsRef<Path>, limit: u32) -> Vec<CommitInfo> {
+    let cwd = cwd.as_ref();
+    let n = limit.to_string();
+    let out = run_git_raw(
+        cwd,
+        &[
+            "log",
+            "-n",
+            &n,
+            "--pretty=format:%H%x00%h%x00%an%x00%ad%x00%s",
+            "--date=short",
+        ],
+    )
+    .unwrap_or_default();
+    out.lines()
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            let mut parts = line.splitn(5, '\u{0}');
+            let sha = parts.next()?.to_string();
+            if sha.is_empty() {
+                return None;
+            }
+            Some(CommitInfo {
+                sha,
+                short_sha: parts.next().unwrap_or("").to_string(),
+                author: parts.next().unwrap_or("").to_string(),
+                date: parts.next().unwrap_or("").to_string(),
+                subject: parts.next().unwrap_or("").to_string(),
+            })
+        })
+        .collect()
+}
+
+/// The patch a single commit introduced (#230) — `git show <sha>` with no commit
+/// header (`--format=`), parsed into the same `WorkingDiff` shape the body renders.
+/// Handles the **root** commit (full initial diff) and normal commits; a merge commit
+/// yields git's default `show` (often empty). Errors on an empty sha or a git failure;
+/// the sha is passed as a single arg (no refspec injection). Summary label = short sha.
+pub fn commit_diff(cwd: impl AsRef<Path>, sha: &str) -> Result<WorkingDiff, String> {
+    let cwd = cwd.as_ref();
+    if sha.trim().is_empty() {
+        return Err("empty commit sha".to_string());
+    }
+    let diff = run_git_raw(
+        cwd,
+        &[
+            "-c",
+            "core.quotepath=false",
+            "show",
+            "--no-color",
+            "--no-ext-diff",
+            "--format=",
+            sha,
+        ],
+    )
+    .ok_or_else(|| format!("could not read commit `{sha}`"))?;
+    let files = parse_unified_diff(&diff);
+    let adds: u32 = files.iter().map(|f| f.add).sum();
+    let dels: u32 = files.iter().map(|f| f.del).sum();
+    Ok(WorkingDiff {
+        summary: DiffSummary {
+            branch: sha.get(..7).unwrap_or(sha).to_string(),
+            files_changed: files.len() as u32,
+            adds,
+            dels,
+        },
+        files,
+    })
+}
+
 /// Local branches of `cwd` plus the current one (for the new-session branch
 /// picker). Non-git folders / repos with no branches return an empty list, which
 /// the UI treats as "just spawn here" (no branch picker).
@@ -1283,5 +1367,50 @@ index 0..1
         // No remote / tracking branch configured → pull has nothing to fast-forward.
         assert!(pull_ff(&dir).is_err());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn list_commits_and_commit_diff_normal_and_root() {
+        let Some(dir) = init_repo("commits") else {
+            return;
+        };
+        fs::write(dir.join("a.txt"), "one\n").unwrap();
+        assert!(commit_all(&dir, "first"));
+        fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
+        assert!(commit_all(&dir, "second"));
+
+        let commits = list_commits(&dir, 10);
+        assert_eq!(commits.len(), 2);
+        // Newest first; fields populated.
+        assert_eq!(commits[0].subject, "second");
+        assert_eq!(commits[1].subject, "first");
+        assert!(!commits[0].sha.is_empty());
+        assert!(!commits[0].short_sha.is_empty());
+        assert!(!commits[0].date.is_empty());
+
+        // The latest commit added one line to a.txt.
+        let head_diff = commit_diff(&dir, &commits[0].sha).unwrap();
+        assert_eq!(head_diff.files.len(), 1);
+        assert_eq!(head_diff.files[0].path, "a.txt");
+        assert_eq!(head_diff.files[0].add, 1);
+
+        // The root commit's diff is the full initial add (no parent).
+        let root_diff = commit_diff(&dir, &commits[1].sha).unwrap();
+        assert_eq!(root_diff.files.len(), 1);
+        assert_eq!(root_diff.files[0].status, FileStatus::Added);
+
+        // `limit` bounds the list; an empty sha errors.
+        assert_eq!(list_commits(&dir, 1).len(), 1);
+        assert!(commit_diff(&dir, "").is_err());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn list_commits_empty_for_non_git_folder() {
+        let plain = unique_dir("commits-plain");
+        fs::create_dir_all(&plain).unwrap();
+        assert!(list_commits(&plain, 10).is_empty());
+        let _ = fs::remove_dir_all(&plain);
     }
 }

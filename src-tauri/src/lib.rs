@@ -208,6 +208,8 @@ pub fn run() {
             commands::current_branches,
             commands::working_diff,
             commands::list_branches,
+            commands::list_commits,
+            commands::commit_diff,
             commands::fetch_remotes,
             commands::pull_branch,
             commands::checkout_branch,

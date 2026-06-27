@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
-import { compareBranches, listBranches, workingDiff } from "../../ipc";
+import {
+  commitDiff,
+  compareBranches,
+  listBranches,
+  listCommits,
+  workingDiff,
+} from "../../ipc";
 import { useStore } from "../../store";
-import type { BranchList, FileDiff, HunkLine, WorkingDiff } from "../../types";
+import type {
+  BranchList,
+  CommitInfo,
+  FileDiff,
+  HunkLine,
+  WorkingDiff,
+} from "../../types";
 import { prismLang } from "../FileViewer/fileType";
 import { highlightToHtml } from "../FileViewer/prism";
 import styles from "./DiffInspector.module.css";
@@ -41,8 +53,13 @@ interface DiffInspectorProps {
 }
 
 type DiffMode = "unified" | "split";
-/** Diff source (#81): working tree vs HEAD, or a two-branch compare. */
-type DiffSource = "working" | "compare";
+/** Diff source: working tree vs HEAD (#81), a two-branch compare (#81), or a single
+ * commit's diff (#230). */
+type DiffSource = "working" | "compare" | "commits";
+
+// Latest-N commits listed in Commits mode (mirrors the backend cap); the cap is
+// surfaced in the picker so a large history reads as bounded.
+const MAX_COMMITS = 100;
 
 // Cap rows rendered per file so a huge diff can't jank the panel (no
 // virtualization in v1 — see the pass-2 punch list).
@@ -163,9 +180,10 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
     (useStore.getState().overviewPanels[repoPath] ?? []).find(
       (p) => p.kind === "diff",
     );
-  const [source, setSource] = useState<DiffSource>(() =>
-    diffPanel()?.diff_source === "compare" ? "compare" : "working",
-  );
+  const [source, setSource] = useState<DiffSource>(() => {
+    const s = diffPanel()?.diff_source;
+    return s === "compare" || s === "commits" ? s : "working";
+  });
   const [base, setBase] = useState<string | null>(
     () => diffPanel()?.compare_base ?? null,
   );
@@ -173,6 +191,12 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
     () => diffPanel()?.compare_target ?? null,
   );
   const [branchList, setBranchList] = useState<BranchList | null>(null);
+  // Commits source (#230): the bounded commit list + the selected commit's sha,
+  // seeded from the persisted diff panel so a configured commits view survives.
+  const [commits, setCommits] = useState<CommitInfo[]>([]);
+  const [commitSha, setCommitSha] = useState<string | null>(
+    () => diffPanel()?.commit_sha ?? null,
+  );
   const setDiffCompare = useStore((s) => s.setDiffCompare);
 
   // Signature of the last applied diff (skip re-render when a poll finds no
@@ -200,19 +224,48 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
     };
   }, [repoPath]);
 
-  // Persist the compare source + branches on the repo's diff panel (#81).
+  // Persist the source + branches/commit on the repo's diff panel (#81/#230).
   useEffect(() => {
     setDiffCompare(repoPath, {
       diff_source: source,
       compare_base: base ?? undefined,
       compare_target: target ?? undefined,
+      commit_sha: commitSha ?? undefined,
     });
-  }, [repoPath, source, base, target, setDiffCompare]);
+  }, [repoPath, source, base, target, commitSha, setDiffCompare]);
+
+  // Load the commit list in Commits mode (#230) — bounded backend-side. Auto-select
+  // the most recent commit when none is chosen yet, so the body isn't empty.
+  useEffect(() => {
+    if (!active || source !== "commits") return;
+    let cancelled = false;
+    void listCommits(repoPath, MAX_COMMITS)
+      .then((list) => {
+        if (cancelled) return;
+        setCommits(list);
+        setCommitSha((cur) =>
+          cur && list.some((c) => c.sha === cur) ? cur : (list[0]?.sha ?? null),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setCommits([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, source, repoPath]);
 
   const load = useCallback(
     async (silent = false) => {
-      // Compare mode needs both branches; until then, show the pick state.
+      // Compare mode needs both branches; commits mode needs a selected commit.
+      // Until then, show the pick state.
       if (source === "compare" && (!base || !target)) {
+        sigRef.current = null;
+        setDiff(null);
+        setError(false);
+        return;
+      }
+      if (source === "commits" && !commitSha) {
         sigRef.current = null;
         setDiff(null);
         setError(false);
@@ -225,7 +278,9 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
         const next =
           source === "compare"
             ? await compareBranches(repoPath, base as string, target as string)
-            : await workingDiff(repoPath);
+            : source === "commits"
+              ? await commitDiff(repoPath, commitSha as string)
+              : await workingDiff(repoPath);
         const sig = JSON.stringify(next);
         // Only update state when the diff actually changed — an unchanged poll
         // is invisible (no re-render, so selection + scroll are preserved).
@@ -247,7 +302,7 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
         inFlightRef.current = false;
       }
     },
-    [repoPath, source, base, target],
+    [repoPath, source, base, target, commitSha],
   );
 
   // Fetch (with spinner) when visible / on repo or source/branch change.
@@ -291,6 +346,14 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
   const activeFile =
     files.find((file) => file.path === selectedFile) ?? files[0] ?? null;
 
+  const selectedCommit = commits.find((c) => c.sha === commitSha);
+  // Header label: the selected commit (short sha · subject) in Commits mode, else the
+  // diff summary's branch / "base → target".
+  const summaryLabel =
+    source === "commits" && selectedCommit
+      ? `${selectedCommit.short_sha} · ${selectedCommit.subject}`
+      : diff?.summary.branch || "—";
+
   const emptyMessage = loading
     ? "Loading…"
     : error
@@ -299,13 +362,21 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
         ? !base || !target
           ? "Pick a base and target branch to compare."
           : "No differences between these branches."
-        : "No changes yet on this branch.";
+        : source === "commits"
+          ? commits.length === 0
+            ? "No commits in this repository."
+            : !commitSha
+              ? "Pick a commit to view its changes."
+              : "This commit has no file changes."
+          : "No changes yet on this branch.";
 
   return (
     <div className={styles.panel}>
       <div className={styles.summary}>
         <div className={styles.summaryRow}>
-          <span className={styles.branch}>{diff?.summary.branch || "—"}</span>
+          <span className={styles.branch} title={summaryLabel}>
+            {summaryLabel}
+          </span>
           <div className={styles.summaryActions}>
             <div className={styles.modeToggle}>
               <button
@@ -341,7 +412,8 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
           </div>
         </div>
 
-        {/* Source toggle (#81): working tree vs HEAD ↔ two-branch compare. */}
+        {/* Source toggle (#81/#230): working tree vs HEAD, a two-branch compare, or a
+            single commit's diff. */}
         <div className={styles.sourceRow}>
           <div className={styles.modeToggle}>
             <button
@@ -360,7 +432,38 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
             >
               Compare
             </button>
+            <button
+              type="button"
+              className={source === "commits" ? styles.modeActive : styles.mode}
+              aria-pressed={source === "commits"}
+              onClick={() => setSource("commits")}
+            >
+              Commits
+            </button>
           </div>
+          {/* Commit picker (#230): the bounded recent-commit list; selecting one shows
+              its diff in the body. The cap is surfaced so a long history reads bounded. */}
+          {source === "commits" && (
+            <div className={styles.comparePickers}>
+              <select
+                className={styles.branchSelect}
+                value={commitSha ?? ""}
+                onChange={(e) => setCommitSha(e.currentTarget.value || null)}
+                aria-label="Commit"
+                disabled={commits.length === 0}
+              >
+                {commits.length === 0 && <option value="">No commits</option>}
+                {commits.map((c) => (
+                  <option key={c.sha} value={c.sha}>
+                    {c.short_sha} · {c.subject} ({c.author} · {c.date})
+                  </option>
+                ))}
+              </select>
+              {commits.length >= MAX_COMMITS && (
+                <span className={styles.capNote}>latest {MAX_COMMITS}</span>
+              )}
+            </div>
+          )}
           {source === "compare" && branchList && (
             <div className={styles.comparePickers}>
               <select

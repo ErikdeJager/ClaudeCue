@@ -12,6 +12,7 @@ import type {
   BranchList,
   CanvasNode,
   CanvasTemplate,
+  CommitInfo,
   ExitPayload,
   ForkablePayload,
   NamePayload,
@@ -301,6 +302,16 @@ export const workingDiff = (cwd: string) =>
 /** Two-dot branch comparison for the diff viewer (#81): git diff base target. */
 export const compareBranches = (cwd: string, base: string, target: string) =>
   invoke<WorkingDiff>("compare_branches", { cwd, base, target });
+
+/** Recent commits on a folder's HEAD for the diff viewer's "Commits" source (#230).
+ * Bounded backend-side (the latest ~100); non-git folders return an empty list. */
+export const listCommits = (cwd: string, limit?: number) =>
+  invoke<CommitInfo[]>("list_commits", { cwd, limit });
+
+/** The diff a single commit introduced (#230): `git show <sha>` → the same
+ * `WorkingDiff` shape the diff body renders. Rejects an empty/invalid sha. */
+export const commitDiff = (cwd: string, sha: string) =>
+  invoke<WorkingDiff>("commit_diff", { cwd, sha });
 
 /** Local + remote branches + current branch for a folder (new-session branch
  * picker). `remote` is populated by a prior `fetchRemotes` (#180). */

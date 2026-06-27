@@ -84,11 +84,14 @@ export interface OverviewPanel {
    * diff/terminal/filetree panels. A `kanban` panel reuses this `file` ref (#142);
    * a `filetree` panel is repo-scoped with no `file` (#167). */
   file?: string;
-  /** Diff panel branch-compare state (#81): "working" (vs HEAD) or "compare"
-   * (base → target), plus the two chosen branches; absent on non-diff panels. */
-  diff_source?: "working" | "compare";
+  /** Diff panel source (#81/#230): "working" (vs HEAD), "compare" (base → target), or
+   * "commits" (a chosen commit's diff); plus the chosen branches / commit sha. Absent
+   * on non-diff panels. */
+  diff_source?: "working" | "compare" | "commits";
   compare_base?: string;
   compare_target?: string;
+  /** Selected commit sha when `diff_source === "commits"` (#230). */
+  commit_sha?: string;
 }
 
 /** A pending scheduled session (#93, mirrors `store::ScheduledSession`). An agent
@@ -162,6 +165,16 @@ export interface DiffSummary {
 export interface WorkingDiff {
   summary: DiffSummary;
   files: FileDiff[];
+}
+
+/** One commit in a folder's history (#230, mirrors `git::CommitInfo`) — the diff
+ * viewer's "Commits" source list. */
+export interface CommitInfo {
+  sha: string;
+  short_sha: string;
+  author: string;
+  date: string;
+  subject: string;
 }
 
 /** Payload of the `session://output` event. */

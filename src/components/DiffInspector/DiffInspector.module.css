@@ -100,6 +100,13 @@
   color: var(--text-muted);
   font-size: var(--fs-meta-sm);
 }
+/* "latest N" cap hint next to the commit picker (#230). */
+.capNote {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta-xs);
+  white-space: nowrap;
+}
 
 .refresh {
   display: flex;

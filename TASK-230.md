@@ -1,6 +1,6 @@
-### 230. [ ] Add a "Commits" source to the diff viewer (list commits → show a commit's diff)
+### 230. [x] Add a "Commits" source to the diff viewer (list commits → show a commit's diff)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 

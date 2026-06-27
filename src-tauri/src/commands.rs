@@ -9,7 +9,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, Window};
 use uuid::Uuid;
 
-use crate::git::{self, BranchList, WorkingDiff};
+use crate::git::{self, BranchList, CommitInfo, WorkingDiff};
 use crate::pty::{SessionError, SessionManager};
 use crate::store::{OverviewPanel, PersistedSession, ScheduledSession, Store};
 
@@ -978,6 +978,24 @@ pub fn working_diff(cwd: String) -> WorkingDiff {
 #[tauri::command]
 pub fn list_branches(cwd: String) -> BranchList {
     git::list_branches(cwd)
+}
+
+/// The latest commits on `cwd`'s HEAD (#230) for the diff viewer's Commits source.
+/// `limit` is clamped to `MAX_COMMITS` so the payload stays bounded on large histories
+/// (the UI surfaces the cap). Non-git / no-commits → empty list (no error).
+#[tauri::command]
+pub fn list_commits(cwd: String, limit: Option<u32>) -> Vec<CommitInfo> {
+    const MAX_COMMITS: u32 = 100;
+    let limit = limit.unwrap_or(MAX_COMMITS).clamp(1, MAX_COMMITS);
+    git::list_commits(cwd, limit)
+}
+
+/// The diff a single commit introduced (#230) — `git show <sha>` parsed into the same
+/// `WorkingDiff` the body renders. An empty sha / git failure surfaces as a typed
+/// `SessionError::Git`.
+#[tauri::command]
+pub fn commit_diff(cwd: String, sha: String) -> Result<WorkingDiff, SessionError> {
+    git::commit_diff(&cwd, &sha).map_err(SessionError::Git)
 }
 
 /// Best-effort `git fetch --prune` for the new-session branch picker (#180) — a new

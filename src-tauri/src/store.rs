@@ -99,6 +99,11 @@ pub struct OverviewPanel {
     pub compare_base: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compare_target: Option<String>,
+    /// Diff panel "Commits" source (#230): when `diff_source == "commits"`, the
+    /// selected commit's sha whose diff is shown. `None` on other sources / older
+    /// records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_sha: Option<String>,
 }
 
 /// A scheduled session (#93): an agent to launch automatically at `fire_at`
@@ -710,6 +715,7 @@ mod tests {
                 diff_source: None,
                 compare_base: None,
                 compare_target: None,
+                commit_sha: None,
             },
             OverviewPanel {
                 id: "p2".into(),
@@ -718,6 +724,7 @@ mod tests {
                 diff_source: None,
                 compare_base: None,
                 compare_target: None,
+                commit_sha: None,
             },
         ];
         store

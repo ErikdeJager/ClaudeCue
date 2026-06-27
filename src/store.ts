@@ -917,13 +917,14 @@ export interface AppState {
    * To Do/Doing/Done lanes via `writeTextFile`, then open it as a `kanban` panel. */
   createKanbanBoard: (repoPath: string, name: string) => Promise<void>;
   removeOverviewPanel: (repoPath: string, id: string) => Promise<void>;
-  /** Persist a repo's diff-panel branch-compare config on its diff panel (#81). */
+  /** Persist a repo's diff-panel source config on its diff panel (#81/#230). */
   setDiffCompare: (
     repoPath: string,
     config: {
-      diff_source?: "working" | "compare";
+      diff_source?: "working" | "compare" | "commits";
       compare_base?: string;
       compare_target?: string;
+      commit_sha?: string;
     },
   ) => void;
   /** Switch an Overview file panel to another repo-relative file in place (#90). */
@@ -2336,7 +2337,8 @@ export const useStore = create<AppState>()((set, get) => ({
     if (
       diffPanel.diff_source === config.diff_source &&
       (diffPanel.compare_base ?? undefined) === config.compare_base &&
-      (diffPanel.compare_target ?? undefined) === config.compare_target
+      (diffPanel.compare_target ?? undefined) === config.compare_target &&
+      (diffPanel.commit_sha ?? undefined) === config.commit_sha
     ) {
       return;
     }
