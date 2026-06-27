@@ -11,6 +11,7 @@ kanban-plugin: board
 - [ ] When the left panel is collapsed, keep agents clickable with their usual left- and right-click behavior. Currently the collapsed rail shows them as status indicators only — they should still respond to clicks like they do when expanded.
 - [ ] Extend the syntax highlighting (same languages as the file viewer task) to the diff viewer, so diffs are syntax-highlighted too.
 - [ ] Add a "commits" option to the diff viewer that lists previous commits. Clicking any commit shows what changed in that commit in the diff viewer.
+- [ ] Change the usage indicator's red threshold from 95% to 90%.
 
 ## READY
 
@@ -26,7 +27,5 @@ kanban-plugin: board
 
 ## DONE
 
-- [x] #221 — Fix the terminal font rendering "jiggly" on Windows (JetBrains Mono / WebGL atlas)
-	Plan: TASK-221.md
 - [x] #222 — Revert Canvas "+" to a plain new-tab button; move "from template" into Templates menu
 	Plan: TASK-222.md

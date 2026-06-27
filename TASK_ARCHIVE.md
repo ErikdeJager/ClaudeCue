@@ -4795,3 +4795,55 @@ permissions), `TRAJECTORY_TO_WINDOWS.md` (real-box verification log).
 
 ---
 
+### 221. [x] Fix the terminal font rendering "jiggly" on Windows (JetBrains Mono not loaded into the WebGL atlas)
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+On **Windows**, terminal output rendered with subtly malformed / "jiggly" glyphs (the letter "C"
+especially) — the bundled **JetBrains Mono** wasn't being applied in the terminal. Root cause: the
+main-window terminal uses xterm's **WebGL** renderer, which draws glyphs into a GL texture rather
+than laying out DOM text, so the bundled `@fontsource` webfont was never fetched on xterm's behalf
+and `document.fonts.ready` could resolve **before** JetBrains Mono loaded — leaving the WebGL glyph
+atlas built once with **fallback-font metrics** (the wobble). macOS (WKWebView) was less affected
+because a DOM element using `--mono` triggered the load earlier. This task makes the font load
+explicitly and rebuilds the atlas so Windows terminals render crisply.
+
+**What shipped** (commit `30ab1e0`, 2026-06-28) — the **primary** OS-neutral fix (WebGL kept on
+Windows), in `src/components/Terminal/terminalPool.ts` `createHost`:
+
+- Replaced the bare `void document.fonts?.ready.then(safeFit)` with an async sequence that
+  **explicitly `document.fonts.load(`${weight} ${size}px "JetBrains Mono"`)`** for weights
+  **400/500/700** at the configured font size (forcing the bundled face to fetch even though only
+  the canvas/GL renderer uses it), awaits `document.fonts.ready`, and then — **guarded against a
+  host disposed mid-load** (`if (disposed) return`) — rebuilds: `webgl?.clearTextureAtlas()`,
+  forces xterm to **re-measure the character cell** by reassigning `term.options.fontFamily`
+  (transient `"monospace"` → original, both synchronous in-frame), `term.refresh(0, term.rows -
+  1)`, then `safeFit()` to recompute cols/rows for the corrected cell size. Both `load()` and
+  `ready` are wrapped so a missing/unsupported face falls through to a best-effort refit.
+
+**Key files touched:** `src/components/Terminal/terminalPool.ts` (the explicit font-load + atlas
+rebuild), `TRAJECTORY_TO_WINDOWS.md` (real-box verification log + the documented fallback).
+
+**Dependencies:** none — a self-contained terminal-rendering fix on shipped code.
+
+**Notes**
+
+- **Cross-platform:** the primary fix is OS-neutral (no `platform` branch) and a no-op on macOS
+  (already crisp; re-measuring after the real font loads stays correct there); WebGL is retained on
+  Windows. A **documented fallback** — drop to the DOM renderer on Windows by generalizing the
+  WebGL gate to `IS_MAIN_WINDOW && !isWindows(platform)` (mirroring the existing detached-window
+  precedent) — is recorded for use only if a real-box check shows the jiggle persists as a deeper
+  GL atlas / devicePixelRatio artifact.
+- **Not runtime-verified:** a Windows-only GUI rendering path (no Windows box / live WebView2 on
+  CI); flagged for real-box verification in `TRAJECTORY_TO_WINDOWS.md` per the CLAUDE.md
+  untestable-path rule — confirm "C" and box-drawing render crisp and survive resize/reparent.
+- **Out of scope:** changing the font / weights / non-terminal UI font, macOS rendering (must stay
+  crisp), and OS-installing JetBrains Mono (it ships as a webfont; the fix is about applying it in
+  xterm).
+
+---
+
