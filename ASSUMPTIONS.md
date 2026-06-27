@@ -682,3 +682,28 @@ absolute file opens via the shipped **#163 parent-dir-as-root** trick (`splitPat
   text); relative ones stay portable (stored `/`-separated). Resolve failures already
   degrade gracefully (pending + Retry, #118). **Depends on: none** (builds on
   #117/#118/#163 + the cross-platform `splitPath`/`joinPath` helpers).
+
+## TASK-225 — Subtle current-branch badge next to each sidebar folder, synced from any source
+
+Card: show a subtle grayed-out branch badge next to each folder name, kept in sync from
+any source (agent, terminal typing, etc.), "likely needs polling." Grounded: the store
+already has `branches` + `refreshBranches`; #212 refreshes on the busy→idle edge + app
+actions + repo-set change, but the repo header renders only the folder name/count (no
+branch). Decided autonomously (user not answering):
+
+- **Reuse the shipped `branches` map / `refreshBranches`** (no backend change) — the badge
+  just renders `branches[repo]`, muted + small + truncating; expanded sidebar only;
+  nothing for non-git folders. Worktree sub-headers already show their branch (out of
+  scope).
+- **Sync = keep #212's event refresh + add (a) a focus/visibilitychange refresh and (b) a
+  ~15s visible-only interval poll** (paused when `document.hidden`, batches all repos in
+  one `currentBranches` call). The card explicitly asks for polling; #212 alone misses
+  external/idle-repo checkouts. Interval is tunable; this deliberately augments #212's
+  "no poll timer" choice because the requirement is broader. **Depends on: none.**
+
+### Process note (board now has a concurrent archiver too)
+
+Besides the dev pipeline implementing READY cards, a DONE→archive process is moving
+completed cards out of `KANBAN.md`'s DONE into `TASK_ARCHIVE.md`. Refine commits continue
+to stage only `TASK-<N>.md` + `KANBAN.md` + `ASSUMPTIONS.md` explicitly and never touch
+DONE/code/`TASK_ARCHIVE.md`, so the loops don't collide.
