@@ -359,6 +359,7 @@ interface ExtraPanelProps {
   color: string;
   groupStart: boolean;
   selected: boolean;
+  onSelect: () => void;
   onClose: () => void;
 }
 
@@ -369,6 +370,7 @@ function ExtraPanel({
   color,
   groupStart,
   selected,
+  onSelect,
   onClose,
 }: ExtraPanelProps) {
   const setOverviewPanelFile = useStore((s) => s.setOverviewPanelFile);
@@ -435,6 +437,7 @@ function ExtraPanel({
       selected={selected}
       title={title}
       actions={actions}
+      onClickBody={onSelect}
     >
       {/* The shared renderer (#157) maps diff/terminal/kanban/file → the live child
           (the same components Canvas uses), with the big-mode placeholder guard. */}
@@ -449,6 +452,7 @@ interface ScheduleCardProps {
   color: string;
   groupStart: boolean;
   selected: boolean;
+  onSelect: () => void;
   onCancel: () => void;
 }
 
@@ -460,6 +464,7 @@ function ScheduleCard({
   color,
   groupStart,
   selected,
+  onSelect,
   onCancel,
 }: ScheduleCardProps) {
   const maximizeItem = useStore((s) => s.maximizeItem);
@@ -521,6 +526,7 @@ function ScheduleCard({
         />
       }
       actions={actions}
+      onClickBody={onSelect}
     >
       <ItemContent
         content={{
@@ -769,6 +775,7 @@ function Overview() {
                         color={color}
                         groupStart={groupStart}
                         selected={item.schedule.id === selectedId}
+                        onSelect={() => select(item.schedule.id)}
                         onCancel={() => void cancelSchedule(item.schedule.id)}
                       />
                     );
@@ -784,6 +791,7 @@ function Overview() {
                       color={color}
                       groupStart={groupStart}
                       selected={item.panel.id === selectedId}
+                      onSelect={() => select(item.panel.id)}
                       onClose={() =>
                         void removeOverviewPanel(item.repoKey, item.panel.id)
                       }
