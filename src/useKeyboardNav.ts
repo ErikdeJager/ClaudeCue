@@ -10,6 +10,7 @@
 //   ⌘K / Ctrl+K        open the Create-panel launcher (type step)         (#189)
 //   ⌘⌥1 … ⌘⌥6          Create-panel launcher straight to the folder step  (#189)
 //                      for type N (session/file/diff/terminal/kanban/tree)
+//   ⌘T / Ctrl+T        new Canvas tab (switches to Canvas view)           (#206)
 //
 // xterm forwards keystrokes to the PTY when a terminal is focused, so the
 // listener runs in the **capture phase on window** — it fires before xterm's
@@ -115,6 +116,31 @@ export function useKeyboardNav(): void {
           const { createPanelOpen, newSessionOpen, openCreatePanel } =
             useStore.getState();
           if (!createPanelOpen && !newSessionOpen) openCreatePanel();
+        }
+        return;
+      }
+
+      // ⌘T / Ctrl+T — create a new Canvas tab from anywhere (#206). A *create*
+      // action like ⌘N/⌘K: switch to Canvas so the new (active) tab is visible,
+      // then addCanvas(). ⌘-based, so it never reaches a focused claude/terminal;
+      // main window only (tab creation belongs to the main strip — swallowed but
+      // inert in a detached canvas window, #84); inert while the new-session or
+      // create-panel modal is open (mirrors ⌘K's guard).
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "t"
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (IS_MAIN_WINDOW) {
+          const { createPanelOpen, newSessionOpen, setView, addCanvas } =
+            useStore.getState();
+          if (!createPanelOpen && !newSessionOpen) {
+            setView("canvas");
+            addCanvas();
+          }
         }
         return;
       }

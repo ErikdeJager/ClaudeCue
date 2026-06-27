@@ -1,6 +1,6 @@
-### 206. [ ] Add a ⌘T keybind to create a new Canvas tab, and surface it in the UI
+### 206. [x] Add a ⌘T keybind to create a new Canvas tab, and surface it in the UI
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** #205
 **Created:** 2026-06-27
 
@@ -61,29 +61,29 @@ tooltip), so the shortcut is visible where the user creates tabs.
 
 **Subtasks**
 
-1. [ ] Add the ⌘T / Ctrl+T handler in `useKeyboardNav.ts` (main window, guarded by
+1. [x] Add the ⌘T / Ctrl+T handler in `useKeyboardNav.ts` (main window, guarded by
    `newSessionOpen`/`createPanelOpen`), switching to Canvas view + `addCanvas()`; update the
    header legend comment.
-2. [ ] Confirm ⌘T is not already claimed by another handler/component (grep; the global
+2. [x] Confirm ⌘T is not already claimed by another handler/component (grep; the global
    legend shows it free).
-3. [ ] Add the `⌘T` `<kbd>` hint to the "New tab" item of the `+` dropdown and to the
+3. [x] Add the `⌘T` `<kbd>` hint to the "New tab" item of the `+` dropdown and to the
    trigger tooltip (TASK-205's dropdown).
-4. [ ] `npm run build`, `npm run lint`, `npm run format:check`, `npm test` pass.
-5. [ ] Manually verify: ⌘T from Overview switches to Canvas and opens a new active tab; ⌘T
+4. [x] `npm run build`, `npm run lint`, `npm run format:check`, `npm test` pass.
+5. [x] Manually verify: ⌘T from Overview switches to Canvas and opens a new active tab; ⌘T
    in Canvas opens a new active tab; ⌘T does nothing while the new-session/create-panel
    modals are open; ⌘T never reaches a focused terminal; the `⌘T` hint shows on the "New
    tab" dropdown item.
 
 **Acceptance criteria**
 
-- [ ] Pressing **⌘T (or Ctrl+T)** in the main window creates a new Canvas tab, makes it
+- [x] Pressing **⌘T (or Ctrl+T)** in the main window creates a new Canvas tab, makes it
   active, and ensures the Canvas view is shown — from either Overview or Canvas.
-- [ ] ⌘T is inert while the new-session modal or create-panel launcher is open, and is
+- [x] ⌘T is inert while the new-session modal or create-panel launcher is open, and is
   swallowed (no webview/PTY side effect) when a terminal is focused.
-- [ ] The **"New tab"** item in the `+` dropdown shows a `⌘T` hint, and the `+` trigger's
+- [x] The **"New tab"** item in the `+` dropdown shows a `⌘T` hint, and the `+` trigger's
   tooltip mentions it.
-- [ ] The shortcut legend at the top of `useKeyboardNav.ts` documents ⌘T.
-- [ ] `npm run build`, `npm run lint`, Prettier, and `npm test` pass.
+- [x] The shortcut legend at the top of `useKeyboardNav.ts` documents ⌘T.
+- [x] `npm run build`, `npm run lint`, Prettier, and `npm test` pass.
 
 **Notes**
 
@@ -99,3 +99,20 @@ tooltip), so the shortcut is visible where the user creates tabs.
 - Key files: `src/useKeyboardNav.ts` (add the handler + legend), `src/store.ts`
   (`addCanvas` ~2678, `setView`), `src/components/Canvas/CanvasTabs.tsx` (the TASK-205 `+`
   dropdown), `src/windowContext.ts` (`IS_MAIN_WINDOW`).
+
+**Implementation (done 2026-06-27)**
+
+- `useKeyboardNav.ts`: added a `(metaKey||ctrlKey) && !shift && !alt && key==="t"` handler
+  (placed after the ⌘K block) that `preventDefault()` + `stopPropagation()`s, and — main
+  window, with neither `createPanelOpen` nor `newSessionOpen` — calls `setView("canvas")`
+  then `addCanvas()`. Extended the top-of-file shortcut legend with the ⌘T line. ⌘T was
+  confirmed unclaimed (grep).
+- `CanvasTabs.tsx`: added a right-aligned `<kbd className={styles.menuKbd}>⌘T</kbd>` to the
+  `+` dropdown's **New tab** item, and updated the `+` trigger `title`/`aria-label` to
+  "New tab (⌘T)".
+- `Canvas.module.css`: made `.menuItem` a `space-between` flex row (so a trailing kbd
+  aligns right; label-only items are unaffected) and added a muted-mono `.menuKbd`.
+- Verified: `npm run build`, `npm run lint`, `prettier --check` (touched files), and
+  `npm test` (288 passing) all pass. Interactive eyeball (subtask 5) can't run headlessly;
+  the handler mirrors the existing ⌘K guard pattern and the swallow (preventDefault +
+  capture-phase stopPropagation) is identical to the other ⌘-combos.

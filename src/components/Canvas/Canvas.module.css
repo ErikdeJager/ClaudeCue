@@ -168,6 +168,10 @@
 }
 
 .menuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
   padding: var(--space-6) var(--space-8);
   border: 0;
   border-radius: var(--radius-chip);
@@ -178,6 +182,15 @@
   text-align: left;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out);
+}
+
+/* Shortcut hint on a menu item (#206): muted mono, pushed to the right edge. */
+.menuKbd {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-sm);
+  font-weight: 400;
 }
 
 .menuItem:hover:not(:disabled) {

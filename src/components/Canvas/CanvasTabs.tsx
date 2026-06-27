@@ -268,8 +268,8 @@ function CanvasTabs() {
           ref={addMenu.btnRef}
           className={styles.tabAdd}
           onClick={addMenu.toggle}
-          title="New tab"
-          aria-label="New tab"
+          title="New tab (⌘T)"
+          aria-label="New tab (⌘T)"
           aria-haspopup="menu"
           aria-expanded={addMenu.open}
         >
@@ -292,6 +292,7 @@ function CanvasTabs() {
               }}
             >
               New tab
+              <kbd className={styles.menuKbd}>⌘T</kbd>
             </button>
             <button
               type="button"
