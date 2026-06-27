@@ -291,3 +291,23 @@ judgment with "see if this … has good UX"):
   **in-panel** (tree↔results toggle), snippet "mini viewer" with the match highlighted, per-
   result **Reveal in tree** (new expand-to-path) + **Open** (reuse existing file-open).
   Sizable but kept as one card; adds no new view type. **Depends on: none.**
+
+## TASK-203 — Restyle the sidebar-footer update indicator
+
+Pure visual restyle of the shipped #190 `UpdateIndicator` chip (`Update.module.css`
+`.indicator*`). Card asked for: inset from the sidebar edges, smaller, thinner, slicker,
+less prominent. Decided autonomously (refine loop, user not answering):
+
+- **Margin = `var(--space-8)` sides/bottom**, aligning with the footer's `0
+  var(--space-8)` inset directly below — over the New/Schedule buttons' 12px — so the chip
+  ties to the footer it sits above. Drop `width: 100%` (column-flex child stretches by
+  default; margins inset it). Trivially retunable.
+- **Single-line label** (icon + title + version on one baseline row) as the primary
+  "thinner" move, over keeping the 2-line stack with smaller fonts.
+- **Hairline border (`--border-hairline`) + transparent fill, accent reserved to the
+  icon**, with a subtle `--bg-hover` hover (not the current full accent flood) — the
+  "less-prominent / slicker" treatment. Over keeping a lighter accent border or removing
+  the border entirely. Icon stays accent so it still reads as a positive, actionable hint.
+- **Error variant restyled to match** (inset, single-line, subtle) rather than left as-is.
+- **Collapsed rail:** keep icon-only, but center it (`justify-content: center`/modifier)
+  so the new margins don't left-stick the icon. **Depends on: none.**
