@@ -224,15 +224,39 @@ describe("app store", () => {
   });
 
   it("setOverviewRepoFilter toggles, switches, and clears (#34)", () => {
+    // Default mode is "all" (folder click).
     useStore.getState().setOverviewRepoFilter("/repo/x");
-    expect(useStore.getState().overviewRepoFilter).toBe("/repo/x");
-    // clicking the active repo clears it
+    expect(useStore.getState().overviewRepoFilter).toEqual({
+      path: "/repo/x",
+      mode: "all",
+    });
+    // clicking the active repo with the same mode clears it
     useStore.getState().setOverviewRepoFilter("/repo/x");
     expect(useStore.getState().overviewRepoFilter).toBeNull();
     // another repo sets it; null is "Show all"
     useStore.getState().setOverviewRepoFilter("/repo/y");
-    expect(useStore.getState().overviewRepoFilter).toBe("/repo/y");
+    expect(useStore.getState().overviewRepoFilter).toEqual({
+      path: "/repo/y",
+      mode: "all",
+    });
     useStore.getState().setOverviewRepoFilter(null);
+    expect(useStore.getState().overviewRepoFilter).toBeNull();
+  });
+
+  it("setOverviewRepoFilter switches mode on the same path, and toggles per (path, mode) (#247)", () => {
+    // "all" then "own" on the same path → switches (does not clear)
+    useStore.getState().setOverviewRepoFilter("/repo/x", "all");
+    expect(useStore.getState().overviewRepoFilter).toEqual({
+      path: "/repo/x",
+      mode: "all",
+    });
+    useStore.getState().setOverviewRepoFilter("/repo/x", "own");
+    expect(useStore.getState().overviewRepoFilter).toEqual({
+      path: "/repo/x",
+      mode: "own",
+    });
+    // re-selecting the same path AND mode clears it
+    useStore.getState().setOverviewRepoFilter("/repo/x", "own");
     expect(useStore.getState().overviewRepoFilter).toBeNull();
   });
 
@@ -245,7 +269,7 @@ describe("app store", () => {
       recents: ["/repo/x", "/repo/y"],
       selectedId: "a",
       view: "canvas",
-      overviewRepoFilter: "/repo/x",
+      overviewRepoFilter: { path: "/repo/x", mode: "all" },
     });
     // ipc calls reject without a Tauri host and are caught; the state update runs.
     await useStore.getState().forgetRepo("/repo/x");
@@ -807,15 +831,54 @@ describe("overviewClusterKeys (#174)", () => {
     expect(ids).toEqual(["p-alpha", "s2", "s3", "p-wt", "s1", "sc-beta"]);
   });
 
-  it("confines navigation to the visible cluster when a repo filter is active", () => {
+  it("confines navigation to the visible cluster when an 'all' repo filter is active", () => {
     const ids = overviewClusterKeys({
       sessions,
       overviewPanels,
       overviewOrder: { "/work/alpha": ["p-alpha", "s2", "s3", "p-wt"] },
       schedules,
-      filter: "/work/alpha",
+      filter: { path: "/work/alpha", mode: "all" },
     });
     expect(ids).toEqual(["p-alpha", "s2", "s3", "p-wt"]);
+  });
+
+  it("an 'own' repo filter hides worktree agents AND worktree-path panels (#247)", () => {
+    // "own" on /work/alpha keeps the repo's own agent (s2) + own panel (p-alpha),
+    // but excludes the worktree agent (s3) and the worktree-keyed panel (p-wt).
+    const ids = overviewClusterKeys({
+      sessions,
+      overviewPanels,
+      overviewOrder: { "/work/alpha": ["p-alpha", "s2", "s3", "p-wt"] },
+      schedules,
+      filter: { path: "/work/alpha", mode: "own" },
+    });
+    expect(ids).toEqual(["p-alpha", "s2"]);
+  });
+
+  it("an 'own' repo filter hides worktree schedules but keeps the repo's own schedule (#247)", () => {
+    const ownSchedule: ScheduledSession = {
+      id: "sc-alpha",
+      cwd: "/work/alpha",
+      fire_at: 0,
+      created_at: 0,
+    };
+    const wtSchedule: ScheduledSession = {
+      id: "sc-alpha-wt",
+      cwd: "/work/alpha",
+      fire_at: 0,
+      created_at: 0,
+      worktree: true,
+      worktree_path: "/work/alpha/wt",
+    };
+    const ids = overviewClusterKeys({
+      sessions: [s2], // alpha's own agent only, to isolate the schedule behavior
+      overviewPanels: {},
+      overviewOrder: {},
+      schedules: [ownSchedule, wtSchedule],
+      filter: { path: "/work/alpha", mode: "own" },
+    });
+    // The own schedule survives; the worktree schedule (nests under a worktree) is hidden.
+    expect(ids).toEqual(["s2", "sc-alpha"]);
   });
 
   it("narrows to a single worktree's items when a worktree-folder filter is active (#197)", () => {
@@ -826,7 +889,7 @@ describe("overviewClusterKeys (#174)", () => {
       overviewPanels,
       overviewOrder: { "/work/alpha": ["p-alpha", "s2", "s3", "p-wt"] },
       schedules,
-      filter: "/work/alpha/wt",
+      filter: { path: "/work/alpha/wt", mode: "all" },
     });
     expect(ids).toEqual(["s3", "p-wt"]);
   });

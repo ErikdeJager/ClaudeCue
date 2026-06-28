@@ -28,7 +28,13 @@ import { defaultBoard } from "./components/Kanban/kanbanOps";
 import { applyTerminalSettings } from "./components/Terminal/terminalPool";
 import * as ipc from "./ipc";
 import { emitSessionOutput } from "./outputBus";
-import { effectiveRepo, repoName, sessionInFilter } from "./paths";
+import {
+  effectiveRepo,
+  type OverviewFilter,
+  repoName,
+  scheduleNestsUnderWorktree,
+  sessionInFilter,
+} from "./paths";
 import { parseResetsAt } from "./time";
 import * as updater from "./updater";
 import { DETACHED_CANVAS_ID, IS_MAIN_WINDOW } from "./windowContext";
@@ -361,7 +367,7 @@ export function overviewClusters(input: {
   overviewPanels: Record<string, OverviewPanel[]>;
   overviewOrder: Record<string, string[]>;
   schedules: ScheduledSession[];
-  filter: string | null;
+  filter: OverviewFilter;
 }): { repo: string; keys: string[] }[] {
   const { sessions, overviewPanels, overviewOrder, schedules, filter } = input;
 
@@ -373,11 +379,22 @@ export function overviewClusters(input: {
     if (s.worktreeParent) wtParent.set(s.repoPath, s.worktreeParent);
   }
   const clusterRepoOf = (path: string) => wtParent.get(path) ?? path;
-  // The sidebar filter (#34/#197): an item's **folder** is shown when it equals the
-  // filter (a worktree-folder filter → only that worktree) or its cluster repo does
-  // (a repo filter → that repo + its worktree items). `null` shows everything.
-  const folderInFilter = (folder: string) =>
-    !filter || folder === filter || clusterRepoOf(folder) === filter;
+  // The sidebar filter (#34/#197/#247): an item's **folder** is shown when, for an
+  // "all" filter, it equals the filter path (a worktree-folder filter → only that
+  // worktree) or its cluster repo does (a repo filter → that repo + its worktree
+  // items); for an "own" filter, only when it **equals** the filter path (the repo's
+  // own directory — worktree-path panels are excluded). `null` shows everything.
+  const folderInFilter = (folder: string) => {
+    if (!filter) return true;
+    if (filter.mode === "own") return folder === filter.path;
+    return folder === filter.path || clusterRepoOf(folder) === filter.path;
+  };
+  // Schedules additionally: an "own" filter hides **worktree schedules** (#218,
+  // `scheduleNestsUnderWorktree`) even though their `cwd` is the parent repo path —
+  // they belong to a worktree sub-group, which "own" hides.
+  const scheduleInFilter = (sc: ScheduledSession) =>
+    folderInFilter(sc.cwd) &&
+    !(filter?.mode === "own" && scheduleNestsUnderWorktree(sc));
 
   // Narrow agents by the filter (a worktree filter matches `repoPath`, a repo filter
   // the effective repo, #197).
@@ -413,7 +430,7 @@ export function overviewClusters(input: {
     if (ids.length > 0) repoSet.add(parent);
   }
   for (const sc of schedules) {
-    if (folderInFilter(sc.cwd)) repoSet.add(sc.cwd);
+    if (scheduleInFilter(sc)) repoSet.add(sc.cwd);
   }
   const repoList = [...repoSet].sort((a, b) => {
     const byName = repoName(a)
@@ -431,7 +448,7 @@ export function overviewClusters(input: {
       .map((s) => s.id);
     const panelIds = panelsByCluster.get(repo) ?? [];
     const scheduleIds = schedules
-      .filter((sc) => sc.cwd === repo && folderInFilter(sc.cwd))
+      .filter((sc) => sc.cwd === repo && scheduleInFilter(sc))
       .map((sc) => sc.id);
     const defaultKeys = [...agentIds, ...panelIds, ...scheduleIds];
     if (defaultKeys.length === 0) continue; // drop empty clusters
@@ -450,7 +467,7 @@ export function overviewClusterKeys(input: {
   overviewPanels: Record<string, OverviewPanel[]>;
   overviewOrder: Record<string, string[]>;
   schedules: ScheduledSession[];
-  filter: string | null;
+  filter: OverviewFilter;
 }): string[] {
   return overviewClusters(input).flatMap((c) => c.keys);
 }
@@ -708,7 +725,7 @@ export interface AppState {
   selectedId: string | null;
   view: View;
   /** Overview filter: show only this repo's agents, or all when null (#34). */
-  overviewRepoFilter: string | null;
+  overviewRepoFilter: OverviewFilter;
   recents: string[];
   /** Current branch per repo path (from git reading); "" when unknown/non-git. */
   branches: Record<string, string>;
@@ -855,9 +872,11 @@ export interface AppState {
    * its column; in Canvas focus its panel if present, else toast + deselect.
    * Never switches the view. */
   selectItem: (item: SidebarItem) => void;
-  /** Toggle the Overview repo filter (clicking the active repo clears it); pass
-   * null to clear ("Show all"). #34 */
-  setOverviewRepoFilter: (repo: string | null) => void;
+  /** Toggle the Overview filter (#34/#247). `mode` (default `"all"`) disambiguates a
+   * repo path: `"all"` = folder click (repo + worktrees), `"own"` = branch-line click
+   * (repo's own directory only). Re-selecting the **same path AND mode** clears it;
+   * a different path or mode switches. Pass `null` to clear ("Show all"). */
+  setOverviewRepoFilter: (path: string | null, mode?: "all" | "own") => void;
   setSessions: (sessions: SessionView[]) => void;
   setRecents: (recents: string[]) => void;
   upsertSession: (session: SessionView) => void;
@@ -1591,12 +1610,16 @@ export const useStore = create<AppState>()((set, get) => ({
   // sidebar ViewSwitch is the only thing that changes the view (#75).
   select: (id) => set({ selectedId: id }),
 
-  // Toggle the Overview repo filter: clicking the active repo (or passing null)
-  // clears it; any other repo sets it (#34).
-  setOverviewRepoFilter: (repo) =>
-    set((s) => ({
-      overviewRepoFilter: s.overviewRepoFilter === repo ? null : repo,
-    })),
+  // Toggle the Overview filter (#34/#247): re-selecting the same path AND mode (or
+  // passing null) clears it; a different path or mode switches. `mode` defaults to
+  // "all" (folder click); the branch line passes "own".
+  setOverviewRepoFilter: (path, mode = "all") =>
+    set((s) => {
+      const cur = s.overviewRepoFilter;
+      if (path === null || (cur && cur.path === path && cur.mode === mode))
+        return { overviewRepoFilter: null };
+      return { overviewRepoFilter: { path, mode } };
+    }),
 
   setSessions: (sessions) => set({ sessions }),
   setRecents: (recents) => set({ recents }),
@@ -3581,9 +3604,11 @@ export const useStore = create<AppState>()((set, get) => ({
         schedules: s.schedules.filter((sc) => sc.cwd !== repoPath),
         selectedId: clearSelection ? null : s.selectedId,
         view: clearSelection ? "overview" : s.view,
-        // Drop a now-dangling Overview filter on the forgotten repo (#34).
+        // Drop a now-dangling Overview filter on the forgotten repo (#34/#247).
         overviewRepoFilter:
-          s.overviewRepoFilter === repoPath ? null : s.overviewRepoFilter,
+          s.overviewRepoFilter?.path === repoPath
+            ? null
+            : s.overviewRepoFilter,
       };
     });
     // One summary toast (#83) listing everything removed, omitting zero parts.

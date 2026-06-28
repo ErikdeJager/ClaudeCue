@@ -722,7 +722,10 @@ function Overview() {
       {filter && (
         <div className={styles.filterBar}>
           <span className={styles.filterLabel}>
-            Showing <strong>{repoName(filter)}</strong>
+            Showing <strong>{repoName(filter.path)}</strong>
+            {/* "own" mode (#247) narrows to the repo's own branch — worktrees hidden;
+                spell that out so the wall reads differently from the "all" folder view. */}
+            {filter.mode === "own" && " · this branch"}
           </span>
           <button
             type="button"

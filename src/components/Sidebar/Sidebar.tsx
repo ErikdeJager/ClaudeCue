@@ -964,7 +964,7 @@ function WorktreeHeader({
   // Click-to-filter Overview to just this worktree (#197), mirroring the repo name.
   const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
   const setView = useStore((s) => s.setView);
-  const isFiltered = useStore((s) => s.overviewRepoFilter === path);
+  const isFiltered = useStore((s) => s.overviewRepoFilter?.path === path);
   const platform = useStore((s) => s.platform);
   const { menu, openMenu, closeMenu } = useRowMenu();
   const [confirming, setConfirming] = useState(false);
@@ -1002,7 +1002,9 @@ function WorktreeHeader({
           type="button"
           className={styles.worktreeName}
           onClick={() => {
-            setOverviewRepoFilter(path);
+            // A worktree click shows only that worktree (#197); mode is moot for a
+            // worktree path (it has no sub-worktrees), so the default "all" is fine.
+            setOverviewRepoFilter(path, "all");
             setView("overview");
           }}
           title={`Filter Overview to ${branch}`}
@@ -1232,11 +1234,13 @@ function RepoBranchLine({
         type="button"
         className={`${styles.repoBranchLine} ${isFiltered ? styles.repoBranchActive : ""}`}
         onClick={() => {
-          setOverviewRepoFilter(repo);
+          // The branch line filters to the repo's **own** directory agents only —
+          // worktrees hidden (#247), distinct from the folder header's "all".
+          setOverviewRepoFilter(repo, "own");
           setView("overview");
         }}
         onContextMenu={openMenu}
-        title={`Filter Overview to ${repoName(repo)}`}
+        title={`Show only ${repoName(repo)}'s own branch (hide worktrees)`}
         aria-pressed={isFiltered}
       >
         <GitBranch
@@ -1532,7 +1536,12 @@ function RepoGroup({
     (s) => s.repoPath === repo && !s.worktreeParent,
   );
   const isEmpty = repoSessions.length === 0;
-  const isFiltered = overviewRepoFilter === repo;
+  // Split the active highlight (#247): the folder header lights for the "all" filter,
+  // the branch line for the "own" filter — never both at once.
+  const folderActive =
+    overviewRepoFilter?.path === repo && overviewRepoFilter.mode === "all";
+  const branchActive =
+    overviewRepoFilter?.path === repo && overviewRepoFilter.mode === "own";
   // Primary label = the repo's branch, or the folder name when non-git / not yet
   // known. All sessions in a group share it, so index duplicates.
   const baseLabel = (branches[repo] ?? "") || repoName(repo);
@@ -1560,7 +1569,7 @@ function RepoGroup({
       so it stays a pure click target; the title stays part of the grip (a <4px click
       filters Overview, a drag reorders). */}
       <div
-        className={`${styles.repoHeader} ${isEmpty ? styles.repoEmpty : ""} ${isFiltered ? styles.repoActive : ""}`}
+        className={`${styles.repoHeader} ${isEmpty ? styles.repoEmpty : ""} ${folderActive ? styles.repoActive : ""}`}
         onContextMenu={(event) => openRepoMenu(repo, event)}
         {...attributes}
         {...listeners}
@@ -1575,17 +1584,18 @@ function RepoGroup({
         >
           <Folder size={12} strokeWidth={2} />
         </span>
-        {/* Left-click a repo title filters Overview to it (toggle); right-click opens
-        the #31 context menu. */}
+        {/* Left-click a repo title filters Overview to everything in the folder —
+        repo + worktrees, the "all" mode (#247, toggle); right-click opens the #31
+        context menu. */}
         <button
           type="button"
           className={styles.repoTitle}
           onClick={() => {
-            setOverviewRepoFilter(repo);
+            setOverviewRepoFilter(repo, "all");
             setView("overview");
           }}
           title={`Filter Overview to ${repoName(repo)}`}
-          aria-pressed={isFiltered}
+          aria-pressed={folderActive}
         >
           <span className={styles.repoName}>{repoName(repo)}</span>
           {!isEmpty && (
@@ -1615,7 +1625,7 @@ function RepoGroup({
         <RepoBranchLine
           repo={repo}
           branch={branches[repo]}
-          isFiltered={isFiltered}
+          isFiltered={branchActive}
         />
       )}
 
@@ -2099,7 +2109,11 @@ function Sidebar() {
           const repoSessions = sessions.filter(
             (s) => s.repoPath === repo && !s.worktreeParent,
           );
-          const isFiltered = overviewRepoFilter === repo;
+          // The rail folder is the folder affordance ("all"); it lights for an "all"
+          // filter on this repo (#247) — the rail has no branch line for "own".
+          const isFiltered =
+            overviewRepoFilter?.path === repo &&
+            overviewRepoFilter.mode === "all";
           const baseLabel = (branches[repo] ?? "") || repoName(repo);
           const worktreeAgents = sessions.filter(
             (s) => s.worktreeParent === repo,
@@ -2151,7 +2165,7 @@ function Sidebar() {
                 className={`${styles.railFolder} ${isFiltered ? styles.railFolderActive : ""}`}
                 style={{ color: repoColor(repo, repoColors) }}
                 onClick={() => {
-                  setOverviewRepoFilter(repo);
+                  setOverviewRepoFilter(repo, "all");
                   setView("overview");
                 }}
                 onContextMenu={(event) => openRepoMenu(repo, event)}

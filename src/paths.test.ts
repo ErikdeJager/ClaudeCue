@@ -79,7 +79,7 @@ describe("effectiveRepo (#96)", () => {
   });
 });
 
-describe("sessionInFilter (#197)", () => {
+describe("sessionInFilter (#197/#247)", () => {
   const repoAgent = { repoPath: "/work/repo" };
   const wtAgent = {
     repoPath: "/data/worktrees/repo-id/feat",
@@ -91,21 +91,30 @@ describe("sessionInFilter (#197)", () => {
     expect(sessionInFilter(wtAgent, null)).toBe(true);
   });
 
-  it("a repo filter matches the repo's direct agents AND its worktree agents", () => {
-    expect(sessionInFilter(repoAgent, "/work/repo")).toBe(true);
-    expect(sessionInFilter(wtAgent, "/work/repo")).toBe(true); // effectiveRepo = parent
+  it("an 'all' repo filter matches the repo's direct agents AND its worktree agents", () => {
+    const f = { path: "/work/repo", mode: "all" as const };
+    expect(sessionInFilter(repoAgent, f)).toBe(true);
+    expect(sessionInFilter(wtAgent, f)).toBe(true); // effectiveRepo = parent
+  });
+
+  it("an 'own' repo filter matches ONLY the repo's own (non-worktree) agents, hiding worktrees (#247)", () => {
+    const f = { path: "/work/repo", mode: "own" as const };
+    expect(sessionInFilter(repoAgent, f)).toBe(true);
+    expect(sessionInFilter(wtAgent, f)).toBe(false); // worktree agent hidden
   });
 
   it("a worktree-folder filter matches only that worktree's agents", () => {
-    expect(sessionInFilter(wtAgent, "/data/worktrees/repo-id/feat")).toBe(true); // repoPath === filter
-    expect(sessionInFilter(repoAgent, "/data/worktrees/repo-id/feat")).toBe(
-      false,
-    );
+    const f = { path: "/data/worktrees/repo-id/feat", mode: "all" as const };
+    expect(sessionInFilter(wtAgent, f)).toBe(true); // repoPath === filter.path
+    expect(sessionInFilter(repoAgent, f)).toBe(false);
   });
 
   it("excludes sessions of an unrelated folder", () => {
-    expect(sessionInFilter(repoAgent, "/work/other")).toBe(false);
-    expect(sessionInFilter(wtAgent, "/work/other")).toBe(false);
+    const all = { path: "/work/other", mode: "all" as const };
+    const own = { path: "/work/other", mode: "own" as const };
+    expect(sessionInFilter(repoAgent, all)).toBe(false);
+    expect(sessionInFilter(wtAgent, all)).toBe(false);
+    expect(sessionInFilter(repoAgent, own)).toBe(false);
   });
 });
 

@@ -102,18 +102,35 @@ export function worktreeGroupPaths(
 }
 
 /**
- * Whether a session is shown under the Overview repo filter (#34/#197). A `repo`
+ * The Overview wall's filter (#34/#197/#247): a folder `path` plus a `mode` that
+ * disambiguates a **repo** path's intent —
+ * - `"all"`: show the repo's own agents **and** its worktree agents (the folder
+ *   header / name click; also a worktree-path filter, where mode is moot since a
+ *   worktree has no sub-worktrees).
+ * - `"own"`: show **only** the repo's own non-worktree directory agents/items — all
+ *   of its worktrees are hidden (the #236 branch-line click).
+ * `null` = no filter (show everything). Transient (not persisted).
+ */
+export type OverviewFilter = { path: string; mode: "all" | "own" } | null;
+
+/**
+ * Whether a session is shown under the Overview filter (#34/#197/#247). `null` shows
+ * everything. An **"own"** filter matches only the repo's own (non-worktree) agents
+ * (`repoPath === path && !worktreeParent`) — worktree agents are hidden. An **"all"**
  * filter matches a session's **effective repo** (so a repo filter includes its
- * worktree agents, #96); a **worktree-folder** filter matches the session's actual
- * `repoPath` (the worktree folder), so it narrows to that one worktree. `null` (no
- * filter) shows everything.
+ * worktree agents, #96) **or** its actual `repoPath` (so a worktree-folder filter
+ * narrows to that one worktree).
  */
 export function sessionInFilter(
   session: { repoPath: string; worktreeParent?: string | null },
-  filter: string | null,
+  filter: OverviewFilter,
 ): boolean {
   if (!filter) return true;
-  return effectiveRepo(session) === filter || session.repoPath === filter;
+  if (filter.mode === "own")
+    return session.repoPath === filter.path && !session.worktreeParent;
+  return (
+    effectiveRepo(session) === filter.path || session.repoPath === filter.path
+  );
 }
 
 /**

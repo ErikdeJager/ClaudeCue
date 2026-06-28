@@ -1,8 +1,8 @@
 # TASK-247
 
-### 247. [ ] Overview filter: clicking the repo's own branch line shows only that branch (hide worktrees)
+### 247. [x] Overview filter: clicking the repo's own branch line shows only that branch (hide worktrees)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 
