@@ -5480,3 +5480,51 @@ resting look and this lift is layered on top (sequenced after to avoid conflicts
 
 ---
 
+### 235. [x] SkillAutocomplete: open the slash-command dropdown above the textarea
+
+**Status:** Done
+**Depends on:** none _(independent — touches only the shipped #114 SkillAutocomplete component)_
+**Created:** 2026-06-28
+
+**Description**
+
+The `/`-triggered slash-command autocomplete (#114) — the shared `SkillAutocomplete` component used
+by the **NewSessionModal schedule step** and the **ScheduledPanel** prompt editors — rendered its
+dropdown menu **below** the prompt textarea, where it overlapped the UI directly beneath it (the
+"Name (optional)" field + actions row in the schedule step; the actions row in the ScheduledPanel),
+reading as poorly positioned. User request (the "Skill detection for schedule" card, 2026-06-28):
+show the dropdown **above** the textarea, in the empty space.
+
+**What shipped** (commit `8454ed9`, 2026-06-28) — a **pure-CSS, reposition-only** change in
+`src/components/SkillAutocomplete/SkillAutocomplete.module.css`:
+
+- Flipped the `.menu` rule's vertical anchor from the textarea's **bottom** edge
+  (`top: calc(100% + var(--space-2))`) to its **top** edge
+  (`bottom: calc(100% + var(--space-2))`), so the menu grows **upward**. A comment documents why
+  (both call sites have UI directly below the prompt).
+- Everything else in the rule is unchanged — `position: absolute`, `z-index`, `right`/`left`,
+  `max-height: 220px`, `overflow-y: auto`, padding, border, background, and `box-shadow` — so the
+  popover's appearance, the 220px cap, and internal scroll for long lists all stay identical; only
+  the side it anchors to moved. The `max-height` now caps upward growth.
+- **No TSX change.** The menu is absolutely positioned, so DOM order doesn't affect where it paints;
+  the menu element carries `.wrap` (`position: relative`) alongside `.wrapFill`, so it still anchors
+  correctly in the ScheduledPanel's `fill` mode without a `.wrapFill` edit. Trigger logic, keyboard
+  handling (↑/↓/Enter/Tab/Escape), filtering, insertion, and the container-key guard are untouched.
+
+**Key files touched:** `src/components/SkillAutocomplete/SkillAutocomplete.module.css` (the `.menu`
+anchor flip + explanatory comment).
+
+**Dependencies:** none — independent; only adjusts the shipped #114 `SkillAutocomplete` styling, so
+the single CSS change fixes both schedule-prompt surfaces at once.
+
+**Notes**
+
+- **Cross-platform:** styling-only with no OS-specific code path; renders identically in WKWebView
+  (macOS) and WebView2 (Windows) — no `platform`/`#[cfg]` gating needed.
+- **Reduced-motion:** the dropdown has no animation, so flipping the anchor has no motion
+  implications.
+- **Out of scope:** which skills are detected/offered, the trigger/keyboard logic, broader visual
+  restyling, and smart/auto-flip positioning (explicitly declined — the menu always renders above).
+
+---
+
