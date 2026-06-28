@@ -5715,3 +5715,64 @@ styles added, `.cardTitleInput`/`.cardBodyInput` removed, `.cardTitle` `cursor` 
 
 ---
 
+### 239. [x] Add a Settings section to configure Kanban column colors by name (with a hashed-name fallback)
+
+**Status:** Done
+**Depends on:** none _(builds on shipped Kanban #143/#145/#151/#233 + the settings + swatch-picker infrastructure #100/#102)_
+**Created:** 2026-06-28
+
+**Description**
+
+Kanban board columns were previously colored **by position** (`accent = REPO_PALETTE[col %
+len]`), with no way for the user to control the color and nowhere in the markdown format to
+store it. This task lets the user **configure Kanban column colors by column name** via a new
+**Settings section**, applied **globally** to every board, with a deterministic hashed-name
+fallback for any column not explicitly configured.
+
+**What shipped** (commit `6e8917c`, 2026-06-28) — a **pure-frontend** change:
+
+- **New setting:** added `kanbanColumnColors: { name: string; color: string }[]` to the
+  `Settings` type (`src/types/index.ts`), seeded in `DEFAULT_SETTINGS` (`src/store.ts`) with
+  the three default column names **"To Do" / "Doing" / "Done"** (each mapped to its hashed-name
+  color so the seed matches an unconfigured board). Persists via the existing opaque settings
+  blob — old `sessions.json` upgrades cleanly via the `DEFAULT_SETTINGS` merge.
+- **Pure color helper:** added + exported `kanbanColumnColor(name, configured)` in `store.ts`
+  (beside `repoColor`) — returns the configured entry's color on a **case-insensitive, trimmed**
+  name match, else hashes the name into `REPO_PALETTE` via the existing `hashString` (stable per
+  name, nothing persisted for unlisted names). Covered by new unit tests in `store.test.ts`
+  (exact + case-insensitive match, deterministic fallback, same-name stability).
+- **Applied in the board:** `BoardColumn` (`KanbanPanel.tsx`) now reads
+  `s.settings.kanbanColumnColors` and computes `accent = kanbanColumnColor(props.name, …)`,
+  replacing the index-based derivation — `--col-accent` (top border, header dot, composer
+  border) follows automatically, no CSS change to the board.
+- **New "Kanban" Settings section:** added to the `Section` union + `SETTINGS_SECTIONS` nav
+  (Lucide icon) with an editable list of column-color rows — each row an editable **name**
+  input + a **color picker** reusing the Accent/repo `.swatches`/`.swatch` Catppuccin swatches
+  **plus a "+" swatch** opening a free `<input type="color">` (a deliberate, user-requested
+  exception to the palette-only convention) + a **remove** (×) button, and an **Add column
+  color** button. All mutations route through `update("kanbanColumnColors", …)` so they apply on
+  **Save** (`Settings.tsx` + `Settings.module.css`).
+
+**Key files touched:** `src/types/index.ts` (new field), `src/store.ts` (default + exported
+`kanbanColumnColor` helper), `src/store.test.ts` (helper tests), `src/components/Kanban/
+KanbanPanel.tsx` (name-based accent lookup), and `src/components/Settings/Settings.tsx` +
+`Settings.module.css` (new "Kanban" section + per-row swatch/free-picker UI).
+
+**Dependencies:** none — independent of the sibling "bigger Add card/Cancel buttons" card
+(#240); both touch Kanban/Settings but neither blocks the other.
+
+**Notes**
+
+- **User decisions:** by **name, global** (not by position, no per-board override — the markdown
+  can't hold color); pre-populate the three `defaultBoard()` column names; **unlisted names →
+  deterministic hashed-name Catppuccin color** (explicitly chosen over "random each time" to
+  avoid flicker); picker = Catppuccin swatches + a "+" free color picker.
+- **Data shape:** an ordered `{name,color}[]` array (not a `Record`) so the Settings list has
+  stable row order and supports blank/duplicate-name rows mid-edit; the lookup resolves the
+  first matching name.
+- **Cross-platform:** pure frontend; settings persist via the existing cross-platform
+  `set_settings` blob; `<input type="color">` works in both WKWebView (macOS) and WebView2
+  (Windows). No OS-specific code.
+
+---
+
