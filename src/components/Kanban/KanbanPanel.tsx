@@ -269,8 +269,12 @@ function SortableCard({
               <Trash2 size={12} strokeWidth={1.5} />
             </button>
           </span>
+          {/* The body is part of the drag surface (#246): no `noDrag` here, so a
+              press-drag on the grayed description moves the card (like the title).
+              Body links + task-list checkboxes stay clickable — the 4px PointerSensor
+              activation distance lets a plain click through without starting a drag. */}
           {card.body.trim() && (
-            <div className={styles.cardBody} {...noDrag}>
+            <div className={styles.cardBody}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeTaskListPositions]}

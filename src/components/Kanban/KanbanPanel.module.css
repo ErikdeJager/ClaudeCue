@@ -430,6 +430,11 @@
   color: var(--text-primary);
   line-height: 1.4;
   word-break: break-word;
+  /* The title is a drag surface (#238/#246) — disable text selection so a press-drag
+     never starts a native selection. Ship both the `-webkit-` (WKWebView/macOS) and the
+     standard (WebView2/Chromium/Windows) property for cross-platform coverage. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .untitled {
@@ -536,6 +541,11 @@
   color: var(--text-muted);
   line-height: 1.5;
   word-break: break-word;
+  /* The body is a drag surface too (#246) — disable text selection so dragging by the
+     description never starts a native selection. Both properties for macOS WKWebView +
+     Windows WebView2/Chromium. Body links/checkboxes stay clickable (4px drag distance). */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .cardBody :where(p, ul, ol) {

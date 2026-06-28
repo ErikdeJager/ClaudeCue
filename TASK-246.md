@@ -1,8 +1,8 @@
 # TASK-246
 
-### 246. [ ] Make a Kanban card's description body part of the drag surface (no text-selection)
+### 246. [x] Make a Kanban card's description body part of the drag surface (no text-selection)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 
