@@ -20,9 +20,6 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #244 — Remove the Delete button from Kanban card edit mode (Save + Cancel only)
-	Plan: TASK-244.md
-	Depends on: none
 - [ ] #245 — Kanban add/save buttons: Enter shortcut indicator + thinner vertical padding
 	Plan: TASK-245.md
 	Depends on: none

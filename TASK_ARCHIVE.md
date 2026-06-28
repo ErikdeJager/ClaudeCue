@@ -5991,3 +5991,49 @@ shipped).
 
 ---
 
+### 244. [x] Remove the Delete button from Kanban card edit mode (Save + Cancel only)
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+A Kanban card in **edit mode** previously showed three inline action buttons — Save,
+Cancel, and Delete (the trash button pushed to the right per #238). The user wanted the
+editor's action row to offer **only Save and Cancel**; deleting a card should happen
+**outside** editing, via the card's existing **view-mode** hover/focus-revealed trash icon
+(which already calls the same `onDelete`). This was a small, focused presentational change:
+drop the edit-mode Delete button and clean up its now-unused styling/comments, leaving the
+editor with a clean Save / Cancel pair.
+
+**What shipped** (commit `45adff6`, 2026-06-28):
+
+- `src/components/Kanban/KanbanPanel.tsx` — removed the `cardEditDelete` button (the
+  `Trash2` + "Delete" block) from the `editing ?` branch's `cardEditActions` row, leaving
+  only Save and Cancel. The stale "Save/Cancel/Delete" wrapper comment was updated to
+  reference only Save/Cancel. The `onDelete` prop and the `Trash2` import were **kept** —
+  both are still used by the view-mode trash button, so no unused-import/variable lint
+  errors. Save / Cancel / Enter / Escape commit/discard behavior, the `onEditBlur`
+  commit-on-blur logic, and the `onMouseDown` focus guard are all unchanged.
+- `src/components/Kanban/KanbanPanel.module.css` — removed the now-unused
+  `.cardEditDelete` rule; `cardActions` / `cardBtn` (view-mode buttons) untouched.
+
+**Key files touched:** `src/components/Kanban/KanbanPanel.tsx` (edit-mode action row),
+`src/components/Kanban/KanbanPanel.module.css` (dropped `.cardEditDelete`).
+
+**Dependencies:** none. (Touches the same `cardEditActions` region as #245, but neither
+blocked the other.)
+
+**Notes**
+
+- The view-mode delete affordance (the hover trash icon) is the intended deletion path and
+  was left exactly as is; both edit- and view-mode buttons called the same `onDelete`, so
+  removing the edit-mode one changed nothing about how deletion works.
+- No keyboard Delete-key shortcut was added — out of scope; "the delete button" in the card
+  text referred to the existing view-mode trash icon.
+- **Cross-platform:** pure frontend React/CSS change with no OS-divergent code — identical
+  on macOS and Windows. `build` / `lint` / `test` pass.
+
+---
+
