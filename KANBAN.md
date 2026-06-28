@@ -13,8 +13,6 @@ kanban-plugin: board
 
 ## DONE
 
-- [x] #232 — Scheduled task time: show only the time when the date is today
-	Plan: TASK-232.md
 - [x] #233 — Redesign the in-app Kanban board UI (cards, columns, inline composer, per-column accents)
 	Plan: TASK-233.md
 - [x] #234 — Kanban card hover-lift animation (drag affordance)

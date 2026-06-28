@@ -5346,3 +5346,41 @@ on #81 (Compare source) and the Settings infrastructure.
 
 ---
 
+### 232. [x] Scheduled task time: show only the time when the date is today
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+A scheduled session in the left panel showed its full date and time (e.g. "Jun 21, 3:45 PM"). When
+the scheduled date is **today**, it now shows **only the time** (e.g. "3:45 PM") to keep the UI
+cleaner; a schedule on any other day keeps the full date + time.
+
+**What shipped** (commit `0d7b6f0`, 2026-06-28) — a small, self-contained tweak to the shared time
+helper:
+
+- **`src/time.ts`:** `formatFireTime(fireAt, now = new Date())` now branches on whether the fire
+  time falls on the **same local calendar day** as `now` — time-only (`{ hour:"numeric",
+  minute:"2-digit" }`) when today, else the existing month/day + time. An **injectable `now`
+  parameter** makes the "today" check unit-testable with a fixed clock (callers still pass only
+  `fireAt`). Applied in the **shared** helper, so both the sidebar `ScheduleRow` label and the
+  Overview `ScheduleCard` get the cleaner display consistently; the sidebar row's full-date hover
+  tooltip is unchanged.
+- **`src/time.test.ts`:** +1 case (today → time-only, other day → date + time) with a fixed `now`;
+  existing tests made clock-independent.
+
+**Key files touched:** `src/time.ts` (`formatFireTime`), `src/time.test.ts` (tests).
+
+**Dependencies:** none — builds on the shipped schedule time helper (#93/#94).
+
+**Notes**
+
+- **Cross-platform:** pure frontend; `toLocaleString` locale formatting is identical on macOS and
+  Windows; no OS-specific code.
+- **Out of scope:** the `datetime-local` editor (`toLocalInput`) + schedule data (unchanged),
+  "tomorrow"/relative wording (only today → time-only; other days keep the absolute date).
+
+---
+
