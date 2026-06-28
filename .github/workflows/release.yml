@@ -70,15 +70,13 @@ jobs:
         run: npm ci
 
       - name: Generate patch notes with Claude (#192)
-        # TEMPORARILY DISABLED for the v1.0.0 first public release: the patch notes are
-        # hand-authored (src/patchnotes/1.0.0.json) and must not be touched by the model.
-        # Re-enable for the NEXT release by restoring the original condition:
-        #   if: steps.guard.outputs.should_release == 'true'
-        if: false
-        # Summarizes every change since the last release tag into
-        # src/patchnotes/<version>.json. No-ops if the file was hand-authored
-        # (a manual file always wins). Fails the run if generation fails — we do
-        # not ship a release with empty notes.
+        if: steps.guard.outputs.should_release == 'true'
+        # Summarizes every change SINCE THE LAST RELEASE TAG into
+        # src/patchnotes/<version>.json — never the whole history. The range is derived
+        # from the latest v* tag (git tag -l 'v*' --sort=-version:refname), so now that
+        # v1.0.0 is tagged the next release only covers v1.0.0..HEAD (changes since
+        # version one). No-ops if the file was hand-authored (a manual file always wins).
+        # Fails the run if generation fails — we do not ship a release with empty notes.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_KEY }}
         run: node scripts/generate-patchnotes.mjs
