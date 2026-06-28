@@ -244,8 +244,18 @@
 }
 
 .hunkHeader {
+  /* Stick each @@ hunk header to the top of the scroll container (.body in focused
+     mode, .cardBody in accordion) so the user always sees which hunk/line range
+     they're currently scrolled into. Same-`top` sticky siblings naturally swap: the
+     next header pushes the previous one up and out as its section scrolls in. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
   padding: var(--space-2) var(--space-8);
+  /* Opaque fill + hairline divider so the floating header never lets the code lines
+     beneath it bleed through while it sticks. */
   background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-hairline);
   color: var(--text-muted);
 }
 

@@ -1,16 +1,18 @@
 name: Release
 
-# On every push to main, release ONLY when BOTH guards pass:
-#   1. the app version was bumped past the latest v* tag, AND
-#   2. a matching src/patchnotes/<version>.json exists (#192).
-# The signing key is now configured in repo secrets, so the former deferred-key skip
-# (#190) is gone — the pipeline actually runs and publishes.
+# On every push to main, release ONLY when the app version was bumped past the latest
+# v* tag. Patch notes are now GENERATED automatically (not required to pre-exist):
 #
-# Builds SIGNED Tauri updater artifacts for macOS (universal) AND Windows (x86_64),
-# uploads them to ONE draft GitHub release, and produces a single merged latest.json
-# (darwin-aarch64, darwin-x86_64, windows-x86_64). The release body is generated from
-# the version's patch notes (#192), which flows into latest.json's `notes` → the app's
-# `update.body`. A maintainer then PUBLISHES the draft — the updater endpoint
+#   prepare        — version gate; if releasing, generate src/patchnotes/<version>.json
+#                    with Claude (summarizing every change since the last release tag),
+#                    commit it back to main with [skip ci] so the accumulated history is
+#                    baked into this and future builds, and emit the release body.
+#   create-release — open ONE draft GitHub release.
+#   release        — 2-OS matrix (macOS universal + Windows x86_64) builds SIGNED
+#                    updater artifacts from the commit that includes the new notes and
+#                    uploads them to the draft, merging one latest.json.
+#
+# A maintainer then PUBLISHES the draft — the updater endpoint
 # /releases/latest/download/latest.json only resolves to a non-draft "latest" release.
 
 on:
@@ -21,18 +23,18 @@ permissions:
   contents: write
 
 jobs:
-  check:
-    name: Release guards
+  prepare:
+    name: Version gate + generate patch notes
     runs-on: ubuntu-latest
     outputs:
       should_release: ${{ steps.guard.outputs.should_release }}
-      has_notes: ${{ steps.notes.outputs.has_notes }}
       version: ${{ steps.guard.outputs.version }}
+      sha: ${{ steps.commit.outputs.sha }}
       body: ${{ steps.body.outputs.md }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # need all tags for the comparison
+          fetch-depth: 0 # need all tags for the comparison + a base to commit onto
 
       - id: guard
         name: Compare config version to the latest tag
@@ -53,33 +55,53 @@ jobs:
             echo "should_release=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - id: notes
-        name: Require matching patch notes (#192)
+      - name: Install Node
+        if: steps.guard.outputs.should_release == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.guard.outputs.should_release == 'true'
+        run: npm ci
+
+      - name: Generate patch notes with Claude (#192)
+        if: steps.guard.outputs.should_release == 'true'
+        # Summarizes every change since the last release tag into
+        # src/patchnotes/<version>.json. No-ops if the file was hand-authored
+        # (a manual file always wins). Fails the run if generation fails — we do
+        # not ship a release with empty notes.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_KEY }}
+        run: node scripts/generate-patchnotes.mjs
+
+      - id: commit
+        name: Commit generated patch notes back to main
+        if: steps.guard.outputs.should_release == 'true'
         run: |
-          # Force per-version patch notes: the release body / latest.json notes come
-          # from src/patchnotes/<version>.json, so a missing/mismatched file ends the
-          # release early.
           version="${{ steps.guard.outputs.version }}"
-          file="src/patchnotes/${version}.json"
-          if [ ! -f "$file" ]; then
-            echo "::notice::No patch notes ($file) for v$version — skipping release."
-            echo "has_notes=false" >> "$GITHUB_OUTPUT"
-          elif [ "$(node -p "require('./${file}').version")" != "$version" ]; then
-            echo "::notice::Patch-notes version in $file does not match v$version — skipping release."
-            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+          # Persist the notes so they're baked into this build AND glob into every
+          # future build's "previous versions" history. [skip ci] stops this push
+          # from re-triggering the workflow.
+          if [ -n "$(git status --porcelain -- src/patchnotes)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add "src/patchnotes/${version}.json"
+            git commit -m "Add patch notes for v${version} [skip ci]"
+            git push origin HEAD:main
+            echo "Committed and pushed generated patch notes for v${version}."
           else
-            echo "has_notes=true" >> "$GITHUB_OUTPUT"
+            echo "Patch notes for v${version} already present — no commit needed."
           fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - id: body
-        name: Generate release notes from patch notes (#192)
-        if: steps.notes.outputs.has_notes == 'true'
+        name: Generate release notes markdown from patch notes
+        if: steps.guard.outputs.should_release == 'true'
         run: |
-          # Generated ONCE here (Linux runner → bash by default, so the heredoc works)
-          # and exposed as a job output, then fed to tauri-action as releaseBody on
-          # BOTH matrix legs — so the GitHub release body AND latest.json `notes` carry
-          # the patch notes. Doing it here avoids a bash-heredoc step on the Windows
-          # runner (whose default shell is PowerShell).
+          # Feeds the GitHub release body AND latest.json's `notes` (→ the app's
+          # update.body) on both matrix legs. Run on Linux so the heredoc is bash.
           {
             echo "md<<PATCHNOTES_EOF"
             node scripts/patchnotes-to-md.mjs "${{ steps.guard.outputs.version }}"
@@ -88,28 +110,29 @@ jobs:
 
   create-release:
     name: Create draft release
-    needs: check
-    if: needs.check.outputs.should_release == 'true' && needs.check.outputs.has_notes == 'true'
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create.outputs.result }}
     steps:
       - id: create
-        # Create exactly ONE draft release up front and hand its numeric id to the
-        # matrix. The build legs upload by releaseId (not by tag): GitHub's
-        # get-release-by-tag API doesn't return drafts, so a tag-based matrix can spawn
-        # duplicate drafts — uploading by id is unambiguous.
+        # Create exactly ONE draft release up front (targeting the commit that includes
+        # the generated notes) and hand its numeric id to the matrix. The build legs
+        # upload by releaseId, not by tag — GitHub's get-release-by-tag API doesn't
+        # return drafts, so a tag-based matrix can spawn duplicate drafts.
         uses: actions/github-script@v7
         env:
-          RELEASE_BODY: ${{ needs.check.outputs.body }}
+          RELEASE_BODY: ${{ needs.prepare.outputs.body }}
         with:
           result-encoding: string
           script: |
-            const tag = `v${{ needs.check.outputs.version }}`;
+            const tag = `v${{ needs.prepare.outputs.version }}`;
             const { data } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
+              target_commitish: `${{ needs.prepare.outputs.sha }}`,
               name: `ReCue ${tag}`,
               body: process.env.RELEASE_BODY,
               draft: true,
@@ -119,7 +142,7 @@ jobs:
 
   release:
     name: Build + upload (${{ matrix.platform }})
-    needs: [check, create-release]
+    needs: [prepare, create-release]
     strategy:
       fail-fast: false
       # Serialize the legs so the latest.json read-modify-write merge on the shared
@@ -137,6 +160,10 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Build from the commit that includes the generated patch notes (baked into
+          # the bundle via import.meta.glob over src/patchnotes/*.json).
+          ref: ${{ needs.prepare.outputs.sha }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -164,5 +191,5 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
-          releaseBody: ${{ needs.check.outputs.body }}
+          releaseBody: ${{ needs.prepare.outputs.body }}
           args: ${{ matrix.args }}
