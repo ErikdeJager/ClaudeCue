@@ -13,6 +13,3 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #238 — Overhaul Kanban card interaction + unify the create/edit UI into a single-field composer
-	Plan: TASK-238.md
-

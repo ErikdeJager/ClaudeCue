@@ -5649,3 +5649,69 @@ settings + `chooseDisplayMode`/`chooseLineMode` persisting wrappers), and
 
 ---
 
+### 238. [x] Overhaul Kanban card interaction + unify the create/edit UI into a single-field composer (drag-only card surface, non-overlaying buttons)
+
+**Status:** Done
+**Depends on:** none _(builds entirely on shipped Kanban code: #143 DnD, #160 commit-on-confirm, #161, #173 task-list checkboxes, #194, #233 card redesign)_
+**Created:** 2026-06-28
+
+**Description**
+
+The Kanban board's card create and edit UIs had diverged. **Create** already used a clean
+single-textarea composer (first line → title, rest → body; Enter submits, Shift+Enter adds a
+line; an action row in normal flow). **Edit** used two separate fields (a title `<input>` +
+body `<textarea>`) plus an **absolutely-positioned action overlay** (Done/Trash) that sat *on
+top of* the text, and the card **title was a click-to-edit button**, mixing the click-to-edit
+and click-to-drag gestures. This task **made the whole card surface drag-only** and **unified
+create + edit into one single-field composer-style UI**, with edit-mode buttons in normal flow
+(no overlay).
+
+**What shipped** (commit `16dc17e`, 2026-06-28) — a **pure-frontend** change in
+`src/components/Kanban/KanbanPanel.tsx` + `KanbanPanel.module.css`:
+
+- **Drag-only card surface:** the view-mode title became non-interactive display text (part of
+  the drag grip, keeping the `.untitled` fallback + `.cardDone` strikethrough) — its
+  click-to-edit `onClick` removed. Editing is now reachable only via the **pencil** button and
+  deleting only via the **trash** button. The hover/focus `.cardActions` overlay (pencil +
+  trash) renders **only in view mode**.
+- **Single-field edit:** replaced the title input + body textarea + overlay with one
+  composer-style `<textarea>` (Enter → commit, Shift+Enter → newline, Escape → cancel;
+  `autoFocus`, `noDrag`) followed by a **flow action row** — **Save** + **Cancel** grouped
+  left, **Delete** pushed right (`.cardEditActions` / `.cardEditDelete`, mirroring
+  `.composer*`). The checkbox/title row is hidden while editing.
+- **Shared parse helper:** extracted module-level `splitCardText(text): { title, body }`
+  (first line → title, rest → body, trimmed) and used it in **both** `submitComposer` and the
+  edit commit, so create/edit parsing can't diverge. The edit draft changed from a
+  `{ title, body }` object to a single `editText: string` seeded as
+  `card.title + (card.body ? "\n" + card.body : "")`; `CardProps`/`BoardColumn`/`KanbanPanel`
+  wiring updated (`editText` + `onEditTextChange` + `onCancelEdit` replacing `draft`/
+  `onDraftChange`; added a `cancelCardEdit` discard path alongside the commit `stopCardEdit`).
+- **Commit-on-blur preserved:** click-away still commits (Save/Cancel/Delete are inside the
+  card so they don't trigger a premature blur-commit); Cancel/Escape discard.
+- **CSS:** added the edit textarea + action-row styles (mirroring `.composerInput` /
+  `.composerActions`, right-aligned subtle-danger Delete); removed the now-unused
+  `.cardTitleInput` + `.cardBodyInput`; dropped `cursor: text` from `.cardTitle`. View-mode
+  `.cardActions`/`.cardBtn` kept.
+
+**Key files touched:** `src/components/Kanban/KanbanPanel.tsx` (drag-only title, view-only
+overlay, single-textarea edit + `splitCardText` shared by create/edit, `editText` state +
+`cancelCardEdit`) and `src/components/Kanban/KanbanPanel.module.css` (edit textarea/action-row
+styles added, `.cardTitleInput`/`.cardBodyInput` removed, `.cardTitle` `cursor` dropped).
+
+**Dependencies:** none — pure-frontend interaction/UI change on shipped, archived Kanban code.
+
+**Notes**
+
+- **User decisions:** edit action row = **Save + Cancel + Delete** (Delete right-aligned);
+  click-away **commits** (Cancel is the discard path); body **task-list checkboxes + links**
+  and the card's **done-checkbox** stay clickable in view mode (only the surface/title drags).
+- **Out of scope (unchanged):** the create composer's existing behavior (only class reuse),
+  `CardPreview`/DragOverlay, the DnD wiring + 4px activation, the Board/Raw toggle, column
+  rename/add/delete, the `kanbanOps`/`kanban.ts` markdown engine (title + body serialize
+  identically), and the autosave/commit-on-confirm plumbing (#160). The sibling Kanban Refine
+  cards (column colors, bigger Add/Cancel buttons) are independent.
+- **Cross-platform:** pure frontend; no OS-specific paths or shell-outs — renders identically
+  in WKWebView (macOS) and WebView2 (Windows).
+
+---
+
