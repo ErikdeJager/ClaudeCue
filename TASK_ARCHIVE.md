@@ -6282,3 +6282,57 @@ new `.tabMenuTrigger` + `.tabClose` comment), `src/components/Canvas/CanvasTabs.
 
 ---
 
+### 250. [x] Hide a repo folder's branch line when the folder has no own items
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+In the left sidebar, each repo "folder" showed its current branch on a line beneath the
+folder header (the `RepoBranchLine` component, #236), rendered whenever the repo's
+current branch was **known** (`branches[repo]` truthy) — regardless of whether the
+folder actually contained any opened items. Because a folder appears from
+persisted recents ∪ active-session repos, a *recent* git folder with **zero**
+sessions/items still showed a branch line. The goal: only render the repo's own branch
+line when the folder has at least one of its **own** items opened; hide it otherwise
+(the folder header itself still renders for recent/empty folders — only the branch line
+is gated).
+
+**What shipped** (commit `eddc5b5`, 2026-06-28):
+
+- `src/components/Sidebar/Sidebar.tsx` — in the `RepoGroup` component, destructured
+  `overviewPanels` from the store and computed a new **`hasOwnItems`** flag:
+  `repoSessions.length > 0 || (overviewPanels[repo]?.length ?? 0) > 0 ||
+  hasOwnSchedules`, where `hasOwnSchedules` reuses the existing
+  `scheduleNestsUnderWorktree` predicate (`schedules.some((s) => s.cwd === repo &&
+  !scheduleNestsUnderWorktree(s))`). The branch-line render gate changed from
+  `{branches[repo] && (` to `{branches[repo] && hasOwnItems && (`. The flag is reactive
+  (sessions / overviewPanels / schedules are store-subscribed), so opening the first own
+  item makes the line appear and removing the last hides it.
+
+Per the confirmed refine decision, **worktree sub-groups do NOT count** as "own items":
+a folder whose only content is a nested worktree sub-group hides the repo's own branch
+line, while the worktree sub-group keeps its own `WorktreeHeader` branch indicator.
+`hasOwnItems` is intentionally separate from the existing `isEmpty` (which counts only
+sessions and drives the greyed header / coral `+`), so header styling is untouched.
+
+**Key files touched:** `src/components/Sidebar/Sidebar.tsx` (`RepoGroup`: new
+`overviewPanels` subscription + `hasOwnItems` flag + branch-line render gate).
+
+**Dependencies:** none. (Builds on #236's `RepoBranchLine` and #247's split
+folder/branch active-highlight, both already shipped.)
+
+**Notes**
+
+- Refine decision (2026-06-28): "Own-directory items only" — worktree sub-groups do not
+  keep the parent's branch line visible; only the repo's own sessions/panels/own-folder
+  schedules do.
+- **Cross-platform:** pure frontend React/TS logic in `Sidebar.tsx` — no paths,
+  shell-outs, keyboard handling, or platform-divergent CSS/WebView behavior; behaves
+  identically on macOS and Windows, no `#[cfg]` gating or `platform` signal involved.
+  `build` / `lint` pass.
+
+---
+
