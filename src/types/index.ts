@@ -249,6 +249,10 @@ export interface Settings {
    * prev/next + picker) or `accordion` (single-open file cards). Each diff panel seeds
    * its in-panel toggle from this. */
   diffDisplayMode: "focused" | "accordion";
+  /** Default diff-viewer line mode (#237): `unified` (one column) or `split`
+   * (side-by-side). Each diff panel seeds its in-panel toggle from this; toggling in a
+   * panel writes back here so the last choice becomes the default for new panels. */
+  diffLineMode: "unified" | "split";
   // Sessions
   /** Use claude's `ai-title` (#97) for unnamed agents; off → the branch label. */
   autoName: boolean;

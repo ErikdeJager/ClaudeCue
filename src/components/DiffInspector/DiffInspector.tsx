@@ -223,7 +223,12 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [mode, setMode] = useState<DiffMode>("unified");
+  // Line mode (#237): unified vs split. Seeded once from the global setting; the
+  // in-panel toggle overrides it for this panel/session and persists back as the new
+  // default for the next-opened diff viewer (mirrors `displayMode` below).
+  const [mode, setMode] = useState<DiffMode>(
+    () => useStore.getState().settings.diffLineMode,
+  );
 
   // Branch-compare state (#81), seeded from the repo's persisted diff panel so a
   // configured compare view survives view switches / restart.
@@ -256,6 +261,25 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
   );
   // Focused-mode file picker popover open state (#231).
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Persist the display-style toggles (#237): set this panel's local state AND write
+  // the choice back to settings so the next-opened diff viewer defaults to it. Reading
+  // `getState().settings` at call time avoids clobbering a concurrent change to another
+  // field; `saveSettings` is idempotent (store + persist + effects) — fine for a toggle.
+  // Already-open panels keep their own local mode (they only seed once at mount), so
+  // this never retroactively re-syncs them.
+  const saveSettings = useStore((s) => s.saveSettings);
+  const chooseDisplayMode = (next: DisplayMode) => {
+    setDisplayMode(next);
+    void saveSettings({
+      ...useStore.getState().settings,
+      diffDisplayMode: next,
+    });
+  };
+  const chooseLineMode = (next: DiffMode) => {
+    setMode(next);
+    void saveSettings({ ...useStore.getState().settings, diffLineMode: next });
+  };
 
   // Signature of the last applied diff (skip re-render when a poll finds no
   // change) and an in-flight guard (never overlap fetches).
@@ -457,7 +481,7 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
                   displayMode === "focused" ? styles.modeActive : styles.mode
                 }
                 aria-pressed={displayMode === "focused"}
-                onClick={() => setDisplayMode("focused")}
+                onClick={() => chooseDisplayMode("focused")}
                 title="Focused single file"
               >
                 Focused
@@ -468,7 +492,7 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
                   displayMode === "accordion" ? styles.modeActive : styles.mode
                 }
                 aria-pressed={displayMode === "accordion"}
-                onClick={() => setDisplayMode("accordion")}
+                onClick={() => chooseDisplayMode("accordion")}
                 title="Accordion files"
               >
                 Accordion
@@ -479,7 +503,7 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
                 type="button"
                 className={mode === "unified" ? styles.modeActive : styles.mode}
                 aria-pressed={mode === "unified"}
-                onClick={() => setMode("unified")}
+                onClick={() => chooseLineMode("unified")}
               >
                 Unified
               </button>
@@ -487,7 +511,7 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
                 type="button"
                 className={mode === "split" ? styles.modeActive : styles.mode}
                 aria-pressed={mode === "split"}
-                onClick={() => setMode("split")}
+                onClick={() => chooseLineMode("split")}
               >
                 Split
               </button>

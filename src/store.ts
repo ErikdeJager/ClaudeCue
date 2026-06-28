@@ -515,6 +515,7 @@ export const DEFAULT_SETTINGS: Settings = {
   confirmDestructive: true,
   canvasCloseBehavior: "ask",
   diffDisplayMode: "focused",
+  diffLineMode: "unified",
   autoName: true,
   autoSave: true,
   defaultAgent: "claude",

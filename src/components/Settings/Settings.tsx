@@ -374,7 +374,34 @@ function SettingsModal() {
                   </div>
                   <p className={styles.helpText}>
                     How the diff viewer lays out changed files. Each diff panel
-                    can still be toggled independently.
+                    can still be toggled independently; the last in-panel choice
+                    becomes the default for newly-opened panels.
+                  </p>
+                </div>
+                <div className={styles.field}>
+                  <span className={styles.fieldLabel}>Diff line mode</span>
+                  <div className={styles.segmented}>
+                    {(
+                      [
+                        ["unified", "Unified"],
+                        ["split", "Split"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={`${styles.segment} ${draft.diffLineMode === v ? styles.segmentActive : ""}`}
+                        onClick={() => update("diffLineMode", v)}
+                        aria-pressed={draft.diffLineMode === v}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className={styles.helpText}>
+                    Whether the diff viewer shows changes in one column (unified)
+                    or side-by-side (split). The last in-panel choice becomes the
+                    default for newly-opened panels.
                   </p>
                 </div>
               </>

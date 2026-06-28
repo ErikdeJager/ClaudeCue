@@ -1,8 +1,8 @@
 # TASK-237
 
-### 237. [ ] Persist the diff viewer's display modes (focus/accordion + unified/split) so the last choice becomes the default for new viewers
+### 237. [x] Persist the diff viewer's display modes (focus/accordion + unified/split) so the last choice becomes the default for new viewers
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 
@@ -110,19 +110,19 @@ read live from the store (that would sync all open panels, which decision (2) fo
 
 **Acceptance criteria**
 
-- [ ] Toggling **focus/accordion** in a diff viewer makes that choice the default the
+- [x] Toggling **focus/accordion** in a diff viewer makes that choice the default the
       **next time a diff viewer is opened** (persists across the session and app restart).
-- [ ] Toggling **unified/split** in a diff viewer likewise becomes the default for the
+- [x] Toggling **unified/split** in a diff viewer likewise becomes the default for the
       next diff viewer (a new `diffLineMode` setting, default `"unified"`, persisted).
-- [ ] Changing the mode in one open diff viewer does **not** change other diff viewers
+- [x] Changing the mode in one open diff viewer does **not** change other diff viewers
       that are **already open** — only newly-opened viewers inherit the change.
-- [ ] The in-panel toggles and the **Settings** controls share one value each (single
+- [x] The in-panel toggles and the **Settings** controls share one value each (single
       source of truth): the Settings → Diff display mode / Diff line mode controls reflect
       the last in-panel choice, and setting them in Settings changes the default for new
       viewers.
-- [ ] The **source** toggle (working/compare/commits) and the selected commit / branch
+- [x] The **source** toggle (working/compare/commits) and the selected commit / branch
       compare are unchanged.
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass. Pure frontend — identical on
+- [x] `npm run build`, `npm run lint`, and `npm test` pass. Pure frontend — identical on
       macOS and Windows (per the cross-platform requirement; settings persist as one
       opaque blob, no backend change).
 
