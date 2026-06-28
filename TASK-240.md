@@ -1,8 +1,8 @@
 # TASK-240
 
-### 240. [ ] Make the Kanban "Add card" / "Cancel" buttons roomier (fix their dropped padding from the undefined `--space-10` token)
+### 240. [x] Make the Kanban "Add card" / "Cancel" buttons roomier (fix their dropped padding from the undefined `--space-10` token)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 
@@ -63,16 +63,16 @@ the broken token with **valid** spacing tokens.
 
 **Acceptance criteria**
 
-- [ ] The Kanban **"Add card"** and **"Cancel"** buttons have visible, comfortable
+- [x] The Kanban **"Add card"** and **"Cancel"** buttons have visible, comfortable
       horizontal **and** vertical padding (text no longer flush to the edges) and read as
       slightly bigger.
-- [ ] Both buttons use **defined** spacing tokens (no `var(--space-10)` remains in
+- [x] Both buttons use **defined** spacing tokens (no `var(--space-10)` remains in
       `.composerAdd`/`.composerCancel`); the padding is no longer dropped to 0.
-- [ ] The text size is unchanged (still `--fs-meta-sm`); only padding changed.
-- [ ] The #238 inline-edit **Save**/**Cancel** buttons (which share these classes) inherit
+- [x] The text size is unchanged (still `--fs-meta-sm`); only padding changed.
+- [x] The #238 inline-edit **Save**/**Cancel** buttons (which share these classes) inherit
       the same roomier padding — no separate regression.
-- [ ] No other component's buttons change (the other `--space-10` sites are untouched).
-- [ ] `npm run build`, `npm run lint`, `npm test` pass. Pure CSS — identical on macOS and
+- [x] No other component's buttons change (the other `--space-10` sites are untouched).
+- [x] `npm run build`, `npm run lint`, `npm test` pass. Pure CSS — identical on macOS and
       Windows.
 
 **Notes**
