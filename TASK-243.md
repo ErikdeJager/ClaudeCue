@@ -1,8 +1,8 @@
 # TASK-243
 
-### 243. [ ] Give the repo's own branch line (#236) its own right-click context menu
+### 243. [x] Give the repo's own branch line (#236) its own right-click context menu
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 

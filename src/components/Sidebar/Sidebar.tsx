@@ -1164,6 +1164,313 @@ function WorktreeHeader({
 }
 
 /**
+ * The repo's own current-branch line (#236) with its own right-click menu (#243).
+ * A left-click still filters Overview to the repo (toggle), exactly like the repo
+ * name (#34); a right-click opens a slim action menu — deliberately separate from
+ * the repo **header** menu (`openRepoMenu`), which is unchanged. Because this is the
+ * real checked-out directory (not an app-managed worktree), the menu offers **no**
+ * "Forget folder" / worktree-style remove — its only destructive actions operate on
+ * the folder's *contents* (Kill all agents / Close all items). It adds two items the
+ * header menu lacks: **Copy branch name** and **Fetch** (`git fetch --prune`). Only
+ * rendered for a git folder with a known current branch, so Pull / Fetch / Copy
+ * branch name always have a real branch to act on.
+ */
+function RepoBranchLine({
+  repo,
+  branch,
+  isFiltered,
+}: {
+  repo: string;
+  branch: string;
+  isFiltered: boolean;
+}) {
+  const sessions = useStore((s) => s.sessions);
+  const overviewPanels = useStore((s) => s.overviewPanels);
+  const startRepoSession = useStore((s) => s.startRepoSession);
+  const copyToClipboard = useStore((s) => s.copyToClipboard);
+  const pullFolder = useStore((s) => s.pullFolder);
+  const fetchFolder = useStore((s) => s.fetchFolder);
+  const killAllAgents = useStore((s) => s.killAllAgents);
+  const closeAllItems = useStore((s) => s.closeAllItems);
+  const setRepoColor = useStore((s) => s.setRepoColor);
+  const repoColors = useStore((s) => s.repoColors);
+  const confirmDestructive = useStore((s) => s.settings.confirmDestructive);
+  const platform = useStore((s) => s.platform);
+  const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
+  const setView = useStore((s) => s.setView);
+  const { menu, openMenu, closeMenu } = useRowMenu();
+  // Mirrors the header menu's `menuMode` minus its `confirm` (forget) mode — this
+  // menu never forgets the folder.
+  const [mode, setMode] = useState<
+    "menu" | "color" | "confirm-kill" | "confirm-close"
+  >("menu");
+  // Reset to the base menu whenever it closes (Escape / overlay / action) so a
+  // reopen never lands mid-submenu — mirrors the header menu's Escape reset.
+  useEffect(() => {
+    if (!menu) setMode("menu");
+  }, [menu]);
+  const close = () => {
+    setMode("menu");
+    closeMenu();
+  };
+
+  // Destructive-action gating, matching the header menu's counts (which include
+  // worktree agents, #74).
+  const runningAll = sessions.filter(
+    (s) =>
+      (s.repoPath === repo || s.worktreeParent === repo) &&
+      s.exitedCode === undefined,
+  ).length;
+  const agentCount = sessions.filter(
+    (s) => s.repoPath === repo || s.worktreeParent === repo,
+  ).length;
+  const panelCount = overviewPanels[repo]?.length ?? 0;
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`${styles.repoBranchLine} ${isFiltered ? styles.repoBranchActive : ""}`}
+        onClick={() => {
+          setOverviewRepoFilter(repo);
+          setView("overview");
+        }}
+        onContextMenu={openMenu}
+        title={`Filter Overview to ${repoName(repo)}`}
+        aria-pressed={isFiltered}
+      >
+        <GitBranch
+          size={12}
+          strokeWidth={1.5}
+          className={styles.repoBranchIcon}
+          aria-hidden
+        />
+        <span className={styles.repoBranchText} title={branch}>
+          {branch}
+        </span>
+      </button>
+      {menu && (
+        <>
+          <div
+            className={styles.menuOverlay}
+            onClick={close}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              close();
+            }}
+          />
+          <div
+            className={styles.menu}
+            style={{ left: menu.x, top: menu.y }}
+            role="menu"
+          >
+            {mode === "color" ? (
+              <div className={styles.colorPicker}>
+                <div className={styles.swatches}>
+                  {REPO_PALETTE.map((hex) => {
+                    const isCurrent = repoColor(repo, repoColors) === hex;
+                    return (
+                      <button
+                        key={hex}
+                        type="button"
+                        className={`${styles.swatch} ${isCurrent ? styles.swatchActive : ""}`}
+                        style={{ background: hex }}
+                        onClick={() => {
+                          void setRepoColor(repo, hex);
+                          close();
+                        }}
+                        title={hex}
+                        aria-pressed={isCurrent}
+                        aria-label={`Set color ${hex}${isCurrent ? " (current)" : ""}`}
+                      />
+                    );
+                  })}
+                </div>
+                <label className={styles.customColor}>
+                  <span>Custom</span>
+                  <input
+                    type="color"
+                    value={repoColor(repo, repoColors)}
+                    onChange={(event) =>
+                      void setRepoColor(repo, event.currentTarget.value)
+                    }
+                  />
+                </label>
+              </div>
+            ) : mode === "confirm-kill" ? (
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuDanger}
+                onClick={() => {
+                  void killAllAgents(repo);
+                  close();
+                }}
+              >
+                Kill {runningAll} agent{runningAll === 1 ? "" : "s"}?
+              </button>
+            ) : mode === "confirm-close" ? (
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuDanger}
+                onClick={() => {
+                  void closeAllItems(repo);
+                  close();
+                }}
+              >
+                Close all items
+                {runningAll > 0
+                  ? ` (kill ${runningAll} agent${runningAll === 1 ? "" : "s"})`
+                  : ""}
+                ?
+              </button>
+            ) : (
+              <>
+                {/* New session (#243): mirrors the header `+` and header menu. */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    void startRepoSession(repo);
+                    close();
+                  }}
+                >
+                  New session
+                </button>
+                <div className={styles.menuSeparator} role="separator" />
+                {/* The shared #164 add-view set (file/diff/terminal/kanban), so the
+                    action set never diverges from the header / worktree menus. */}
+                <div className={styles.menuSection}>Views</div>
+                <ViewsMenu
+                  repoPath={repo}
+                  onClose={close}
+                  includeNewSession={false}
+                />
+                <div className={styles.menuSeparator} role="separator" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    void revealPath(repo);
+                    close();
+                  }}
+                >
+                  {revealLabel(platform)}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    void copyToClipboard(repo, "path");
+                    close();
+                  }}
+                >
+                  Copy path
+                </button>
+                {/* Copy branch name (#243): new vs the header menu — the branch line
+                    is the natural place to grab the current branch. */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    void copyToClipboard(branch, "branch name");
+                    close();
+                  }}
+                >
+                  Copy branch name
+                </button>
+                {/* Pull (#181): fast-forward the folder's current branch. The branch
+                    line only renders with a known branch, so it's always shown. */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  title="git pull --ff-only"
+                  onClick={() => {
+                    void pullFolder(repo);
+                    close();
+                  }}
+                >
+                  Pull
+                </button>
+                {/* Fetch (#243): new vs the header menu — `git fetch --prune`, reusing
+                    the #180 backend; refreshes branch labels on success. */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  title="git fetch --prune"
+                  onClick={() => {
+                    void fetchFolder(repo);
+                    close();
+                  }}
+                >
+                  Fetch
+                </button>
+                <div className={styles.menuSeparator} role="separator" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => setMode("color")}
+                >
+                  Change color…
+                </button>
+                {/* Destructive actions (#243): only ever operate on the folder's
+                    *contents* — there is intentionally NO "Forget folder" /
+                    worktree-style remove here (the header menu keeps Forget). */}
+                {(runningAll > 0 || agentCount > 0 || panelCount > 0) && (
+                  <div className={styles.menuSeparator} role="separator" />
+                )}
+                {runningAll > 0 && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuItemDanger}
+                    onClick={() => {
+                      if (confirmDestructive) setMode("confirm-kill");
+                      else {
+                        void killAllAgents(repo);
+                        close();
+                      }
+                    }}
+                  >
+                    Kill all agents
+                  </button>
+                )}
+                {(agentCount > 0 || panelCount > 0) && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuItemDanger}
+                    onClick={() => {
+                      // Confirm only when agents are running and confirms are on.
+                      if (confirmDestructive && runningAll > 0)
+                        setMode("confirm-close");
+                      else {
+                        void closeAllItems(repo);
+                        close();
+                      }
+                    }}
+                  >
+                    Close all items
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+/**
  * A top-level repo "folder" group in the expanded sidebar (#211): the repo header
  * (whose **whole bar is the drag grip** — no separate handle), the repo's sessions /
  * non-agent items / pending schedules, and any nested worktree sub-groups.
@@ -1305,26 +1612,11 @@ function RepoGroup({
           below); hidden for a non-git / unknown folder. Clicking it filters Overview to
           the repo (toggle), exactly like clicking the repo name (#34). */}
       {branches[repo] && (
-        <button
-          type="button"
-          className={`${styles.repoBranchLine} ${isFiltered ? styles.repoBranchActive : ""}`}
-          onClick={() => {
-            setOverviewRepoFilter(repo);
-            setView("overview");
-          }}
-          title={`Filter Overview to ${repoName(repo)}`}
-          aria-pressed={isFiltered}
-        >
-          <GitBranch
-            size={12}
-            strokeWidth={1.5}
-            className={styles.repoBranchIcon}
-            aria-hidden
-          />
-          <span className={styles.repoBranchText} title={branches[repo]}>
-            {branches[repo]}
-          </span>
-        </button>
+        <RepoBranchLine
+          repo={repo}
+          branch={branches[repo]}
+          isFiltered={isFiltered}
+        />
       )}
 
       {/* Child rows (#59/#74/#93): sessions, non-agent items, schedules, and nested

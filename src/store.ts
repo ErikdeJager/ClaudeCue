@@ -1189,6 +1189,11 @@ export interface AppState {
    * (#181, sidebar repo / worktree "Pull"). Toasts the result (summary or git
    * error); never merges or leaves a partial state. */
   pullFolder: (cwd: string) => Promise<void>;
+  /** Best-effort `git fetch --prune` on `cwd` (#243, the repo branch-line menu's
+   * "Fetch"). Reuses the #180 `fetch_remotes` command — no new backend. Toasts
+   * success ("Fetched <repo>") or git's error, then refreshes branch labels so any
+   * branch movement is reflected. */
+  fetchFolder: (cwd: string) => Promise<void>;
 }
 
 /**
@@ -3705,6 +3710,21 @@ export const useStore = create<AppState>()((set, get) => ({
     } catch (err) {
       const message = isSessionError(err) ? err.message : "Pull failed";
       get().pushToast(`Pull failed: ${message}`, "error");
+    }
+  },
+
+  fetchFolder: async (cwd) => {
+    // `git fetch --prune` (#243): reuses the #180 `fetch_remotes` command (already
+    // registered + permitted for the branch picker; its `git fetch` goes through the
+    // Rust `hidden_command` CREATE_NO_WINDOW guard, so no console flash on Windows).
+    // Toast git's success/error, then refresh branch labels for any branch movement.
+    try {
+      await ipc.fetchRemotes(cwd);
+      get().pushToast(`Fetched ${repoName(cwd)}`);
+      await get().refreshBranches();
+    } catch (err) {
+      const message = isSessionError(err) ? err.message : "Fetch failed";
+      get().pushToast(`Fetch failed: ${message}`, "error");
     }
   },
 }));
