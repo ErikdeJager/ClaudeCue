@@ -6336,3 +6336,58 @@ folder/branch active-highlight, both already shipped.)
 
 ---
 
+### 251. [x] Repo branch line: show the active-filter selection the same way a worktree branch does
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+In the left sidebar, clicking a branch filters the Overview to that branch's changes.
+A **worktree** branch, when the active filter, showed a prominent selection box
+(`.worktreeActive { background: var(--accent-dim); }` + accent branch text on a
+`--radius-chip`-rounded `.worktreeHeader`). The repo's **own (primary) branch line**
+(`RepoBranchLine`, #236), however, only changed its text color when active
+(`.repoBranchActive { color: var(--accent); }`) — because it filters the #247 "own"
+mode, which sets `branchActive` (not `folderActive`), so the repo header does **not**
+light and no selection box appeared. The two affordances therefore looked and felt
+different — the reported bug. Goal: give the repo's own branch line the same accent-dim
+selection box + accent text as a worktree branch (CSS-only).
+
+**What shipped** (commit `cdd4b0f`, 2026-06-28):
+
+- `src/components/Sidebar/Sidebar.module.css` — added `border-radius:
+  var(--radius-chip);` to `.repoBranchLine` (so the active fill has rounded corners
+  matching `.worktreeHeader`; invisible while the background is transparent), and added
+  `background: var(--accent-dim);` to `.repoBranchActive` (keeping its existing
+  `color: var(--accent);`), mirroring `.worktreeActive`. Also reworded the now-stale
+  comment that claimed the header carries the selection box, to note the branch line
+  now carries its own accent-dim box because the "own" filter doesn't light the header.
+
+No TSX/logic change — the `isFiltered={branchActive}` wiring already existed. The
+worktree selection, the repo header's "all"-filter selection (`.repoActive`), the
+"worktree" badge (#240), and the branch line's row height / icon alignment / font size
+are all intentionally unchanged — only the selection treatment was unified.
+
+**Key files touched:** `src/components/Sidebar/Sidebar.module.css` (`.repoBranchLine`
+border-radius + `.repoBranchActive` background + comment).
+
+**Dependencies:** none. (Relates to #236's `RepoBranchLine` and #247's "own" filter
+mode, and is independent of #250 which gated the same line in `Sidebar.tsx` — no file
+overlap.)
+
+**Notes**
+
+- Interpretation (no user question needed): "look and feel the same" was scoped to the
+  **selection** treatment (the specific complaint), reusing the same tokens
+  `.worktreeActive`/`.worktreeHeader` use (`--accent-dim`, `--accent`, `--radius-chip`)
+  for an exact match — not row height / font size / the deliberately-different
+  "worktree" badge, which stay per #236/#240.
+- **Cross-platform:** pure CSS using existing design tokens with no `-webkit-`-only
+  properties, vibrancy, or newly-introduced `color-mix` — renders identically on
+  WKWebView (macOS) and WebView2/Chromium (Windows); no `#[cfg]` gating or `platform`
+  signal involved. `build` / `lint` pass.
+
+---
+
