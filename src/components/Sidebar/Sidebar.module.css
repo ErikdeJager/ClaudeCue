@@ -233,9 +233,10 @@
 }
 
 .repoName {
-  /* Don't grow (#225): so the branch badge sits right after the name rather than
-     being pushed to the far edge; still shrinks + truncates when the name is long. */
-  flex: 0 1 auto;
+  /* Grow to reclaim the header width: with the branch moved to its own line (#236),
+     the name no longer shares the row with an inline badge. Still shrinks + truncates
+     when the name is long. */
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   font-family: var(--mono);
@@ -246,26 +247,58 @@
   text-align: left;
 }
 
-/* Subtle current-branch badge next to the repo name (#225): grayed + compact,
-   truncates so a long branch never crowds the name / count / +. */
-.repoBranch {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 50%;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-family: var(--mono);
-  font-size: var(--fs-meta-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .count {
-  /* Pushed to the right edge (#225 — repoName no longer grows to do it). */
   margin-left: auto;
   flex-shrink: 0;
   color: var(--text-muted);
   font-size: var(--fs-meta-xs);
+}
+
+/* Current branch on its own line below the repo header (#236, supersedes the #225
+   inline badge): a clickable sub-line echoing the worktree branch indicator
+   (`.worktreeHeader`/`.worktreeName`) — GitBranch icon + muted mono text — but without
+   the worktree sub-group's left-border framing. Indented so the GitBranch icon sits in
+   the same 16px icon column as the repo's Folder marker (#128) and the agent rows'
+   activity dots (#95), which lands the branch text directly under the repo name. A
+   full line of its own means a long branch name truncates here instead of crowding the
+   name / count / +. Transparent button reset like `.repoTitle` / `.worktreeName`. */
+.repoBranchLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  height: 22px;
+  padding: 0 var(--space-8) 0 var(--space-16);
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.repoBranchLine:hover {
+  color: var(--text-secondary);
+}
+
+/* Active Overview filter on this repo — mirrors `.worktreeActive .worktreeName`'s
+   accent text (the header itself carries the selection box, #68). */
+.repoBranchActive {
+  color: var(--accent);
+}
+
+.repoBranchIcon {
+  flex-shrink: 0;
+}
+
+.repoBranchText {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: var(--fs-meta-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The "+" is a separate click target inside the header selector (#68): no box

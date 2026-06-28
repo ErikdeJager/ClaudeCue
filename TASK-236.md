@@ -1,8 +1,8 @@
 # TASK-236
 
-### 236. [ ] Show the current branch on its own line under each sidebar folder header (reuse the worktree branch indicator)
+### 236. [x] Show the current branch on its own line under each sidebar folder header (reuse the worktree branch indicator)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 
@@ -110,23 +110,23 @@ shipped in #225 are reused unchanged — only the *rendering location and style*
 
 **Acceptance criteria**
 
-- [ ] The repo header **no longer renders the branch inline** next to the repo name (the
+- [x] The repo header **no longer renders the branch inline** next to the repo name (the
       `.repoBranch` span is gone).
-- [ ] Each top-level folder **with a known git branch** shows that branch on **its own
+- [x] Each top-level folder **with a known git branch** shows that branch on **its own
       line directly below the header** (above the session rows), indented to align under
       the repo name, with a `GitBranch` icon + muted branch text — visually matching the
       worktree branch indicator (no left-border sub-group framing).
-- [ ] A **non-git / unknown-branch** folder shows **no** branch line.
-- [ ] **Clicking** the branch line filters Overview to that repo and **toggles off** when
+- [x] A **non-git / unknown-branch** folder shows **no** branch line.
+- [x] **Clicking** the branch line filters Overview to that repo and **toggles off** when
       clicked again while active, switching to the Overview view — same as clicking the
       repo name; `aria-pressed` reflects the filtered state.
-- [ ] A **long branch name** occupies its own full line and does **not** break the header
+- [x] A **long branch name** occupies its own full line and does **not** break the header
       layout or push out the session count / `+`.
-- [ ] The **#225 sync behavior is unchanged** — the branch line updates after an
+- [x] The **#225 sync behavior is unchanged** — the branch line updates after an
       in-terminal/external `git checkout` (busy→idle edge, window focus/visibility, and
       the ~15s poll) exactly as the inline badge did.
-- [ ] **Worktree sub-group headers** and the **collapsed icon rail** are unchanged.
-- [ ] `npm run build`, `npm run lint`, and `npm test` pass. Pure frontend — renders
+- [x] **Worktree sub-group headers** and the **collapsed icon rail** are unchanged.
+- [x] `npm run build`, `npm run lint`, and `npm test` pass. Pure frontend — renders
       identically on macOS and Windows (per the cross-platform requirement).
 
 **Notes**

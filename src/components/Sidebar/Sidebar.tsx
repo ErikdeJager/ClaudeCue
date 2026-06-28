@@ -1276,14 +1276,6 @@ function RepoGroup({
           aria-pressed={isFiltered}
         >
           <span className={styles.repoName}>{repoName(repo)}</span>
-          {/* Subtle current-branch badge (#225): the folder's git branch, kept in
-              sync by the #212 edge + the focus/visibility/poll effect below. Hidden
-              for a non-git / unknown folder. Truncates so it never crowds the name. */}
-          {branches[repo] && (
-            <span className={styles.repoBranch} title={branches[repo]}>
-              {branches[repo]}
-            </span>
-          )}
           {!isEmpty && (
             <span className={styles.count}>{repoSessions.length}</span>
           )}
@@ -1299,6 +1291,36 @@ function RepoGroup({
           <Plus size={14} strokeWidth={1.5} />
         </button>
       </div>
+
+      {/* Current branch on its own line below the header (#236, supersedes the #225
+          inline badge): echoes the worktree branch indicator (GitBranch icon + muted
+          text) without its left-border sub-group framing. A full line of its own means
+          a long branch never crowds the name / count / +. Same data + sync as #225
+          (the `branches` map, kept current by the #212 edge + the focus/poll effect
+          below); hidden for a non-git / unknown folder. Clicking it filters Overview to
+          the repo (toggle), exactly like clicking the repo name (#34). */}
+      {branches[repo] && (
+        <button
+          type="button"
+          className={`${styles.repoBranchLine} ${isFiltered ? styles.repoBranchActive : ""}`}
+          onClick={() => {
+            setOverviewRepoFilter(repo);
+            setView("overview");
+          }}
+          title={`Filter Overview to ${repoName(repo)}`}
+          aria-pressed={isFiltered}
+        >
+          <GitBranch
+            size={12}
+            strokeWidth={1.5}
+            className={styles.repoBranchIcon}
+            aria-hidden
+          />
+          <span className={styles.repoBranchText} title={branches[repo]}>
+            {branches[repo]}
+          </span>
+        </button>
+      )}
 
       {/* Child rows (#59/#74/#93): sessions, non-agent items, schedules, and nested
       worktree agents — always rendered (#115 removed the #113 collapse gate). */}
