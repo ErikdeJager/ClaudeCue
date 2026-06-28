@@ -13,9 +13,12 @@ import {
   FolderOpen,
   MousePointerClick,
   Palette,
+  Plus,
   RefreshCw,
   SlidersHorizontal,
+  SquareKanban,
   Trash2,
+  X,
 } from "lucide-react";
 
 import ReactMarkdown from "react-markdown";
@@ -38,6 +41,7 @@ type Section =
   | "appearance"
   | "behavior"
   | "sessions"
+  | "kanban"
   | "updates"
   | "data";
 
@@ -65,6 +69,11 @@ const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
     id: "sessions",
     label: "Sessions",
     icon: <Bot size={15} strokeWidth={1.5} />,
+  },
+  {
+    id: "kanban",
+    label: "Kanban",
+    icon: <SquareKanban size={15} strokeWidth={1.5} />,
   },
   {
     id: "updates",
@@ -437,6 +446,108 @@ function SettingsModal() {
                   className={styles.checkRow}
                 />
               </>
+            )}
+
+            {section === "kanban" && (
+              // Column colors by name (#239): a global, editable name→color list. A
+              // column whose name isn't listed falls back to a stable hashed-name color.
+              <div className={styles.field}>
+                <span className={styles.fieldLabel}>Column colors</span>
+                <p className={styles.helpText}>
+                  Color board columns by name — applied to every Kanban board. A
+                  column whose name isn't listed gets a stable color hashed from its
+                  name.
+                </p>
+                <div className={styles.kanbanColors}>
+                  {draft.kanbanColumnColors.map((row, i) => {
+                    const setRow = (patch: Partial<{ name: string; color: string }>) =>
+                      update(
+                        "kanbanColumnColors",
+                        draft.kanbanColumnColors.map((r, j) =>
+                          j === i ? { ...r, ...patch } : r,
+                        ),
+                      );
+                    // A non-palette color is shown as the active state on the "+"
+                    // free-picker swatch (filled with that color) rather than any
+                    // palette swatch.
+                    const onPalette = REPO_PALETTE.includes(row.color);
+                    const customActive = !onPalette && !!row.color;
+                    return (
+                      <div key={i} className={styles.kanbanColorRow}>
+                        <input
+                          className={styles.kanbanColorName}
+                          value={row.name}
+                          placeholder="Column name"
+                          onChange={(e) => setRow({ name: e.currentTarget.value })}
+                          aria-label="Column name"
+                        />
+                        <div className={styles.swatches}>
+                          {REPO_PALETTE.map((color) => (
+                            <button
+                              key={color}
+                              type="button"
+                              className={`${styles.swatch} ${row.color === color ? styles.swatchActive : ""}`}
+                              style={{ background: color }}
+                              onClick={() => setRow({ color })}
+                              title={color}
+                              aria-label={`Color ${color}`}
+                              aria-pressed={row.color === color}
+                            />
+                          ))}
+                          {/* "+" free color picker (#239): a deliberate exception to
+                              the palette-only convention. A hidden native color input
+                              fills the swatch; when a custom color is set the swatch
+                              shows it (active), otherwise a "+". */}
+                          <label
+                            className={`${styles.swatch} ${styles.swatchCustom} ${customActive ? styles.swatchActive : ""}`}
+                            style={
+                              customActive ? { background: row.color } : undefined
+                            }
+                            title="Custom color"
+                          >
+                            {!customActive && (
+                              <Plus size={13} strokeWidth={1.5} />
+                            )}
+                            <input
+                              type="color"
+                              className={styles.colorInput}
+                              value={row.color || "#cba6f7"}
+                              onChange={(e) => setRow({ color: e.currentTarget.value })}
+                              aria-label="Custom color"
+                            />
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.kanbanColorRemove}
+                          onClick={() =>
+                            update(
+                              "kanbanColumnColors",
+                              draft.kanbanColumnColors.filter((_, j) => j !== i),
+                            )
+                          }
+                          title="Remove"
+                          aria-label="Remove column color"
+                        >
+                          <X size={14} strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className={styles.addRowBtn}
+                  onClick={() =>
+                    update("kanbanColumnColors", [
+                      ...draft.kanbanColumnColors,
+                      { name: "", color: "" },
+                    ])
+                  }
+                >
+                  <Plus size={14} strokeWidth={1.5} /> Add column color
+                </button>
+              </div>
             )}
 
             {section === "updates" && (

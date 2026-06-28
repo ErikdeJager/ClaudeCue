@@ -500,6 +500,27 @@ export function repoColor(
 }
 
 /**
+ * A Kanban column's color (#239): the configured color when the column name matches
+ * a Settings entry (case-insensitive + trimmed), else a stable default derived by
+ * hashing the name into the Catppuccin palette — exactly like `repoColor` hashes a
+ * path, so an unconfigured lane stays consistent across renders/reopens (no flicker).
+ * Blank-color entries (a row mid-edit) are ignored so they fall through to the hash.
+ * Pure.
+ */
+export function kanbanColumnColor(
+  name: string,
+  configured: { name: string; color: string }[],
+): string {
+  const key = name.trim().toLowerCase();
+  const match = configured.find(
+    (c) => c.color && c.name.trim().toLowerCase() === key,
+  );
+  if (match) return match.color;
+  const idx = hashString(key) % REPO_PALETTE.length;
+  return REPO_PALETTE[idx] ?? REPO_PALETTE[0] ?? "#cba6f7";
+}
+
+/**
  * Default application settings (#100). The frontend owns these, so an older
  * persisted file without a `settings` blob upgrades cleanly. `accentColor: ""`
  * means "use the default `--accent` token" (Peach).
@@ -516,6 +537,12 @@ export const DEFAULT_SETTINGS: Settings = {
   canvasCloseBehavior: "ask",
   diffDisplayMode: "focused",
   diffLineMode: "unified",
+  // The three default-board lanes (#239), seeded with their hashed-name colors so the
+  // Settings list matches what an unconfigured board shows out of the box; editable.
+  kanbanColumnColors: ["To Do", "Doing", "Done"].map((name) => ({
+    name,
+    color: kanbanColumnColor(name, []),
+  })),
   autoName: true,
   autoSave: true,
   defaultAgent: "claude",

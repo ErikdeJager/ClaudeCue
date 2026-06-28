@@ -253,6 +253,10 @@ export interface Settings {
    * (side-by-side). Each diff panel seeds its in-panel toggle from this; toggling in a
    * panel writes back here so the last choice becomes the default for new panels. */
   diffLineMode: "unified" | "split";
+  /** Kanban column colors by name (#239): an ordered list of column-name → color
+   * entries applied to every board. A column whose name isn't listed gets a stable
+   * color hashed from its name (see `kanbanColumnColor`). */
+  kanbanColumnColors: { name: string; color: string }[];
   // Sessions
   /** Use claude's `ai-title` (#97) for unnamed agents; off → the branch label. */
   autoName: boolean;

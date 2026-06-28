@@ -8,6 +8,7 @@ import {
   DEFAULT_SETTINGS,
   dedupeBranchLabels,
   isCleanExit,
+  kanbanColumnColor,
   mergeRepoOrder,
   mergeSettings,
   overviewClusterKeys,
@@ -661,6 +662,48 @@ describe("repoColor", () => {
     const c = repoColor("/repo/a", {});
     expect(REPO_PALETTE).toContain(c);
     expect(repoColor("/repo/a", {})).toBe(c); // stable across calls
+  });
+});
+
+describe("kanbanColumnColor (#239)", () => {
+  const configured = [
+    { name: "To Do", color: "#abcdef" },
+    { name: "Doing", color: "#123456" },
+  ];
+
+  it("returns the configured color for an exact name match", () => {
+    expect(kanbanColumnColor("To Do", configured)).toBe("#abcdef");
+  });
+
+  it("matches case-insensitively and trims whitespace", () => {
+    expect(kanbanColumnColor("  to do ", configured)).toBe("#abcdef");
+    expect(kanbanColumnColor("DOING", configured)).toBe("#123456");
+  });
+
+  it("falls back to a stable hashed palette color for an unlisted name", () => {
+    const c = kanbanColumnColor("Backlog", configured);
+    expect(REPO_PALETTE).toContain(c);
+    // Stable across calls + independent of the configured list for unlisted names.
+    expect(kanbanColumnColor("Backlog", configured)).toBe(c);
+    expect(kanbanColumnColor("Backlog", [])).toBe(c);
+  });
+
+  it("ignores a blank-color entry (a row mid-edit) and falls through to the hash", () => {
+    const c = kanbanColumnColor("Review", [{ name: "Review", color: "" }]);
+    expect(c).toBe(kanbanColumnColor("Review", []));
+    expect(REPO_PALETTE).toContain(c);
+  });
+
+  it("seeds DEFAULT_SETTINGS with the three default lanes", () => {
+    expect(DEFAULT_SETTINGS.kanbanColumnColors.map((c) => c.name)).toEqual([
+      "To Do",
+      "Doing",
+      "Done",
+    ]);
+    // The seeded color matches the hashed-name fallback (what an unconfigured board shows).
+    for (const { name, color } of DEFAULT_SETTINGS.kanbanColumnColors) {
+      expect(color).toBe(kanbanColumnColor(name, []));
+    }
   });
 });
 

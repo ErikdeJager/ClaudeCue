@@ -1,8 +1,8 @@
 # TASK-239
 
-### 239. [ ] Add a Settings section to configure Kanban column colors by name (with a hashed-name fallback)
+### 239. [x] Add a Settings section to configure Kanban column colors by name (with a hashed-name fallback)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-28
 
@@ -95,20 +95,20 @@ This task lets the user **configure Kanban column colors by column name** via a 
 
 **Acceptance criteria**
 
-- [ ] A new **"Kanban"** section in Settings lists column-color entries, **pre-populated
+- [x] A new **"Kanban"** section in Settings lists column-color entries, **pre-populated
       with "To Do", "Doing", "Done"**, each editable.
-- [ ] The user can **add** a new entry (type any column name + assign a color), **edit** a
+- [x] The user can **add** a new entry (type any column name + assign a color), **edit** a
       row's color, and **remove** a row. Changes apply on **Save** and **persist** across
       restart (via the existing settings blob).
-- [ ] Each entry's color is chosen from the **Catppuccin `REPO_PALETTE` swatches**, with a
+- [x] Each entry's color is chosen from the **Catppuccin `REPO_PALETTE` swatches**, with a
       final **"+"** that opens a **free color picker** for an arbitrary color.
-- [ ] A board column whose name **matches** a configured entry (case-insensitive, trimmed)
+- [x] A board column whose name **matches** a configured entry (case-insensitive, trimmed)
       uses that entry's color for its top border, header dot, and composer border.
-- [ ] A board column whose name is **not** configured gets a **deterministic** color
+- [x] A board column whose name is **not** configured gets a **deterministic** color
       hashed from its name into `REPO_PALETTE` — **stable** across renders and reopens
       (no flicker, nothing persisted).
-- [ ] The configuration is **global** (applies to every board); no per-board override.
-- [ ] `npm run build`, `npm run lint`, `npm test` pass (incl. the new `kanbanColumnColor`
+- [x] The configuration is **global** (applies to every board); no per-board override.
+- [x] `npm run build`, `npm run lint`, `npm test` pass (incl. the new `kanbanColumnColor`
       test). Pure frontend — identical on macOS and Windows.
 
 **Notes**

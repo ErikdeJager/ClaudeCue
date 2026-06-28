@@ -32,7 +32,7 @@ import remarkGfm from "remark-gfm";
 
 import { noAutoCapitalize } from "../../inputProps";
 import { kbdHint } from "../../platform";
-import { REPO_PALETTE, useStore } from "../../store";
+import { kanbanColumnColor, useStore } from "../../store";
 import { useAutoSaveFile } from "../../useAutoSaveFile";
 import Checkbox from "../Checkbox/Checkbox";
 import {
@@ -371,12 +371,11 @@ interface ColumnProps {
 function BoardColumn(props: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: `column:${props.col}` });
   const items = props.cards.map((_, i) => cardId(props.col, i));
-  // Deterministic per-column accent (#233) from the shared palette by column index
-  // (cycling) — the markdown format has nowhere to store a color, so it's derived.
-  const accent =
-    REPO_PALETTE[props.col % REPO_PALETTE.length] ??
-    REPO_PALETTE[0] ??
-    "#cba6f7";
+  // Per-column accent by NAME (#239, superseding the #233 by-index derivation): the
+  // user-configured color for this column name (Settings → Kanban), else a stable
+  // hashed-name color. Drives `--col-accent` (top border / header dot / composer).
+  const columnColors = useStore((s) => s.settings.kanbanColumnColors);
+  const accent = kanbanColumnColor(props.name, columnColors);
 
   // Inline add-card composer (#233): first line → title, remaining lines → body.
   const [composing, setComposing] = useState(false);
