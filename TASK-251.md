@@ -2,7 +2,7 @@
 
 ### 251. [ ] Repo branch line: show the active-filter selection the same way a worktree branch does
 
-**Status:** Not started · _(Not started | In progress | Done)_
+**Status:** Done · _(Not started | In progress | Done)_
 **Depends on:** none
 **Created:** 2026-06-28
 
