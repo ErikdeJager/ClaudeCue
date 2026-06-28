@@ -12,6 +12,3 @@ kanban-plugin: board
 ## READY
 
 ## DONE
-
-- [x] #234 — Kanban card hover-lift animation (drag affordance)
-	Plan: TASK-234.md

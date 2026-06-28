@@ -5439,3 +5439,44 @@ styles). No `kanban.ts` engine change.
 
 ---
 
+### 234. [x] Kanban card hover-lift animation (drag affordance)
+
+**Status:** Done
+**Depends on:** #233
+**Created:** 2026-06-28
+
+**Description**
+
+Make an in-app Kanban card lift slightly on hover — a smooth, subtle animation with a little flair
+— so the user understands the card is draggable. Direct user request (2026-06-28): "jump up
+slightly when hovered… smooth animation with a little bit of flair… but don't overdo it."
+
+**What shipped** (commit `d9137e6`, 2026-06-28) — **CSS-only** in
+`src/components/Kanban/KanbanPanel.module.css`:
+
+- Added a `transition` on `.card` for `transform` + `box-shadow` (`var(--dur-fast)
+  var(--ease-out)`), and a hover rule **`transform: translateY(-2px)` + a soft
+  `box-shadow: 0 4px 12px rgba(0,0,0,0.28)` + `cursor: grab`** (with `cursor: grabbing` on
+  `:active`) — a ~2px rise that eases in and out, understated.
+- **Scoped so it never fights dnd-kit's inline drag transform:** the hover rule is gated
+  `:not(.cardPlaceholder):not(.cardOverlay)` (the drag-state classes in use), so the lift doesn't
+  apply to the placeholder or the drag overlay.
+- **Reduced-motion aware:** since the global `body.reduce-motion` killswitch only zeroes the
+  transition *duration*, a scoped `body.reduce-motion .card:…:hover` rule neutralizes the lift
+  itself (`transform`/`box-shadow: none`), leaving just the calm border/cursor cue.
+
+**Key files touched:** `src/components/Kanban/KanbanPanel.module.css` (the `.card` transition +
+scoped `:hover` lift + reduced-motion override).
+
+**Dependencies:** **#233** — both edit the `.card` style; #233 established the redesigned card's
+resting look and this lift is layered on top (sequenced after to avoid conflicts).
+
+**Notes**
+
+- **Cross-platform:** pure CSS; `translateY`/`box-shadow`/`transition` render identically in
+  WKWebView (macOS) and WebView2 (Windows); plain-color shadow, no macOS-only effects.
+- **Out of scope:** the broader Kanban redesign (#233), DnD mechanics (#143), and lift on non-card
+  elements (columns/composer).
+
+---
+
