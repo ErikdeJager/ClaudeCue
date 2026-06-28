@@ -820,11 +820,12 @@
   }
 }
 
-/* --- Worktree sub-group (#74): an isolated worktree nested under its parent
-   repo, indented with a left rail so it reads as a child of the repo group. --- */
+/* --- Worktree sub-group (#74/#240): an isolated worktree under its parent repo,
+   rendered flush at the repo's own level (no indent / left rail) — a "worktree"
+   badge on the header is the sole worktree cue. Just vertical spacing keeps it a
+   discrete block. --- */
 .worktreeGroup {
-  margin: var(--space-1) 0 var(--space-1) var(--space-16);
-  border-left: 1px solid var(--border-hairline);
+  margin: var(--space-1) 0;
 }
 
 .worktreeHeader {
@@ -832,9 +833,25 @@
   align-items: center;
   gap: var(--space-6);
   height: 26px;
-  padding: 0 var(--space-8);
+  /* Left padding lands the GitBranch icon in the same 16px icon column as the repo's
+     Folder marker (#128) and the `.repoBranchLine` icon, so the worktree branch lines
+     up with the repo branch (#240). */
+  padding: 0 var(--space-8) 0 var(--space-16);
   border-radius: var(--radius-chip);
   color: var(--text-muted);
+}
+
+/* "worktree" marker (#240): mirrors the Overview/Canvas badge (#96) at the sidebar's
+   compact 10px label size. Now that the worktree isn't indented, this chip is the cue
+   that distinguishes a worktree branch from the repo's own branch line. */
+.worktreeBadge {
+  flex-shrink: 0;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-chip);
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--fs-meta-xs);
 }
 
 .worktreeIcon {

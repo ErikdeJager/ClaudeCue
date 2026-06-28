@@ -1011,6 +1011,11 @@ function WorktreeHeader({
           {branch}
         </button>
       )}
+      {/* "worktree" badge (#240): now that the sub-group isn't indented, this chip is
+          what distinguishes a worktree branch from the repo's own branch line — mirrors
+          the Overview/Canvas badge. Right-aligned (the flex:1 name pushes it + the "+"
+          to the right edge). Rail mode stays icon-only. */}
+      {!compact && <span className={styles.worktreeBadge}>worktree</span>}
       {/* Inline "+" new session in this worktree (#196), mirroring the repo header's
           + (#127): reuses the app-managed worktree folder (ref-count++, #166). The
           click is contained so it never opens the row's context menu. Disabled when
@@ -1369,9 +1374,9 @@ function RepoGroup({
           />
         ))}
 
-      {/* Isolated worktrees (#74), nested under their parent repo: each worktree
-      folder is a sub-group (branch + "worktree" badge) with its agent(s). Their
-      repo_path is the worktree, not this repo. */}
+      {/* Isolated worktrees (#74/#240), rendered flush at this repo's own level (no
+      indent): each worktree folder is a sub-group — a branch header with a "worktree"
+      badge — and its agent(s). Their repo_path is the worktree, not this repo. */}
       {worktreePaths.map((wt) => {
         const wtAgents = worktreeAgents.filter((s) => s.repoPath === wt);
         const wtSchedules = worktreeSchedules.filter(
