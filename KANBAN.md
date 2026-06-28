@@ -11,9 +11,6 @@ kanban-plugin: board
 
 ## DONE
 
-- [ ] #246 — Make a Kanban card's description body part of the drag surface (no text-selection)
-	Plan: TASK-246.md
-	Depends on: none
 - [ ] #247 — Overview filter: clicking the repo's own branch line shows only that branch (hide worktrees)
 	Plan: TASK-247.md
 	Depends on: none

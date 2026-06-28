@@ -6085,3 +6085,50 @@ blocked the other.)
 
 ---
 
+### 246. [x] Make a Kanban card's description body part of the drag surface (no text-selection)
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-28
+
+**Description**
+
+A Kanban card whose markdown has more than one line renders the extra lines as a grayed-out
+**description body** below the title. The whole card `<article>` is the dnd-kit drag grip,
+but the body was **excluded** from the drag surface: the `cardBody` wrapper carried a
+`noDrag` (`onPointerDown` → `stopPropagation`) that prevented a press-drag on the body from
+reaching the drag listeners — so dragging the description started a native **text
+selection** instead of moving the card. The user wanted to drag the card by its description
+and to stop the mouse selecting the body text.
+
+**What shipped** (commit `fe997e1`, 2026-06-28):
+
+- `src/components/Kanban/KanbanPanel.tsx` — removed `{...noDrag}` from the view-mode
+  `cardBody` wrapper, so a `pointerdown` on the body propagates to the card's sortable drag
+  listeners and a press-drag moves/reorders the card like the title.
+- `src/components/Kanban/KanbanPanel.module.css` — added **both** `-webkit-user-select:
+  none` (WKWebView/macOS) and `user-select: none` (WebView2/Chromium/Windows) to
+  `.cardBody` **and** `.cardTitle` (both are drag surfaces), so dragging never starts a
+  native selection. The editor textarea (`.cardEditInput`) was left untouched, keeping
+  normal text editing/selection in edit mode.
+- Body **links** and **task-list checkboxes** stay clickable: the existing 4px
+  `PointerSensor` activation distance means a click without ≥4px movement never starts a
+  drag, so their `onClick` handlers still fire — no targeted re-add of `noDrag` was needed.
+
+**Key files touched:** `src/components/Kanban/KanbanPanel.tsx` (dropped the body
+`noDrag`), `src/components/Kanban/KanbanPanel.module.css` (`user-select: none` on
+`.cardBody` + `.cardTitle`).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Accepted tradeoff (the user's explicit intent):** the rendered body text becomes
+  non-selectable with the mouse — dragging is preferred over selecting; a long description
+  is still selectable in **edit mode** (the editor textarea).
+- **Cross-platform:** ships both the `-webkit-` and the standard `user-select` property
+  (per the WebView-divergence guidance), and the drag uses the platform-neutral dnd-kit
+  PointerSensor — identical on macOS and Windows. `build` / `lint` / `test` pass.
+
+---
+
