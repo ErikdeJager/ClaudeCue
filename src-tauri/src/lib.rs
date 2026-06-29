@@ -201,6 +201,7 @@ pub fn run() {
             commands::search_file_contents,
             commands::read_text_file,
             commands::write_text_file,
+            commands::move_into_repo,
             commands::list_skills,
             commands::file_exists,
             commands::is_git_repo,

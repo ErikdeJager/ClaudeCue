@@ -37,6 +37,7 @@ import TemplateUseModal from "./components/TemplateUseModal/TemplateUseModal";
 import { reconcileTerminals } from "./components/Terminal/terminalPool";
 import Toaster from "./components/Toaster/Toaster";
 import UpdateModal from "./components/Update/UpdateModal";
+import { useOsFileDrop } from "./osFileDrop";
 import { useStore } from "./store";
 import { useKeyboardNav } from "./useKeyboardNav";
 import { IS_MAIN_WINDOW, ownedHere } from "./windowContext";
@@ -82,6 +83,9 @@ function MainApp() {
 
   // Global Shift+Arrow navigation between agents / views (#24).
   useKeyboardNav();
+
+  // OS file drag-drop into the file tree (#253) — this window's webview listener.
+  useOsFileDrop();
 
   // Terminal instances live in a persistent pool (not the React view tree) so
   // they survive Overview↔Canvas switches. Dispose one only when its

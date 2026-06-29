@@ -275,6 +275,16 @@ export const readTextFile = (repo: string, file: string) =>
 export const writeTextFile = (repo: string, file: string, contents: string) =>
   invoke<void>("write_text_file", { repo, file, contents });
 
+/** Move an external OS file/dir (`source`, an absolute OS-native path the user
+ * dragged in) into the repo dir `destSubdir` (#253). The destination is confined to
+ * the repo; the source is the user's drag (explicit consent, not confined). Returns
+ * the moved item's new repo-relative path; rejects a collision / out-of-repo dest. */
+export const moveIntoRepo = (
+  repo: string,
+  destSubdir: string,
+  source: string,
+) => invoke<string>("move_into_repo", { repo, destSubdir, source });
+
 /** Best-effort slash-invokable skills/commands for `cwd` (#114) — the
  * scheduled-prompt autocomplete. Reads project + user `.claude/{skills,commands}`,
  * project shadowing user; a missing dir just yields fewer entries (never throws). */

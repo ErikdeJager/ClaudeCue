@@ -487,6 +487,20 @@ pub fn write_text_file(repo: String, file: String, contents: String) -> Result<(
     crate::files::write_text_file(&repo, &file, &contents).map_err(SessionError::Io)
 }
 
+/// Move an external OS file/directory (`source`) into the repo dir `dest_subdir`
+/// (#253 — drag-from-OS-into-the-file-tree). The destination is confined to the repo;
+/// the source is the user's dragged path (explicit consent, not confined). Returns the
+/// new repo-relative path on success; a collision / out-of-repo destination / missing
+/// source surfaces as a typed `SessionError::Io { message }` for an error toast.
+#[tauri::command]
+pub fn move_into_repo(
+    repo: String,
+    dest_subdir: String,
+    source: String,
+) -> Result<String, SessionError> {
+    crate::files::move_into_repo(&repo, &dest_subdir, &source).map_err(SessionError::Io)
+}
+
 /// Best-effort slash-invokable skills/commands for a folder (#114) — the
 /// scheduled-prompt autocomplete. Reads project `<cwd>/.claude` + user `~/.claude`
 /// (project shadows user); a missing/unreadable dir simply yields fewer entries.

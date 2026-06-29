@@ -441,6 +441,97 @@ pub fn write_text_file(repo: impl AsRef<Path>, file: &str, contents: &str) -> Re
     fs::write(&write_path, contents).map_err(|e| e.to_string())
 }
 
+/// Whether a `rename` failure is a cross-volume error (the source and destination are
+/// on different filesystems, so `fs::rename` can't work) — `EXDEV` on unix, the
+/// `ERROR_NOT_SAME_DEVICE` code on Windows. Used to decide when to fall back to a
+/// copy-then-remove move. (`std::io::ErrorKind::CrossesDevices` is not yet stable, so
+/// we match the raw OS error codes, which is portable here.)
+fn is_cross_device(err: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    let codes: &[i32] = &[18]; // EXDEV
+    #[cfg(windows)]
+    let codes: &[i32] = &[17]; // ERROR_NOT_SAME_DEVICE
+    #[cfg(not(any(unix, windows)))]
+    let codes: &[i32] = &[];
+    err.raw_os_error()
+        .map(|c| codes.contains(&c))
+        .unwrap_or(false)
+}
+
+/// Recursively copy `src` (a file or directory) to `dst` (which must not exist). The
+/// cross-volume fallback for `move_into_repo` — std has no recursive copy. Files use
+/// `fs::copy`; a directory is created and its entries copied in turn.
+fn copy_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    let meta = fs::symlink_metadata(src).map_err(|e| e.to_string())?;
+    if meta.is_dir() {
+        fs::create_dir(dst).map_err(|e| e.to_string())?;
+        for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            copy_recursive(&entry.path(), &dst.join(entry.file_name()))?;
+        }
+        Ok(())
+    } else {
+        fs::copy(src, dst).map(|_| ()).map_err(|e| e.to_string())
+    }
+}
+
+/// Move an external OS file/directory (`source`, an absolute OS-native path the user
+/// dragged in) **into** the repo directory `dest_subdir` (#253 — the second deliberate
+/// `files.rs` write after `write_text_file`). The **destination** is confined to the
+/// repo (must resolve to an existing directory inside it); the **source** is *not*
+/// confined — it's the user's explicit drag, like the #163 native-dialog consent. The
+/// destination filename is derived from the source's own `file_name()` (so the
+/// frontend never does OS-separator handling). A name collision in the target dir is
+/// **refused** (no overwrite). The move is data-safe: a same-volume `fs::rename`, else
+/// (cross-volume) a recursive copy followed by removing the source **only after** the
+/// copy fully succeeds — so a mid-operation failure can never lose the original.
+/// Returns the new **repo-relative POSIX** path (matching `list_dir`) for the
+/// post-drop refresh + toast. No shell-out, so it behaves identically on macOS/Windows.
+pub fn move_into_repo(
+    repo: impl AsRef<Path>,
+    dest_subdir: &str,
+    source: &str,
+) -> Result<String, String> {
+    let repo = repo.as_ref();
+    // Confine the destination directory to the repo (rejects `..`/symlink escapes); it
+    // must already exist as a directory (we move into it, we don't create the tree).
+    let dir = confine(repo, dest_subdir)?;
+    if !dir.is_dir() {
+        return Err("destination is not a directory".to_string());
+    }
+    let src = Path::new(source);
+    let src_meta =
+        fs::symlink_metadata(src).map_err(|_| format!("cannot read dropped item `{source}`"))?;
+    let os_name = src.file_name().ok_or("dropped item has no file name")?;
+    let name = os_name.to_string_lossy().to_string();
+    let dest = dir.join(os_name);
+    // Refuse to clobber an existing item (collision → error, no overwrite).
+    if dest.symlink_metadata().is_ok() {
+        return Err(format!("`{name}` already exists here"));
+    }
+    match fs::rename(src, &dest) {
+        Ok(()) => {}
+        Err(e) if is_cross_device(&e) => {
+            // Different volume: copy the whole item across, then remove the source —
+            // copy-first ordering means a failure leaves the original intact.
+            copy_recursive(src, &dest)?;
+            let removed = if src_meta.is_dir() {
+                fs::remove_dir_all(src)
+            } else {
+                fs::remove_file(src)
+            };
+            removed.map_err(|e| e.to_string())?;
+        }
+        Err(e) => return Err(e.to_string()),
+    }
+    let prefix = dest_subdir.trim_matches('/');
+    Ok(if prefix.is_empty() {
+        name
+    } else {
+        format!("{prefix}/{name}")
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -684,5 +775,80 @@ mod tests {
         assert!(write_text_file(&dir, "/etc/recue-escape.md", "x").is_err());
         assert!(write_text_file(&dir, "nope/deep/x.md", "x").is_err()); // parent missing
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn moves_a_file_into_the_repo_root_and_a_subdir() {
+        let repo = tmp("move-repo");
+        fs::create_dir_all(repo.join("sub")).unwrap();
+        // An external source dir (a sibling of the repo) holds the dragged files.
+        let ext = tmp("move-src");
+        fs::write(ext.join("dropped.txt"), "hello").unwrap();
+        fs::write(ext.join("into-sub.txt"), "world").unwrap();
+
+        // Into the repo root (empty dest_subdir).
+        let rel = move_into_repo(&repo, "", ext.join("dropped.txt").to_str().unwrap()).unwrap();
+        assert_eq!(rel, "dropped.txt");
+        assert_eq!(read_text_file(&repo, "dropped.txt").unwrap(), "hello");
+        // The source was removed (it's a move, not a copy).
+        assert!(!ext.join("dropped.txt").exists());
+
+        // Into a subdir — the returned path is repo-relative POSIX.
+        let rel = move_into_repo(&repo, "sub", ext.join("into-sub.txt").to_str().unwrap()).unwrap();
+        assert_eq!(rel, "sub/into-sub.txt");
+        assert_eq!(read_text_file(&repo, "sub/into-sub.txt").unwrap(), "world");
+
+        let _ = fs::remove_dir_all(&repo);
+        let _ = fs::remove_dir_all(&ext);
+    }
+
+    #[test]
+    fn moves_a_directory_recursively_into_the_repo() {
+        let repo = tmp("move-dir-repo");
+        let ext = tmp("move-dir-src");
+        fs::create_dir_all(ext.join("folder/nested")).unwrap();
+        fs::write(ext.join("folder/a.txt"), "a").unwrap();
+        fs::write(ext.join("folder/nested/b.txt"), "b").unwrap();
+
+        let rel = move_into_repo(&repo, "", ext.join("folder").to_str().unwrap()).unwrap();
+        assert_eq!(rel, "folder");
+        assert_eq!(read_text_file(&repo, "folder/a.txt").unwrap(), "a");
+        assert_eq!(read_text_file(&repo, "folder/nested/b.txt").unwrap(), "b");
+        assert!(!ext.join("folder").exists());
+
+        let _ = fs::remove_dir_all(&repo);
+        let _ = fs::remove_dir_all(&ext);
+    }
+
+    #[test]
+    fn move_refuses_a_name_collision_without_overwriting() {
+        let repo = tmp("move-collide-repo");
+        fs::write(repo.join("dup.txt"), "original").unwrap();
+        let ext = tmp("move-collide-src");
+        fs::write(ext.join("dup.txt"), "incoming").unwrap();
+
+        assert!(move_into_repo(&repo, "", ext.join("dup.txt").to_str().unwrap()).is_err());
+        // The existing file is untouched and the source still exists (no data loss).
+        assert_eq!(read_text_file(&repo, "dup.txt").unwrap(), "original");
+        assert!(ext.join("dup.txt").exists());
+
+        let _ = fs::remove_dir_all(&repo);
+        let _ = fs::remove_dir_all(&ext);
+    }
+
+    #[test]
+    fn move_rejects_an_out_of_repo_destination_and_missing_source() {
+        let repo = tmp("move-reject-repo");
+        let ext = tmp("move-reject-src");
+        fs::write(ext.join("ok.txt"), "x").unwrap();
+
+        // A traversal destination is rejected (confine), leaving the source in place.
+        assert!(move_into_repo(&repo, "../escape", ext.join("ok.txt").to_str().unwrap()).is_err());
+        assert!(ext.join("ok.txt").exists());
+        // A missing source errors clearly.
+        assert!(move_into_repo(&repo, "", ext.join("nope.txt").to_str().unwrap()).is_err());
+
+        let _ = fs::remove_dir_all(&repo);
+        let _ = fs::remove_dir_all(&ext);
     }
 }

@@ -421,3 +421,40 @@ Verification: `npm run lint`, `npm run build`, `npm test` (357 tests, incl. the 
 - On a Windows box, build a Canvas template whose **relative** file block path is typed
   with backslashes (`src\foo\bar.md`), then use that template on **macOS** and confirm the
   panel opens the file and its title shows `bar.md` (the normalization makes it portable).
+
+## 2026-06-29
+
+### Drag OS files into the file tree (#253)
+
+A new feature: dragging files/folders from the OS (Finder/Explorer) onto a FileTree
+folder/root **moves** them into the repo. Built cross-platform from the start —
+
+- **OS-native input path, not the DOM:** uses Tauri's `getCurrentWebview().
+  onDragDropEvent` (works on WKWebView **and** WebView2), wired per-window from `App.tsx`
+  and the detached `CanvasWindow`. The dragged `paths` are OS-native (backslashes on
+  Windows) and pass straight through to Rust untouched — no `splitPath`/`joinPath`.
+- **Position math is DPR-aware:** the event's `position` is in **physical** pixels; the
+  hit-test divides by `window.devicePixelRatio` before `document.elementFromPoint`, so it
+  is correct under macOS Retina **and** Windows fractional scaling.
+- **The move is `std::fs` only (no shell-out):** same-volume `fs::rename`, else (a
+  cross-device error — `EXDEV` on unix, `ERROR_NOT_SAME_DEVICE`/17 on Windows, matched by
+  `raw_os_error`) a recursive copy **then** remove. So a cross-drive move works on both
+  OSes and a failure never loses the source. The destination is repo-confined; the source
+  is the user's dragged path (explicit consent).
+- **Highlight is token-only CSS** (`.dropTarget` = accent outline + `--accent-dim`), no
+  platform-divergent styling. The capability already lists `core:default` for windows
+  `["main","canvas-*"]`, which covers the webview drag-drop events — no capability change.
+
+#### Still needs manual Windows verification (#253)
+
+- **WebView2 drop fires + delivers paths**: on a Windows build, drag one or more files
+  from Explorer onto a folder row and the tree root, and confirm `onDragDropEvent` fires
+  with the absolute `paths` and the files move in (toast confirms). CI can't drive a GUI
+  drag.
+- **Fractional-DPR hit-test**: on a Windows box at 125%/150% display scaling, confirm the
+  highlighted/landed folder matches the cursor exactly (the `devicePixelRatio` conversion).
+  Also re-confirm on a macOS Retina display.
+- **Cross-volume move**: drag a file from a different drive/volume into the repo (Windows:
+  another drive letter; macOS: another mounted volume) and confirm the copy-then-remove
+  fallback moves it intact and removes the source. The same-volume rename + collision +
+  validation paths are covered by the Rust unit tests.

@@ -155,6 +155,21 @@ even though it works in `tauri dev`.
   Coloring uses only the on-system `--status-done/-awaiting/-error` tokens, so it's
   identical on macOS and Windows (the only OS-sensitive primitive is the `git`
   shell-out, which goes through the shared `hidden_command` console-flash guard).
+- **OS files → file tree (#253):** dragging files/folders from Finder/Explorer onto a
+  FileTree **folder row** (or the tree **root**) **moves** them into that directory.
+  Tauri's webview drag-drop event is **window-global** (not DOM-bound), so `src/
+  osFileDrop.ts` (`useOsFileDrop`, wired from both `App.tsx` and the detached
+  `CanvasWindow` — each its own webview) listens via `getCurrentWebview().
+  onDragDropEvent` and **hit-tests** the cursor: physical→CSS px via `devicePixelRatio`
+  (Retina + Windows fractional scaling), `document.elementFromPoint` →
+  `closest("[data-filetree-droptarget]")`/`[data-filetree-repo]` (pure
+  `resolveDropTarget`) resolves the repo + dir (a folder row → its path, a file row →
+  its parent dir, the root container → `""`). On `over` the store's transient
+  `fileDropTarget` highlights the exact target (token-only `.dropTarget`); on `drop`
+  `moveFilesIntoRepo` calls `move_into_repo` per path, bumps a per-repo `fileTreeRefresh`
+  signal (each tree reloads its visible levels — no reset), and toasts the result. The
+  in-app **dnd-kit** drags (pointer events) are a separate input stream that never
+  clashes with the OS drag.
 - **Views:** the store holds `sessions / selectedId / view / recents / branches /
   canvases / activeCanvasId / claudeMissing / toasts / schedules / settings /
   sidebarWidth / folderOrder`; the app mounts one of
@@ -476,7 +491,7 @@ even though it works in `tauri dev`.
 │   ├── src/commands.rs     # Tauri command surface + event payloads
 │   ├── src/store.rs        # JSON persistence (sessions, recents, canvases, canvas templates, schedules, settings, sidebar width, folder order)
 │   ├── src/git.rs          # Git: branch + diff + compare (#81) + per-file status (#252) + list (local+remote #180) + checkout + worktree (#74) + fetch (#180) + pull --ff-only (#181)
-│   ├── src/files.rs        # Repo file access (lazy list_dir tree + search_files picker + search_file_contents in-tree content search #202, read/write_text_file #141, path-validated)
+│   ├── src/files.rs        # Repo file access (lazy list_dir tree + search_files picker + search_file_contents in-tree content search #202, read/write_text_file #141, move_into_repo OS-drop #253, path-validated)
 │   ├── src/skills.rs        # Read-only scan of .claude skills/commands for prompt autocomplete (#114)
 │   ├── Info.plist          # Partial plist (mic + speech-recognition usage strings), merged into the bundle
 │   ├── tauri.conf.json     # Window, bundle, build config
@@ -587,11 +602,17 @@ cargo llvm-cov --manifest-path src-tauri/Cargo.toml --html   # html report
   error. `--ff-only` only ever fast-forwards (never a merge commit / partial-merge
   state in a folder an agent may be using); a diverged or upstream-less branch fails
   cleanly with an error toast. No confirm gate; still no commits / push.
-- **File access is read-mostly, with one deliberate write** — `files.rs` lists +
-  reads repo text files for the viewer (#40/#44) and, since **#141**, writes a repo
-  text file (`write_text_file`) — the app's **first arbitrary file write**, backing
-  the markdown **Kanban board** (#141–#151) and the FileViewer's **editable raw
-  markdown / plain-text** view (#148/#149). **File listing scales to any repo, all
+- **File access is read-mostly, with two deliberate writes** — `files.rs` lists +
+  reads repo text files for the viewer (#40/#44) and writes the repo: since **#141**
+  `write_text_file` (the app's **first arbitrary file write**, backing the markdown
+  **Kanban board** #141–#151 and the FileViewer's **editable raw markdown / plain-text**
+  view #148/#149), and since **#253** `move_into_repo` — the **second** write — which
+  **moves a dragged OS file/directory into** a repo folder (drag-from-Finder/Explorer
+  onto the file tree). The move confines only the **destination** to the repo (the
+  source is the user's dragged OS path — explicit consent, like the #163 native dialog),
+  refuses a name collision (no overwrite), and is data-safe (same-volume `fs::rename`,
+  else cross-volume recursive copy **then** remove — a failure never loses the source);
+  no shell-out, so it behaves identically on macOS/Windows. **File listing scales to any repo, all
   files:** the old recursive `list_files` (a flat list **capped at 500 / depth 8**,
   walked in unsorted filesystem order — so a large repo's files, incl. user-created
   ones like a Kanban `.md`, were silently truncated, and *which* ones differed per

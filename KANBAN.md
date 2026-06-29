@@ -8,9 +8,6 @@ kanban-plugin: board
 
 ## READY
 
-- [ ] #253 — Drag OS files into the file tree to move them into the repo
-	Plan: TASK-253.md
-	Depends on: none
 - [ ] #254 — Render Mermaid diagrams in rendered markdown (file viewer)
 	Plan: TASK-254.md
 	Depends on: none
@@ -19,4 +16,8 @@ kanban-plugin: board
 	Depends on: none
 
 ## DONE
+
+- [ ] #253 — Drag OS files into the file tree to move them into the repo
+	Plan: TASK-253.md
+	Depends on: none
 

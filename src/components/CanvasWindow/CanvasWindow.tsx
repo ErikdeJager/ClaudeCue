@@ -9,6 +9,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 
+import { useOsFileDrop } from "../../osFileDrop";
 import { useStore } from "../../store";
 import { useKeyboardNav } from "../../useKeyboardNav";
 import { DETACHED_CANVAS_ID, ownedHere } from "../../windowContext";
@@ -68,6 +69,9 @@ function CanvasWindow() {
   // Spatial panel nav (#76) works here; new-session / view-toggle / canvas-jump
   // are inert in a canvas-only window (guarded in the hook by window identity).
   useKeyboardNav();
+
+  // OS file drag-drop into a FileTree panel in this detached window (#253).
+  useOsFileDrop();
 
   // Own only the PTYs in this window's canvas (#84) — dispose any others the pool
   // might hold. On re-dock (window closing) the main window recreates them.

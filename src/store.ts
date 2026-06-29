@@ -230,6 +230,24 @@ export function isClaudeActive(state: AppState): boolean {
   return state.sessions.every((s) => (s.agent ?? "claude") === "claude");
 }
 
+/** Build the toast message for an OS-file drop-move (#253). Pure (testable): names
+ * how many items moved + where, and surfaces the first error when some/all failed. */
+export function moveResultMessage(
+  moved: number,
+  destSubdir: string,
+  errors: string[],
+): string {
+  const where = destSubdir ? destSubdir : "the repo root";
+  const items = (n: number) => `${n} item${n === 1 ? "" : "s"}`;
+  if (moved > 0 && errors.length === 0) {
+    return `Moved ${items(moved)} into ${where}`;
+  }
+  if (moved > 0) {
+    return `Moved ${items(moved)} into ${where}; ${items(errors.length)} failed: ${errors[0]}`;
+  }
+  return errors[0] ?? "Move failed";
+}
+
 /** Sample markdown changelog for the dev mock update (#193) — exercises the #192
  * patch-notes render (headings, bullets, an inline link) in the "What's new" slot. */
 const SAMPLE_UPDATE_NOTES = [
@@ -739,6 +757,14 @@ export interface AppState {
    * `branches`) on load, on each session busy→idle edge, and via the tree's Refresh
    * button. A missing repo key / empty map = no coloring (clean or non-git). */
   fileStatuses: Record<string, Record<string, FileStatusCode>>;
+  /** The FileTree directory currently hovered by an OS file-drag (#253): the repo +
+   * repo-relative dir (`""` = root) a drop would land in, or null when not over a
+   * tree. Set by the window-global drag-drop listener; read by every FileTree to
+   * highlight the precise drop target. Transient (never persisted). */
+  fileDropTarget: { repo: string; dir: string } | null;
+  /** Per-repo monotonic counter bumped after a successful drop-move (#253) so each
+   * FileTree reloads its visible levels (the moved-in file appears) without a reset. */
+  fileTreeRefresh: Record<string, number>;
   /** Assigned per-repo colors, path → hex (#35); unassigned repos derive a default. */
   repoColors: Record<string, string>;
   /** Per-repo ordered list of extra (non-agent) Overview panels (#38). */
@@ -972,6 +998,17 @@ export interface AppState {
    * mount / Refresh path), else every repo in the sidebar set (load / busy→idle /
    * git-write paths). Fail-open per repo (a failed read leaves the prior map). */
   refreshFileStatuses: (repo?: string) => Promise<void>;
+  /** Set/clear the FileTree OS-drag drop target highlight (#253); no-ops when the
+   * target is unchanged so a stream of "over" events doesn't churn re-renders. */
+  setFileDropTarget: (target: { repo: string; dir: string } | null) => void;
+  /** Move dragged OS files/dirs (`sources`, absolute OS paths) into `destSubdir` of
+   * `repo` (#253). Calls the backend per source, bumps the repo's FileTree refresh
+   * signal on any success, and toasts a concise result. Fail-open per source. */
+  moveFilesIntoRepo: (
+    repo: string,
+    destSubdir: string,
+    sources: string[],
+  ) => Promise<void>;
   /** Assign a repo's color (optimistic + persisted) (#35). */
   setRepoColor: (path: string, color: string) => Promise<void>;
   /** Apply + persist application settings (#100) and run their side-effects. */
@@ -1526,6 +1563,8 @@ export const useStore = create<AppState>()((set, get) => ({
   recents: [],
   branches: {},
   fileStatuses: {},
+  fileDropTarget: null,
+  fileTreeRefresh: {},
   repoColors: {},
   overviewPanels: {},
   overviewOrder: {},
@@ -2305,6 +2344,49 @@ export const useStore = create<AppState>()((set, get) => ({
       });
       return changed ? { fileStatuses: next } : {};
     });
+  },
+
+  setFileDropTarget: (target) => {
+    set((s) => {
+      const cur = s.fileDropTarget;
+      // No-op when unchanged (both null, or same repo+dir) — "over" fires rapidly
+      // during a drag, so this keeps the FileTree from re-rendering on every tick.
+      if (cur === target) return {};
+      if (cur && target && cur.repo === target.repo && cur.dir === target.dir) {
+        return {};
+      }
+      return { fileDropTarget: target };
+    });
+  },
+
+  moveFilesIntoRepo: async (repo, destSubdir, sources) => {
+    if (sources.length === 0) return;
+    // Move each dragged item; fail-open per source so one bad file doesn't abort the
+    // rest (e.g. a collision on one while others succeed).
+    const results = await Promise.allSettled(
+      sources.map((src) => ipc.moveIntoRepo(repo, destSubdir, src)),
+    );
+    const moved = results.filter((r) => r.status === "fulfilled").length;
+    const errors = results
+      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+      .map((r) =>
+        isSessionError(r.reason) ? r.reason.message : "move failed",
+      );
+    if (moved > 0) {
+      // Bump the per-repo refresh signal so the FileTree reloads its visible levels
+      // (the moved-in item appears), and re-read git statuses (new files → green).
+      set((s) => ({
+        fileTreeRefresh: {
+          ...s.fileTreeRefresh,
+          [repo]: (s.fileTreeRefresh[repo] ?? 0) + 1,
+        },
+      }));
+      void get().refreshFileStatuses(repo);
+    }
+    get().pushToast(
+      moveResultMessage(moved, destSubdir, errors),
+      moved === 0 ? "error" : undefined,
+    );
   },
 
   setRepoColor: async (path, color) => {

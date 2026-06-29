@@ -43,6 +43,13 @@ function statusClass(status: FileStatusCode | undefined): string {
   return "";
 }
 
+/** Repo-relative directory of a file path (`""` for a root file) — the directory an
+ * OS file dropped onto that file row would enter (#253). */
+function parentDir(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx === -1 ? "" : path.slice(0, idx);
+}
+
 /** Right-click menu state: the cursor position + the file the menu targets. */
 interface FileMenu {
   x: number;
@@ -92,6 +99,12 @@ function FileTree({ repoPath }: { repoPath: string }) {
     () => buildFolderRollup(statusMap ?? {}),
     [statusMap],
   );
+  // OS file-drag drop target (#253): when it points at this repo, the dir (`""` = root)
+  // a drop would land in is highlighted. Refresh signal bumped after a successful move.
+  const dropTarget = useStore((s) =>
+    s.fileDropTarget?.repo === repoPath ? s.fileDropTarget.dir : null,
+  );
+  const moveRefresh = useStore((s) => s.fileTreeRefresh[repoPath] ?? 0);
   // Children keyed by directory path ("" = repo root); a missing key = not yet loaded.
   const [children, setChildren] = useState<Record<string, DirEntry[]>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -140,6 +153,22 @@ function FileTree({ repoPath }: { repoPath: string }) {
   useEffect(() => {
     void refreshFileStatuses(repoPath);
   }, [repoPath, nonce, refreshFileStatuses]);
+
+  // After an OS file-drop move (#253), reload every currently-loaded level so the
+  // moved-in item appears **without** a full reset (expansion state is preserved).
+  // `childrenRef` mirrors `children` so the effect can read the latest loaded levels
+  // without depending on `children` (which would re-run it on every load).
+  const childrenRef = useRef(children);
+  childrenRef.current = children;
+  const lastMoveRefresh = useRef(moveRefresh);
+  useEffect(() => {
+    if (moveRefresh === lastMoveRefresh.current) return; // mount / no move yet
+    lastMoveRefresh.current = moveRefresh;
+    for (const dir of Object.keys(childrenRef.current)) {
+      inFlight.current.delete(dir); // force a re-fetch of this level
+      load(dir);
+    }
+  }, [moveRefresh, load]);
 
   // Clear the search when the repo changes (a stale query shouldn't carry over).
   useEffect(() => {
@@ -320,14 +349,18 @@ function FileTree({ repoPath }: { repoPath: string }) {
         // A folder is tinted in its highest-severity descendant's color (#252) — so a
         // collapsed folder still shows that something inside it changed (red wins).
         const cls = statusClass(folderRollup.get(node.path));
+        // OS-drop target (#253): a drop on this folder row lands inside it; highlight
+        // it while the drag hovers here.
+        const drop = dropTarget === node.path ? ` ${styles.dropTarget}` : "";
         return (
           <div key={node.path}>
             <button
               type="button"
-              className={`${styles.row}${cls ? ` ${cls}` : ""}`}
+              className={`${styles.row}${cls ? ` ${cls}` : ""}${drop}`}
               style={indent}
               onClick={() => toggle(node.path)}
               title={node.path}
+              data-filetree-droptarget={node.path}
             >
               <Chevron
                 size={13}
@@ -361,6 +394,8 @@ function FileTree({ repoPath }: { repoPath: string }) {
           onClick={() => openFile(node.path)}
           onContextMenu={(event) => openMenu(event, node.path)}
           title={node.path}
+          // A drop on a file row lands in its containing directory (#253).
+          data-filetree-droptarget={parentDir(node.path)}
         >
           <FileText
             size={13}
@@ -387,6 +422,8 @@ function FileTree({ repoPath }: { repoPath: string }) {
             className={styles.ghost}
             style={indent}
             title={`${rel} (deleted)`}
+            // A drop on a ghost row lands in this directory level (#253).
+            data-filetree-droptarget={path}
           >
             <FileText
               size={13}
@@ -505,7 +542,15 @@ function FileTree({ repoPath }: { repoPath: string }) {
   const root = children[""];
 
   return (
-    <div className={styles.tree}>
+    <div
+      className={`${styles.tree}${dropTarget === "" ? ` ${styles.dropTarget}` : ""}`}
+      // OS file-drop target markers (#253): the whole tree is the repo-root drop zone;
+      // `data-filetree-repo` lets the window-global drop listener resolve which repo a
+      // folder/file row (a descendant) belongs to. A drop on a row's own
+      // `data-filetree-droptarget` (nearer via `closest`) wins over this root marker.
+      data-filetree-repo={repoPath}
+      data-filetree-droptarget=""
+    >
       <div className={styles.toolbar}>
         <div className={styles.search}>
           <Search

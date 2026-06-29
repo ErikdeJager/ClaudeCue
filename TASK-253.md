@@ -1,6 +1,6 @@
-### 253. [ ] Drag OS files into the file tree to move them into the repo (drop on folders/root, with drop-target feedback)
+### 253. [x] Drag OS files into the file tree to move them into the repo (drop on folders/root, with drop-target feedback)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-29
 
@@ -91,7 +91,7 @@ cssY)` and walk up to the nearest element carrying a drop-target marker (Subtask
 
 1. [ ] **Backend: a path-validated move command** (`src-tauri/src/files.rs` +
    `commands.rs` + `lib.rs`).
-   - [ ] `pub fn move_into_repo(repo, dest_subdir: &str, source: &str) -> Result<String,
+   - [x] `pub fn move_into_repo(repo, dest_subdir: &str, source: &str) -> Result<String,
      String>`: validate `dest_subdir` with the existing `confine(repo, dest_subdir)`
      (must resolve to an existing directory inside the repo); derive the destination
      filename from the **source**'s `Path::file_name()` (so the frontend never computes
@@ -100,13 +100,13 @@ cssY)` and walk up to the nearest element carrying a drop-target marker (Subtask
      on a cross-device error, `std::fs::copy` (file) or a recursive directory copy,
      then remove the source only after the copy fully succeeds. Return the new
      repo-relative path of the moved item (for the refresh + toast).
-   - [ ] Reject a `source` that does not exist / is not readable with a clear error.
+   - [x] Reject a `source` that does not exist / is not readable with a clear error.
      The `source` is intentionally **not** confined to the repo (it's the user's
      dragged OS path); only the **destination** is confined.
-   - [ ] Register `#[tauri::command] move_into_repo` in `commands.rs` + the `lib.rs`
+   - [x] Register `#[tauri::command] move_into_repo` in `commands.rs` + the `lib.rs`
      invoke handler; add the `moveIntoRepo(repo, destSubdir, source)` wrapper to
      `src/ipc.ts`.
-   - [ ] Unit/integration test (temp dir, gated like existing `files.rs`/`git.rs`
+   - [x] Unit/integration test (temp dir, gated like existing `files.rs`/`git.rs`
      tests): same-dir move, move into a subdir, collision rejection, out-of-repo
      destination rejection (`..`), and a missing-source error. Cross-volume copy+remove
      can't be unit-tested portably — cover the same-volume rename path and the
@@ -120,17 +120,17 @@ cssY)` and walk up to the nearest element carrying a drop-target marker (Subtask
 
 3. [ ] **App-level OS-drop listener + hit-test + dispatch** (a small reusable module,
    e.g. `src/osFileDrop.ts`, wired from `App.tsx` **and** `CanvasWindow`).
-   - [ ] In the main shell **and** the detached `CanvasWindow` (each is its own
+   - [x] In the main shell **and** the detached `CanvasWindow` (each is its own
      window/document/webview, #84), subscribe once to
      `getCurrentWebview().onDragDropEvent`. (`getCurrentWebview()` is per-window, so
      each window handles drops landing in it — cross-window correct.)
-   - [ ] Convert `payload.position` physical → CSS pixels with
+   - [x] Convert `payload.position` physical → CSS pixels with
      `window.devicePixelRatio` (matters on Windows fractional scaling **and** macOS
      Retina — verify on both), then `document.elementFromPoint` → `closest(
      "[data-filetree-droptarget]")` to resolve the target directory + its
      `data-filetree-repo`. No match → not a FileTree target → ignore (and emit no
      highlight).
-   - [ ] On `"over"`: set the current highlight (repoPath + dir) in a lightweight
+   - [x] On `"over"`: set the current highlight (repoPath + dir) in a lightweight
      store/state the FileTree reads. On `"leave"`: clear it. On `"drop"`: clear the
      highlight and, for each path in `payload.paths`, call the store move action
      (Subtask 5) targeting the resolved repo+dir; ignore the drop if it didn't resolve
@@ -138,18 +138,18 @@ cssY)` and walk up to the nearest element carrying a drop-target marker (Subtask
 
 4. [ ] **FileTree: drop-target markers, highlight, and post-drop refresh**
    (`FileTree.tsx` + `FileTree.module.css`).
-   - [ ] Give the tree **root container** `data-filetree-repo={repoPath}` and
+   - [x] Give the tree **root container** `data-filetree-repo={repoPath}` and
      `data-filetree-droptarget=""` (empty = repo root). Give each **folder row**
      `data-filetree-droptarget={node.path}`. Give each **file row**
      `data-filetree-droptarget={parentDir(node.path)}` so a drop onto a file lands in
      its containing directory. (So `closest("[data-filetree-droptarget]")` always
      yields the directory a drop would enter.)
-   - [ ] Read the current drag highlight from the store; when it matches this tree's
+   - [x] Read the current drag highlight from the store; when it matches this tree's
      repo + a folder path (or `""` for root), apply a `.dropTarget` class
      (accent outline + `--accent-dim` fill, using existing tokens — no off-system
      color, no platform-divergent CSS). Highlight the root container when the target
      is `""`.
-   - [ ] After a successful move into `destSubdir`, **reload that directory level**:
+   - [x] After a successful move into `destSubdir`, **reload that directory level**:
      subscribe to a store refresh signal (Subtask 5) keyed by repoPath (+ optionally
      the dir) and re-run `load(destSubdir)` (and `load("")` if root) so the moved item
      shows without a full tree reset. (Reuse/extend the existing `load`/`nonce`
@@ -157,9 +157,9 @@ cssY)` and walk up to the nearest element carrying a drop-target marker (Subtask
 
 5. [ ] **Store: drag-highlight state, the move action, refresh signal, toast**
    (`src/store.ts`).
-   - [ ] Add transient `fileDropTarget: { repo: string; dir: string } | null` (the
+   - [x] Add transient `fileDropTarget: { repo: string; dir: string } | null` (the
      hovered target) with setters used by the Subtask-3 listener.
-   - [ ] Add `moveFilesIntoRepo(repo, destSubdir, sources: string[])`: call
+   - [x] Add `moveFilesIntoRepo(repo, destSubdir, sources: string[])`: call
      `ipc.moveIntoRepo` per source via `Promise.allSettled`; on success bump a
      per-repo **refresh signal** (e.g. `fileTreeRefresh: Record<string, number>`
      incremented for `repo`) that the FileTree's load effect depends on, and
@@ -167,53 +167,53 @@ cssY)` and walk up to the nearest element carrying a drop-target marker (Subtask
      Fail-open per file.
 
 6. [ ] **Cross-platform handling (call out explicitly).**
-   - [ ] `onDragDropEvent` works on WKWebView (macOS) and WebView2 (Windows) — verify
+   - [x] `onDragDropEvent` works on WKWebView (macOS) and WebView2 (Windows) — verify
      the drop fires + the paths arrive on **both**; the source paths are OS-native
      (backslashes on Windows) and pass through to Rust untouched (no `splitPath`).
-   - [ ] The move uses `std::fs::rename`/`copy` — **no shell-out**, so no
+   - [x] The move uses `std::fs::rename`/`copy` — **no shell-out**, so no
      `hidden_command` needed; works identically on both OSes (`fs::rename` returns a
      cross-device error on Windows across drives and on macOS across volumes → the same
      copy+remove fallback covers both).
-   - [ ] The drop-target highlight is token-driven CSS only.
-   - [ ] This is a **GUI drag gesture that CI can't exercise**: implement for both OSes,
+   - [x] The drop-target highlight is token-driven CSS only.
+   - [x] This is a **GUI drag gesture that CI can't exercise**: implement for both OSes,
      and record the real-box check (Windows WebView2 drop + fractional-DPR hit-test;
      macOS Retina hit-test; cross-volume move) in **`TRAJECTORY_TO_WINDOWS.md`** per the
      CLAUDE.md untestable-path rule.
 
 7. [ ] **Tests + docs.**
-   - [ ] Rust: the `move_into_repo` tests (Subtask 1).
-   - [ ] Frontend (Vitest): a pure hit-test/target-resolution helper if extracted
+   - [x] Rust: the `move_into_repo` tests (Subtask 1).
+   - [x] Frontend (Vitest): a pure hit-test/target-resolution helper if extracted
      (e.g. `resolveDropTarget(element)` → `{repo, dir} | null`) and the move action's
      result-message formatting.
-   - [ ] `npm run build` + `npm run lint` + `npm test` + `cargo test` green.
-   - [ ] Update `CLAUDE.md` (the FileTree #167 bullet + the `files.rs` "file access is
+   - [x] `npm run build` + `npm run lint` + `npm test` + `cargo test` green.
+   - [x] Update `CLAUDE.md` (the FileTree #167 bullet + the `files.rs` "file access is
      read-mostly, with … writes" note → now two writes: `write_text_file` and
      `move_into_repo`) and `TRAJECTORY_TO_WINDOWS.md`.
 
 **Acceptance criteria**
 
-- [ ] Dragging one or more files from the OS onto a **folder row** in the file tree
+- [x] Dragging one or more files from the OS onto a **folder row** in the file tree
   **moves** them into that folder on disk; the moved files appear in the tree without an
   app restart, and a toast confirms the result.
-- [ ] Dragging onto the **root area** of the tree (or onto a file row) moves the file
+- [x] Dragging onto the **root area** of the tree (or onto a file row) moves the file
   into the **repo root** (resp. the file's containing directory).
-- [ ] While dragging over the tree, the **exact folder/root** that would receive the
+- [x] While dragging over the tree, the **exact folder/root** that would receive the
   drop is **visually highlighted**, and the highlight clears on leave/drop.
-- [ ] A name collision in the target directory is **refused** (no overwrite) with an
+- [x] A name collision in the target directory is **refused** (no overwrite) with an
   explanatory toast; a move that fails partway leaves the **source intact** (copy-then-
   remove ordering).
-- [ ] Dropping a file outside any FileTree (terminal, Canvas background, etc.) does
+- [x] Dropping a file outside any FileTree (terminal, Canvas background, etc.) does
   nothing and shows no highlight.
-- [ ] The feature works in the sidebar tree, an Overview column, a Canvas panel, and a
+- [x] The feature works in the sidebar tree, an Overview column, a Canvas panel, and a
   **detached canvas window**.
-- [ ] **Works on both macOS and Windows:** the drop event + paths arrive on both
+- [x] **Works on both macOS and Windows:** the drop event + paths arrive on both
   WebViews, the physical→CSS position conversion uses `devicePixelRatio` (correct under
   Retina and Windows fractional scaling), the move uses `std::fs` (no shell, cross-
   volume copy+remove fallback on both), and the highlight is token-only CSS. The
   untestable real-box checks are logged in `TRAJECTORY_TO_WINDOWS.md`.
-- [ ] The existing in-app dnd-kit drags (sidebar → Canvas, tab reorder, etc.) are
+- [x] The existing in-app dnd-kit drags (sidebar → Canvas, tab reorder, etc.) are
   unaffected.
-- [ ] `npm run build`, `npm run lint`, `npm test`, and the Rust suite pass.
+- [x] `npm run build`, `npm run lint`, `npm test`, and the Rust suite pass.
 
 **Notes**
 

@@ -12,6 +12,7 @@ import {
   kanbanColumnColor,
   mergeRepoOrder,
   mergeSettings,
+  moveResultMessage,
   overviewClusterKeys,
   REPO_PALETTE,
   repoColor,
@@ -427,6 +428,34 @@ describe("versionIncreased (#190)", () => {
     expect(versionIncreased("0.0.1", "0.0.1")).toBe(false); // unchanged
     expect(versionIncreased("0.0.2", "0.0.1")).toBe(false); // downgrade
     expect(versionIncreased("1.2.0", "1.2.0-beta")).toBe(false); // pre-release ≤
+  });
+});
+
+describe("moveResultMessage (#253)", () => {
+  it("reports a successful move with item count and destination", () => {
+    expect(moveResultMessage(1, "src/utils", [])).toBe(
+      "Moved 1 item into src/utils",
+    );
+    expect(moveResultMessage(3, "src", [])).toBe("Moved 3 items into src");
+  });
+
+  it("names the repo root for an empty destination", () => {
+    expect(moveResultMessage(2, "", [])).toBe(
+      "Moved 2 items into the repo root",
+    );
+  });
+
+  it("surfaces the first error when some moved and some failed", () => {
+    expect(moveResultMessage(1, "src", ["`x` already exists here"])).toBe(
+      "Moved 1 item into src; 1 item failed: `x` already exists here",
+    );
+  });
+
+  it("reports the error when nothing moved", () => {
+    expect(moveResultMessage(0, "src", ["`x` already exists here"])).toBe(
+      "`x` already exists here",
+    );
+    expect(moveResultMessage(0, "src", [])).toBe("Move failed");
   });
 });
 

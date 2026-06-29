@@ -200,6 +200,16 @@
   text-decoration: line-through;
 }
 
+/* OS file-drop target highlight (#253): the precise folder row (or the whole tree
+   for a repo-root drop) an incoming OS file would land in. Token-only (accent
+   outline + dim fill), so it's identical on macOS and Windows. Defined after
+   `.row:hover` so it wins the equal-specificity tie during a drag. */
+.dropTarget {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--accent-dim);
+}
+
 /* ── Search results (#202) ───────────────────────────────────────────────── */
 .results {
   display: flex;
