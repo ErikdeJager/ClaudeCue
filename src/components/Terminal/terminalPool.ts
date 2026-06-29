@@ -96,6 +96,32 @@ function cssToken(name: string, fallback: string): string {
 }
 
 /**
+ * The CSS-pixel height of one rendered terminal row (#262), read from xterm's
+ * render metrics. xterm exposes no public getter for this, so we read the
+ * internal render service **defensively**: any shape change (or a not-yet-measured
+ * terminal) returns `undefined` and the caller falls back to the FitAddon-only
+ * behavior — it never throws. This is a pure WebView measurement (xterm's own cell
+ * sizing), identical under WKWebView (macOS) and WebView2 (Windows).
+ */
+function rowHeightCss(term: XTerm): number | undefined {
+  try {
+    const core = (
+      term as unknown as {
+        _core?: {
+          _renderService?: {
+            dimensions?: { css?: { cell?: { height?: number } } };
+          };
+        };
+      }
+    )._core;
+    const h = core?._renderService?.dimensions?.css?.cell?.height;
+    return typeof h === "number" && h > 0 ? h : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * A lazily-created off-screen layer that holds terminals not currently shown in
  * a view. It is laid out (positioned, sized) so a parked terminal stays
  * measurable — xterm misbehaves at 0×0 — without being visible or interactive.
@@ -238,6 +264,31 @@ function createHost(sessionId: string): TerminalHost {
     if (host.slot === null) return;
     if (container.offsetWidth === 0 || container.offsetHeight === 0) return;
     safeFit();
+    // Conservative bottom-clearance guard (#262). FitAddon picks
+    // rows = floor(contentHeight / cellHeight) from xterm's measured cell height,
+    // but the *painted* row can be a hair taller (sub-pixel rounding at certain
+    // font-size/line-height combos), so rows × cellHeight can exceed the padded
+    // content box and push the last row — claude's prompt / input line — below the
+    // panel's bottom edge (the reported "last line falls out of view" bug, which
+    // only a clear used to fix). When that would happen, tell the PTY one fewer row
+    // so the last line is always fully visible. Best-effort: a failed metrics read
+    // (`rowHeightCss` → undefined) or `term.resize` just keeps the FitAddon result,
+    // never throwing. Pure WebView measurement, identical on macOS / Windows.
+    const cellH = rowHeightCss(term);
+    if (cellH !== undefined && term.rows > 1) {
+      const cs = getComputedStyle(container);
+      const padV =
+        (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const contentH = container.clientHeight - padV;
+      // Tolerate sub-pixel rounding; only shave when a full visible row is clipped.
+      if (contentH > 0 && term.rows * cellH > contentH + 1) {
+        try {
+          term.resize(term.cols, term.rows - 1);
+        } catch {
+          // keep the FitAddon result on any resize failure
+        }
+      }
+    }
     void resizePty(sessionId, term.cols, term.rows).catch(() => {});
   };
   const scheduleResize = () => {
@@ -252,14 +303,47 @@ function createHost(sessionId: string): TerminalHost {
     void writeStdin(sessionId, data).catch(() => {});
   });
 
+  // rAF-coalesced writes (#261): under heavy output (a long build/log) a separate
+  // `term.write` per ~8 KB IPC chunk floods the single WebView main thread, starving
+  // React's keystroke handling everywhere (the Kanban textarea, a second terminal).
+  // Instead buffer the frame's chunks and flush them in ONE `term.write` on the next
+  // animation frame, so a burst costs one parse + one repaint per frame. Ordering is
+  // preserved (FIFO), and a steady stream still flushes ~60×/s so latency stays low.
+  let writeBuffer: Uint8Array[] = [];
+  let writeRaf: number | undefined;
+  const flushWrites = () => {
+    writeRaf = undefined;
+    if (writeBuffer.length === 0) return;
+    const chunks = writeBuffer;
+    writeBuffer = [];
+    // Concatenate the frame's chunks so xterm parses the whole burst in a single
+    // write — much cheaper than one write call per chunk.
+    let total = 0;
+    for (const c of chunks) total += c.length;
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      merged.set(c, offset);
+      offset += c.length;
+    }
+    term.write(merged);
+  };
+  const scheduleFlush = () => {
+    if (writeRaf === undefined) writeRaf = requestAnimationFrame(flushWrites);
+  };
+
   // Buffer live output until the historical scrollback has been replayed, so
   // history and live bytes do not interleave. Because the host outlives the
   // views, this runs exactly ONCE per session — never again on a view switch.
   let replayed = false;
   const pending: Uint8Array[] = [];
   const unsubscribe = onSessionOutput(sessionId, (bytes) => {
-    if (replayed) term.write(bytes);
-    else pending.push(bytes);
+    if (!replayed) {
+      pending.push(bytes);
+      return;
+    }
+    writeBuffer.push(bytes);
+    scheduleFlush();
   });
 
   let disposed = false;
@@ -324,6 +408,10 @@ function createHost(sessionId: string): TerminalHost {
   host.dispose = () => {
     disposed = true;
     if (resizeTimer !== undefined) clearTimeout(resizeTimer);
+    // Flush any buffered tail bytes (and cancel the pending frame) before the term
+    // goes away, so a final burst isn't dropped on teardown (#261).
+    if (writeRaf !== undefined) cancelAnimationFrame(writeRaf);
+    flushWrites();
     observer.disconnect();
     unsubscribe();
     dataSub.dispose();

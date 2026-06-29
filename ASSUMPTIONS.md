@@ -1065,3 +1065,129 @@ directive (2026-06-26) all interpretation calls below were made autonomously.
   `term.write` in terminalPool; (C) drop the per-chunk `sessions.find` reconnecting scan.
 - **Out of scope:** changing reader chunk size / backend time-window batching (keeps latency
   predictable + the diff reviewable). `deps: none`, parallel with 260.
+
+## Task 262 — Terminal last line below the screen
+- #178 already added vertical padding; bug persists intermittently due to **sub-row fit
+  rounding** (line-height makes the real cell taller than FitAddon assumes → one row too
+  many → last row clipped). Fix = more bottom padding (≈20px) **plus** a conservative fit
+  guard (reduce rows by one when the rendered height would overflow the content box,
+  best-effort via xterm metrics, guarded). `deps: none`.
+
+## Task 263 — Modal opens slowly
+- **Card's guess corrected:** the remote `git fetch` is already async/off the open path.
+  Real cause = a pre-open `await ipc.listBranches(repo)` in `store.ts startRepoSession`
+  gating the per-repo modal. Fix = open immediately with `initialBranches: null`; the
+  modal's existing branch-detection effect fills the list async. `deps: none`.
+
+## Task 264 — File tree auto-refresh
+- **Polling chosen over fs-watch** (no `notify` crate; card sanctions polling). Reuse the
+  existing `fileTreeRefresh` per-repo signal (re-lists loaded levels, preserves expansion).
+  Triggers: busy→idle edge re-list (not just re-tint), a ~5s visibility-gated poll, and
+  window focus. `deps: none`.
+
+## Task 265 — Scheduled worktree card header (3 lines)
+- Cause: `ScheduleCard` drops name/worktree-badge/meta as three direct children of the
+  `.titleBlock` flex-column → 3 rows + full-width badge. Fix = wrap name+badge in the
+  existing `.agentTitle` row (mirror `SessionCard`). Pure UI; `deps: none`.
+
+## Task 266 — Checkout branch in repo context menu
+- New `"checkout"` `menuMode` sub-panel (mirrors the `"color"` sub-mode) with a branch
+  picker (local + cached remote via `sortBranches`) + create-new. New store actions
+  `checkoutFolderBranch`/`createFolderBranch` (model on `pullFolder`); **no agent spawned**
+  (distinct from `spawnSession`'s checkout). Reuse existing `checkout_branch`/`create_branch`
+  commands (no backend change). Show the running-agents destructive advisory. `deps: none`.
+
+## Task 267 — File-tree folder/file context menu (new folder, delete)
+- Folder rows get a new context menu (New folder…/Delete folder); file rows gain Delete.
+  Two new path-validated `files.rs` writes — `create_dir` + `delete_path` (the 3rd/4th
+  deliberate writes) — strictly confined (canonicalize, `starts_with` repo, **refuse repo
+  root**, reject symlinks/`..`, no clobber), reserved-name guard for new folders. Deletes
+  confirm-gated (Settings #103). Refresh via the existing `fileTreeRefresh` bump. `deps: none`.
+
+## Task 268 — Natural-language launch-time input
+- **Custom parser in `time.ts`, no new date lib** (offline ethos). Covers durations
+  (1h/30m/1 hour), clock times (15:00/6pm/9:30am), today/tomorrow prefixes, explicit-date
+  fallback. **A bare time already past today rolls to tomorrow.** Free-text input + static
+  hint + live "Starts <date/time>" preview, replacing both `datetime-local` widgets. Invalid
+  input disables submit. `deps: none`.
+
+## Task 269 — Start now button
+- New backend `fire_schedule_now(id)` command, extracted from a shared `fire_one_schedule`
+  helper factored out of `fire_due_schedules`; reuses the existing `schedule://fired` →
+  `onFired` transition. Button in ScheduledPanel + Overview card + sidebar row.
+- **`deps: 259`** — serialized after eager-worktree (both restructure the fire path; avoids
+  a risky merge in worktree/spawn code and guarantees fire-now reuses the eager worktree).
+
+## Task 270 — Gray out gitignored files/folders
+- Add `--ignored=matching` to the `git status` read + a `FileStatus::Ignored` ("I") variant;
+  parser stops dropping `!` entries. Frontend: `statusIgnored` tint (`--text-muted`).
+  **Ignored is kept OUT of the folder severity roll-up** (an ignored child must not gray a
+  tracked parent); a folder grays only when the directory itself is ignored. `deps: none`.
+
+## Task 271 — Copy button on rendered markdown code blocks
+- A `pre` override added to FileViewer's `markdownComponents` (alongside the existing
+  `code: MermaidCode`) renders a hover-revealed Copy button per fenced block, using
+  `store.copyToClipboard`. **Scoped to FileViewer only** (Mermaid precedent) — Kanban/
+  PatchNotes/Settings unaffected; inline code + mermaid diagrams excluded. `deps: none`.
+
+## Task 272 — Usage meter red at 90%
+- One-line threshold change `pct >= 95` → `pct >= 90` in `UsageBar.tsx` + matching comment
+  updates. `deps: none`.
+
+## Task 273 — Canvas "+" tab icon size
+- The button boxes are already 20px-equal; the `Plus` glyph just *looks* lighter than
+  `LayoutTemplate`/`Grid2x2`. Fix = bump `<Plus size={14}>` → `size={16}` (and strokeWidth
+  if needed). `deps: none`.
+
+## Task 274 — Template editor block-config layout
+- "Kanban template editor" = the **Canvas `TemplateEditor`**. Two CSS fixes: path-mode
+  buttons `.pathModeBtn` drop `flex:1` → `flex:0 0 auto` + min-width (compact pair); prompt
+  `.configInput`/`.configField` flex to fill (raise min-height ~140px). `deps: none`.
+
+## Task 275 — Export/import Canvas templates
+- User's "Kanban template" = the **Canvas Template** system. **Import included** (round-trip
+  for sharing). Export via native save dialog + `write_text_file(parentDir, base)` reusing
+  the #163 parent-dir-as-root consent trick; import via `pickFile` + `read_text_file` +
+  validated `parseTemplateJson` + `saveTemplate` (fresh id). Add `dialog:allow-save`
+  capability if missing. No new backend write command. `deps: none`.
+
+## Task 276 — Kanban: Enter creates card + reopens composer
+- `submitComposer` success path stops calling `cancelComposer()`; instead clears text + keeps
+  `composing=true` + re-focuses. Empty Enter / Escape still close. `deps: 257` (built on the
+  resized composer; same file).
+
+## Task 277 — Kanban: transient undo on card delete
+- New panel-local `lastDeleted {col,idx,card}` (component state → non-persisted) captured
+  before `deleteCard`; new pure `insertCardAt` op (kanbanOps) for undo; undo affordance
+  rendered at the deleted spot in BoardColumn; overwritten by the next delete; cleared on
+  file switch. `deps: 276` (serialize the kanban-UI cluster 257→276→277).
+
+## Task 278 — Diff seen marker (3-state)
+- Client-side per-file **content digest** (`status|add|del|hash(hunks)`) detects
+  changed-since-seen (no backend metadata). **Persisted in a dedicated Rust `diff_seen`
+  scalar** (`{repoPath:{filePath:digest}}`), kept out of the settings blob (so the Settings
+  draft can't clobber it). Icons-only (Eye/Check/AlertCircle), button + `s` keybind (works
+  with a single file; plain key, cross-platform), both Focused + Accordion, visible hints.
+  `deps: 258` (shared DiffInspector; interacts with occurrence ordering).
+
+## Task 279 — Scheduled worktree duplicate top-level folder
+- Cause: `onFired` prepends the **worktree folder** to `recents` → a phantom top-level
+  RepoGroup (live-only artifact; backend adds the parent `sched.cwd` instead). Fix: for a
+  worktree session, `onFired` adds the **parent** (or nothing) to recents, matching the
+  interactive worktree path + a restart. `deps: 259`.
+
+## Task 280 — Canvas "no longer pending" (fire + detached)
+- (1) On fire, **rewrite scheduled canvas leaves** to the new live session id (pure
+  `rewriteScheduledLeaves`, preserve leaf id; persist via `setCanvases` which broadcasts
+  `canvas://changed`). (2) Detached windows are schedule-blind (main-window-only gating):
+  **load schedules in detached windows + sync** (prefer a `schedule://changed` broadcast
+  mirroring `canvas://changed`; minimal fallback = re-`listSchedules` on
+  `schedule://fired`/`canvas://changed`). `deps: 279` (both edit `onFired`).
+
+## Task 281 — Release v1.0.2
+- Bump `tauri.conf.json` + `package.json` to 1.0.2; author `src/patchnotes/1.0.2.json`
+  (categories feature/improvement/fix, user-facing prose, **regenerated from
+  `git log v1.0.1..HEAD` + TASK_ARCHIVE at implementation time**). The *implementing* agent
+  performs the bump (refine lane never bumps). Push to main triggers the pipeline → draft →
+  maintainer publishes. Out of scope: build/sign/publish. Mirrors #256.
+- **`deps:` ALL of 257–280** — the release gates on every refined task being implemented.

@@ -185,10 +185,10 @@ export interface CommitInfo {
   subject: string;
 }
 
-/** Payload of the `session://output` event. */
+/** Payload of the `session://output` event — base64-encoded PTY bytes (#261). */
 export interface OutputPayload {
   id: string;
-  bytes: number[];
+  b64: string;
 }
 
 /** Payload of the `session://exited` event. */
@@ -261,6 +261,12 @@ export interface Settings {
    * (side-by-side). Each diff panel seeds its in-panel toggle from this; toggling in a
    * panel writes back here so the last choice becomes the default for new panels. */
   diffLineMode: "unified" | "split";
+  /** Default diff-viewer file ordering (#258): `occurrence` (default — a file appends
+   * to the bottom of the list the first time it changes; re-changes don't reorder it) or
+   * `alphabetical` (case-insensitive A→Z by path). Each diff panel seeds its in-panel
+   * toggle from this; toggling in a panel writes back here as the new default. The
+   * per-panel occurrence sequence itself is not persisted — only this mode preference. */
+  diffSortOrder: "occurrence" | "alphabetical";
   /** Kanban column colors by name (#239): an ordered list of column-name → color
    * entries applied to every board. A column whose name isn't listed gets a stable
    * color hashed from its name (see `kanbanColumnColor`). */
