@@ -7740,3 +7740,56 @@ switch / reopen / restart).
 
 ---
 
+### 278. [x] Diff viewer — per-file "seen" marker (Seen / Not-seen / Changed-since-seen)
+
+**Status:** Done
+**Depends on:** 258
+**Created:** 2026-06-30
+
+**Description**
+
+Each changed file in the DiffInspector now carries a **three-state review marker** shown with
+icons (not text): **NotSeen** (never marked), **Seen** (marked reviewed, diff unchanged
+since), and **ChangedSinceSeen** (was Seen, but its diff content changed afterward — flips
+automatically). Toggle via a per-file icon button **or** the **`s` keybind**; works in both
+Focused and Accordion modes; keybind hints are visible; state persists across restarts.
+Built on #258's ordering (a changed file moves to the bottom **and** its marker flips).
+
+**What shipped** (commit `038a70c`, PR
+[#30](https://github.com/ErikdeJager/ReCue/pull/30), merged `58a4690`, 2026-06-30):
+
+- **Client-side content digest** — new `diffSeen.ts` `fileDigest(file)` (a stable hash of
+  `status|add|del|JSON.stringify(hunks)` — the full parsed hunks, accurate even though
+  rendering truncates) and `seenState(file, storedDigest)` returning
+  `notSeen|seen|changed`. No backend metadata. Unit-tested in `diffSeen.test.ts`.
+- **Persisted in a dedicated Rust `diff_seen` scalar** (`store.rs` `serde_json::Value` +
+  `diff_seen()`/`set_diff_seen()` commands, registered in `lib.rs`, Rust test), shaped
+  `{ [repoPath]: { [filePath]: digest } }` — **kept out of the settings blob** so the
+  Settings draft can't clobber it (modeled on `sidebar_width`/`repo_order`). Frontend:
+  `ipc.getDiffSeen`/`setDiffSeen`; store `diffSeen` slice loaded on boot + `markDiffSeen`/
+  clear with a debounced persist.
+- **Component** — per-file `seenState` from `diffSeen[repoPath]?.[path]`; an icon toggle
+  button in the Focused sub-header and each Accordion card header (Eye/Check/AlertCircle
+  style via `--status-*` tokens, **icons only** with `title`/`aria-label`); the `s`/`S`
+  keybind in `onPanelKeyDown` toggles the active file (works with a single file, after the
+  modifier + typing-context guards), with `aria-keyshortcuts="s"` and a visible hint.
+
+**Key files/areas touched:** `src-tauri/src/{store.rs,commands.rs,lib.rs}` (`diff_seen`),
+`src/ipc.ts`, `src/store.ts`, `src/types/index.ts`,
+`src/components/DiffInspector/{diffSeen.ts,diffSeen.test.ts,DiffInspector.tsx,DiffInspector.module.css}`.
+
+**Dependencies:** 258 (shared `DiffInspector.tsx`; seen state interacts with occurrence
+ordering).
+
+**Notes**
+
+- **Autonomous decisions** (per the standing `ASSUMPTIONS.md` deferral): change detection via
+  a **client-side content digest** (no backend metadata); persisted in a **dedicated
+  `diff_seen` Rust scalar** kept out of the settings blob; **icons-only** markers with the
+  plain `s` keybind (works with a single file); both Focused + Accordion; visible hints.
+- **Cross-platform:** plain unmodified `s` key (no `metaKey`), pure WebView UI + a cfg-neutral
+  persisted scalar — identical on macOS/Windows, no OS branch. `npm test` (digest/state) /
+  `cargo test` / `build` / `lint` green.
+
+---
+
