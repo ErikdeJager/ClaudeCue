@@ -7216,3 +7216,59 @@ picker + running-agents advisory), `src/store.ts` (`checkoutFolderBranch`,
 
 ---
 
+### 267. [x] Context menu on file-tree folders & files (new folder, delete)
+
+**Status:** Done
+**Depends on:** none _(plays well with #264's `fileTreeRefresh` bump)_
+**Created:** 2026-06-30
+
+**Description**
+
+Right-clicking a **folder** row in the FileTree now opens a menu with **New folder…** and
+**Delete folder**; **file** rows gain a **Delete** item on their existing menu. Deletes are
+confirm-gated (respecting the Settings confirm-destructive toggle, #103) and the tree
+re-lists in place (expansion preserved) after any change. This adds the **3rd and 4th
+deliberate `files.rs` writes** (after `write_text_file` #141 and `move_into_repo` #253),
+strictly path-confined.
+
+**What shipped** (commit `fe17c23`, PR
+[#18](https://github.com/ErikdeJager/ReCue/pull/18), merged `10213c9`, 2026-06-30):
+
+- **Two new path-validated backend commands** (`files.rs`): **`create_dir(repo, path)`**
+  (canonicalize the parent, confine to the repo, refuse a collision — no clobber —
+  `fs::create_dir`) and **`delete_path(repo, path)`** (`confine` the existing target; hard
+  safety rails: **refuses the canonicalized repo root**, rejects symlinks, doesn't follow
+  them; `remove_dir_all` for a dir / `remove_file` for a file). Both reject `..`/symlink
+  escape and out-of-repo targets, documented in the file header per the deliberate-write
+  convention; a new folder name goes through the reserved-name guard (`windows_safe_seg`, so
+  CON/NUL/… can't be created). New Rust confinement tests (collision/out-of-repo/missing
+  parent for create; repo-root/traversal/missing-target/symlink for delete).
+- **Frontend** — `ipc.ts` `createDir`/`deletePath`; `store.ts` `createFolder` /
+  `deleteTreePath` (call ipc → `bumpFileTreeRefresh(repo)` + `refreshFileStatuses(repo)` +
+  toast); `FileTree.tsx` extends its inline `FileMenu` with `isDir`, adds `onContextMenu` to
+  the folder button, a folder menu (New folder… inline name input that expands the created
+  folder; Delete folder, danger + confirm-gated) and a Delete item on the file menu; danger
+  styling in `FileTree.module.css`.
+
+**Key files/areas touched:** `src-tauri/src/files.rs` (`create_dir`, `delete_path` + tests +
+header note), `src-tauri/src/commands.rs` (wrappers + reserved-name guard),
+`src-tauri/src/lib.rs` (register), `src/ipc.ts`, `src/store.ts`,
+`src/components/FileTree/{FileTree.tsx,FileTree.module.css}`.
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Autonomous decisions** (per the standing `ASSUMPTIONS.md` deferral): the two writes are
+  the **3rd/4th deliberate `files.rs` writes**, strictly confined (canonicalize, `starts_with`
+  repo, **refuse repo root**, reject symlinks/`..`, no clobber) with a reserved-name guard;
+  deletes confirm-gated via the existing Settings flow; refresh via the existing
+  `fileTreeRefresh` bump (inline if #264 hadn't landed). FileTree uses its own inline menu
+  (not the shared `RowContextMenu`), matching the existing file-row menu.
+- **Cross-platform:** `fs::create_dir`/`remove_dir_all`/`remove_file` + canonicalize-confine
+  are platform-neutral (no shell-out); paths stay repo-relative POSIX over IPC, reassembled
+  backend-side. Identical on macOS and Windows. `cargo test` (new confinement tests) /
+  `npm run build` / `lint` green.
+
+---
+
