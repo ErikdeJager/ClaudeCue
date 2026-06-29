@@ -7163,3 +7163,56 @@ opened instantly with `newSessionInitialBranches: null`.)
 
 ---
 
+### 266. [x] "Checkout branch…" in the repo (primary folder) context menu
+
+**Status:** Done
+**Depends on:** none _(no backend change — reuses existing checkout/create-branch commands)_
+**Created:** 2026-06-30
+
+**Description**
+
+Added a **Checkout branch…** item to the sidebar repo context menu so a user can switch a
+folder to a different branch — pick an existing branch (local or cached remote) or create a
+new one — checked out **in that folder without starting an agent**. The sidebar branch label
+and file-tree status update after the checkout.
+
+**What shipped** (commit `79c0987`, PR
+[#17](https://github.com/ErikdeJager/ReCue/pull/17), merged `f3c2924`, 2026-06-30):
+
+- **New `"checkout"` `menuMode`** in `Sidebar.tsx` (alongside `menu`/`confirm`/`color`/…),
+  with a **picker sub-panel** mirroring the existing `"color"` sub-mode: a filter input, a
+  scrollable branch list sorted via the reused `sortBranches` (local under a header, cached
+  remotes under a "Remote branches" header, the current branch marked), and a **"+ Create
+  new branch"** inline form with inline validation. The branch list is fetched
+  (`listBranches`) when the sub-mode opens. A **Checkout branch…** menu item (near Pull,
+  gated on a known current branch) opens it.
+- **Two store actions** (modeled on `pullFolder`, **no agent spawned** — distinct from
+  `spawnSession`'s checkout): `checkoutFolderBranch(repo, branch)` → `ipc.checkoutBranch`
+  then `refreshBranches()` + `refreshFileStatuses(repo)` + a success/error toast; and
+  `createFolderBranch(repo, name, base)` → `ipc.createBranch` + the same refreshes,
+  returning the error string for inline display. Selecting a **remote** branch creates a
+  local tracking branch via `createFolderBranch(repo, short, remoteRef)` (the #180/#124
+  pattern).
+- **Destructive advisory** — a running-agents warning line appears inside the picker
+  (sessions with `repoPath === repo`, not exited) before checkout, mirroring the
+  NewSessionModal advisory; non-blocking but visible.
+- Picker sub-panel CSS reuses the color-picker patterns.
+
+**Key files/areas touched:** `src/components/Sidebar/Sidebar.tsx` (`"checkout"` menuMode +
+picker + running-agents advisory), `src/store.ts` (`checkoutFolderBranch`,
+`createFolderBranch`), `src/components/Sidebar/Sidebar.module.css`.
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Autonomous decisions** (per the standing `ASSUMPTIONS.md` deferral): a bespoke
+  `"checkout"` sub-mode in the existing repo-menu state machine (not the generic
+  `RowContextMenu`); **no agent spawned** on checkout (distinct from the new-session checkout
+  path); reuse the existing `checkout_branch`/`create_branch` commands so **no backend
+  change**; rely on cached remotes in the picker (no forced fetch).
+- **Cross-platform:** pure frontend menu UI over existing cfg-correct git commands; menu copy
+  is OS-neutral ("Checkout branch…"). `npm run build` / `lint` green.
+
+---
+
