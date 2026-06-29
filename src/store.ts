@@ -1017,6 +1017,14 @@ export interface AppState {
     destSubdir: string,
     sources: string[],
   ) => Promise<void>;
+  /** Create a new folder at repo-relative `path` in the FileTree (#267). On success
+   * bumps the repo's FileTree refresh signal + re-reads git statuses so the new
+   * folder appears in place, and toasts the result. Errors toast and no-op. */
+  createFolder: (repo: string, path: string) => Promise<void>;
+  /** Delete the repo-relative file/folder at `path` from the FileTree (#267 —
+   * recursive for a folder). On success refreshes the tree + git statuses and toasts;
+   * a confinement / not-found error toasts and no-ops. */
+  deleteTreePath: (repo: string, path: string) => Promise<void>;
   /** Assign a repo's color (optimistic + persisted) (#35). */
   setRepoColor: (path: string, color: string) => Promise<void>;
   /** Apply + persist application settings (#100) and run their side-effects. */
@@ -2410,6 +2418,49 @@ export const useStore = create<AppState>()((set, get) => ({
       moveResultMessage(moved, destSubdir, errors),
       moved === 0 ? "error" : undefined,
     );
+  },
+
+  // Bump the per-repo FileTree refresh signal + re-read git statuses so any open tree
+  // reloads its visible levels in place after a folder create / delete (mirrors the
+  // `moveFilesIntoRepo` pattern — expansion state is preserved, no full reset).
+  createFolder: async (repo, path) => {
+    try {
+      await ipc.createDir(repo, path);
+    } catch (err) {
+      get().pushToast(
+        isSessionError(err) ? err.message : "Could not create folder",
+        "error",
+      );
+      return;
+    }
+    set((s) => ({
+      fileTreeRefresh: {
+        ...s.fileTreeRefresh,
+        [repo]: (s.fileTreeRefresh[repo] ?? 0) + 1,
+      },
+    }));
+    void get().refreshFileStatuses(repo);
+    get().pushToast("Folder created", "success");
+  },
+
+  deleteTreePath: async (repo, path) => {
+    try {
+      await ipc.deletePath(repo, path);
+    } catch (err) {
+      get().pushToast(
+        isSessionError(err) ? err.message : "Could not delete",
+        "error",
+      );
+      return;
+    }
+    set((s) => ({
+      fileTreeRefresh: {
+        ...s.fileTreeRefresh,
+        [repo]: (s.fileTreeRefresh[repo] ?? 0) + 1,
+      },
+    }));
+    void get().refreshFileStatuses(repo);
+    get().pushToast("Deleted", "success");
   },
 
   setRepoColor: async (path, color) => {

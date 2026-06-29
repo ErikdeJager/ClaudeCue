@@ -285,6 +285,18 @@ export const moveIntoRepo = (
   source: string,
 ) => invoke<string>("move_into_repo", { repo, destSubdir, source });
 
+/** Create a new (empty) directory at repo-relative `path` (#267). Validated inside
+ * the repo (the parent must exist + be in-repo); refuses to clobber an existing item
+ * and (on Windows) a reserved device name. */
+export const createDir = (repo: string, path: string) =>
+  invoke<void>("create_dir", { repo, path });
+
+/** Delete the repo-relative file or directory at `path` (#267 — recursive for a
+ * directory). A genuinely destructive write: validated strictly inside the repo,
+ * refuses the repo root, and never follows a symlink. */
+export const deletePath = (repo: string, path: string) =>
+  invoke<void>("delete_path", { repo, path });
+
 /** Best-effort slash-invokable skills/commands for `cwd` (#114) — the
  * scheduled-prompt autocomplete. Reads project + user `.claude/{skills,commands}`,
  * project shadowing user; a missing dir just yields fewer entries (never throws). */

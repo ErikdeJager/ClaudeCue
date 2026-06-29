@@ -50,12 +50,19 @@ function parentDir(path: string): string {
   return idx === -1 ? "" : path.slice(0, idx);
 }
 
-/** Right-click menu state: the cursor position + the file the menu targets. */
+/** Right-click menu state: the cursor position + the row the menu targets and
+ * whether it's a folder (folders get New folder… / Delete folder; files get the
+ * open/reveal/copy items + Delete) (#184/#267). */
 interface FileMenu {
   x: number;
   y: number;
-  file: string;
+  path: string;
+  isDir: boolean;
 }
+
+/** Inline menu step (#267): the base item list, the New-folder name input, or the
+ * delete confirm (only used when confirm-destructive is on). */
+type MenuMode = "menu" | "newFolder" | "confirmDelete";
 
 /** Debounce before a typed query hits the backend (#202) — coalesces keystrokes. */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -75,7 +82,10 @@ const CONTENT_RESULT_LIMIT = 200;
  * lives in local component state (not persisted; refresh reloads from the root).
  * Clicking a file opens it in the file viewer; right-clicking a file offers Open in
  * file viewer / Open as Kanban board (`.md` only) / Reveal in Finder / Copy absolute
- * path / Copy relative path (#184). Folders have no menu.
+ * path / Copy relative path (#184) / Delete (#267). Right-clicking a **folder** offers
+ * New folder… / Delete folder (#267). Deletes are confirm-gated by the Settings
+ * confirm-destructive toggle (#103) and remove recursively; the tree refreshes in
+ * place after any create/delete (the per-repo `fileTreeRefresh` signal, #253 pattern).
  *
  * **In-panel search (#202):** a search box at the top replaces the tree with results
  * while a query is typed (debounced). Two groups — **Files** (filename hits via
@@ -87,6 +97,9 @@ const CONTENT_RESULT_LIMIT = 200;
 function FileTree({ repoPath }: { repoPath: string }) {
   const openFileFromTree = useStore((s) => s.openFileFromTree);
   const copyToClipboard = useStore((s) => s.copyToClipboard);
+  const createFolder = useStore((s) => s.createFolder);
+  const deleteTreePath = useStore((s) => s.deleteTreePath);
+  const confirmDestructive = useStore((s) => s.settings.confirmDestructive);
   const platform = useStore((s) => s.platform);
   // Git working-tree status for this repo (#252): repo-relative path → "A"|"M"|"D".
   // Undefined = not loaded / non-git → no coloring. The map is shared in the store so
@@ -109,6 +122,11 @@ function FileTree({ repoPath }: { repoPath: string }) {
   const [children, setChildren] = useState<Record<string, DirEntry[]>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<FileMenu | null>(null);
+  // The inline menu step + the New-folder name draft (#267); reset whenever the menu
+  // opens or closes so a prior input never leaks into the next right-click.
+  const [menuMode, setMenuMode] = useState<MenuMode>("menu");
+  const [newFolderName, setNewFolderName] = useState("");
+  const newFolderRef = useRef<HTMLInputElement | null>(null);
   const [nonce, setNonce] = useState(0);
   // Paths with an in-flight `list_dir` — guards against double-loading on re-render.
   const inFlight = useRef<Set<string>>(new Set());
@@ -226,15 +244,27 @@ function FileTree({ repoPath }: { repoPath: string }) {
     };
   }, [debounced, repoPath]);
 
+  // Close the context menu and reset its inline step/draft (#267).
+  const closeMenu = useCallback(() => {
+    setMenu(null);
+    setMenuMode("menu");
+    setNewFolderName("");
+  }, []);
+
   // Dismiss the context menu on Escape.
   useEffect(() => {
     if (!menu) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenu(null);
+      if (event.key === "Escape") closeMenu();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [menu]);
+  }, [menu, closeMenu]);
+
+  // Focus the New-folder input when that step opens so the user can type at once.
+  useEffect(() => {
+    if (menu && menuMode === "newFolder") newFolderRef.current?.focus();
+  }, [menu, menuMode]);
 
   // Once a reveal target is set (and the tree re-rendered with its ancestors expanded),
   // scroll the row into view and clear the transient highlight after a moment.
@@ -291,14 +321,54 @@ function FileTree({ repoPath }: { repoPath: string }) {
     [repoPath],
   );
 
-  const openMenu = (event: ReactMouseEvent, file: string) => {
+  const openMenu = (event: ReactMouseEvent, path: string, isDir: boolean) => {
     event.preventDefault();
     event.stopPropagation();
+    setMenuMode("menu");
+    setNewFolderName("");
     setMenu({
       x: Math.max(8, Math.min(event.clientX, window.innerWidth - 200)),
       y: Math.max(8, Math.min(event.clientY, window.innerHeight - 200)),
-      file,
+      path,
+      isDir,
     });
+  };
+
+  // Create a subfolder of the menu's target folder, then expand + reload that level so
+  // the new folder shows in place (the store also bumps `fileTreeRefresh`). A blank /
+  // separator-only name is a no-op; the backend rejects reserved / invalid names.
+  const submitNewFolder = () => {
+    if (!menu) return;
+    const name = newFolderName.trim();
+    if (!name || name.includes("/") || name.includes("\\")) return;
+    const parent = menu.path;
+    const target = parent ? `${parent}/${name}` : name;
+    closeMenu();
+    void createFolder(repoPath, target).then(() => {
+      setExpanded((prev) => new Set([...prev, parent]));
+      inFlight.current.delete(parent);
+      load(parent);
+    });
+  };
+
+  // Delete the menu's target row (file or folder). Confirm-gated by the Settings
+  // confirm-destructive toggle (#103): on → step to the inline confirm; off → delete now.
+  const requestDelete = () => {
+    if (!menu) return;
+    if (confirmDestructive) {
+      setMenuMode("confirmDelete");
+      return;
+    }
+    const path = menu.path;
+    closeMenu();
+    void deleteTreePath(repoPath, path);
+  };
+
+  const confirmDelete = () => {
+    if (!menu) return;
+    const path = menu.path;
+    closeMenu();
+    void deleteTreePath(repoPath, path);
   };
 
   // Split a snippet around the (case-insensitive) match, wrapping each hit in <mark>.
@@ -359,6 +429,7 @@ function FileTree({ repoPath }: { repoPath: string }) {
               className={`${styles.row}${cls ? ` ${cls}` : ""}${drop}`}
               style={indent}
               onClick={() => toggle(node.path)}
+              onContextMenu={(event) => openMenu(event, node.path, true)}
               title={node.path}
               data-filetree-droptarget={node.path}
             >
@@ -392,7 +463,7 @@ function FileTree({ repoPath }: { repoPath: string }) {
           className={`${styles.row}${isRevealed ? ` ${styles.revealed}` : ""}${cls ? ` ${cls}` : ""}`}
           style={indent}
           onClick={() => openFile(node.path)}
-          onContextMenu={(event) => openMenu(event, node.path)}
+          onContextMenu={(event) => openMenu(event, node.path, false)}
           title={node.path}
           // A drop on a file row lands in its containing directory (#253).
           data-filetree-droptarget={parentDir(node.path)}
@@ -607,10 +678,10 @@ function FileTree({ repoPath }: { repoPath: string }) {
         <>
           <div
             className={styles.menuOverlay}
-            onClick={() => setMenu(null)}
+            onClick={closeMenu}
             onContextMenu={(event) => {
               event.preventDefault();
-              setMenu(null);
+              closeMenu();
             }}
           />
           <div
@@ -618,66 +689,139 @@ function FileTree({ repoPath }: { repoPath: string }) {
             style={{ left: menu.x, top: menu.y }}
             role="menu"
           >
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.menuItem}
-              onClick={() => {
-                openFile(menu.file);
-                setMenu(null);
-              }}
-            >
-              Open in file viewer
-            </button>
-            {menu.file.toLowerCase().endsWith(".md") ? (
+            {menuMode === "newFolder" ? (
+              // New-folder name input (#267): Enter creates, Escape (global) cancels.
+              <div className={styles.menuForm}>
+                <input
+                  ref={newFolderRef}
+                  className={styles.menuInput}
+                  type="text"
+                  value={newFolderName}
+                  spellCheck={false}
+                  {...noAutoCapitalize}
+                  placeholder="New folder name"
+                  aria-label="New folder name"
+                  onChange={(event) =>
+                    setNewFolderName(event.currentTarget.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      submitNewFolder();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className={styles.menuFormBtn}
+                  disabled={!newFolderName.trim()}
+                  onClick={submitNewFolder}
+                >
+                  Create
+                </button>
+              </div>
+            ) : menuMode === "confirmDelete" ? (
               <button
                 type="button"
                 role="menuitem"
-                className={styles.menuItem}
-                onClick={() => {
-                  void openFileFromTree(repoPath, menu.file, "kanban");
-                  setMenu(null);
-                }}
+                className={styles.menuItemDanger}
+                onClick={confirmDelete}
               >
-                Open as Kanban board
+                {menu.isDir ? "Delete folder & its contents?" : "Delete file?"}
               </button>
-            ) : null}
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.menuItem}
-              onClick={() => {
-                void revealPath(joinPath(platform, repoPath, menu.file));
-                setMenu(null);
-              }}
-            >
-              {revealLabel(platform)}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.menuItem}
-              onClick={() => {
-                void copyToClipboard(
-                  joinPath(platform, repoPath, menu.file),
-                  "path",
-                );
-                setMenu(null);
-              }}
-            >
-              Copy absolute path
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.menuItem}
-              onClick={() => {
-                void copyToClipboard(menu.file, "path");
-                setMenu(null);
-              }}
-            >
-              Copy relative path
-            </button>
+            ) : menu.isDir ? (
+              // ── Folder menu (#267) ──
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => setMenuMode("newFolder")}
+                >
+                  New folder…
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItemDanger}
+                  onClick={requestDelete}
+                >
+                  Delete folder
+                </button>
+              </>
+            ) : (
+              // ── File menu (#184 + Delete #267) ──
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    openFile(menu.path);
+                    closeMenu();
+                  }}
+                >
+                  Open in file viewer
+                </button>
+                {menu.path.toLowerCase().endsWith(".md") ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.menuItem}
+                    onClick={() => {
+                      void openFileFromTree(repoPath, menu.path, "kanban");
+                      closeMenu();
+                    }}
+                  >
+                    Open as Kanban board
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    void revealPath(joinPath(platform, repoPath, menu.path));
+                    closeMenu();
+                  }}
+                >
+                  {revealLabel(platform)}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    void copyToClipboard(
+                      joinPath(platform, repoPath, menu.path),
+                      "path",
+                    );
+                    closeMenu();
+                  }}
+                >
+                  Copy absolute path
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => {
+                    void copyToClipboard(menu.path, "path");
+                    closeMenu();
+                  }}
+                >
+                  Copy relative path
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItemDanger}
+                  onClick={requestDelete}
+                >
+                  Delete
+                </button>
+              </>
+            )}
           </div>
         </>
       ) : null}
