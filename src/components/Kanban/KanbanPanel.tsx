@@ -693,9 +693,7 @@ function KanbanPanel({
     if (renamingCol !== null) commitRenameDraft();
     const card = board.columns[col]?.cards[idx];
     // Seed the single edit field from the card: title on line 1, body below (#238).
-    setEditText(
-      card ? card.title + (card.body ? "\n" + card.body : "") : "",
-    );
+    setEditText(card ? card.title + (card.body ? "\n" + card.body : "") : "");
     setEditing({ col, idx });
     setRenamingCol(null);
     setRenameDraft(null);

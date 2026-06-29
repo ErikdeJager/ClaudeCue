@@ -6586,3 +6586,53 @@ MermaidBlock.tsx,FileViewer.tsx,FileViewer.module.css}`, `package.json` /
 
 ---
 
+### 255. [x] Keyboard navigation between files in the diff viewer (focused + accordion modes)
+
+**Status:** Done
+**Depends on:** none _(builds on shipped #231 display modes + #237 mode persistence)_
+**Created:** 2026-06-29
+
+**Description**
+
+The diff viewer (`DiffInspector.tsx`) is now arrow-key navigable between changed files,
+answering the card ("use the arrow keys … to jump between files when in focused mode.
+Also look at accordion mode for a way to jump between items"). In **Focused** mode ←/→
+step prev/next file (↑/↓ stay free for the diff body's vertical scroll); in **Accordion**
+mode ↑/↓ step the open card. The handler is **panel-scoped** so multiple diff panels
+(Overview columns, Canvas panels, detached windows) never move each other.
+
+**What shipped** (commit `767471c`, 2026-06-29):
+
+- **Focusable panel + panel-local key handler** — the panel root gets `tabIndex={0}` and
+  a token `:focus-visible` outline, plus an `onKeyDown` that reuses the existing wrapping
+  `stepFile(±1)`. Focused mode binds ←/→; Accordion binds ↑/↓ and scrolls the open card
+  into view (`block:"nearest"`, a no-op when already visible so a mouse click never
+  jolts). It bails on <2 files, on any modifier, and while an
+  input/select/contenteditable/listbox/combobox (text fields, branch/commit pickers, the
+  file-picker listbox) has focus.
+- **Pure key→delta decision** extracted to new `DiffInspector/diffNav.ts` (`diffNavDelta`
+  + the `DisplayMode` type), unit-tested in `diffNav.test.ts`.
+- **Discoverability** — `aria-keyshortcuts` + arrow hints on the ‹/› buttons and accordion
+  card headers; a token-driven `:focus-visible` affordance in `DiffInspector.module.css`.
+
+**Key files/areas touched:** `src/components/DiffInspector/{DiffInspector.tsx,
+DiffInspector.module.css,diffNav.ts,diffNav.test.ts}`; docs in `CLAUDE.md`.
+
+**Dependencies:** none (builds on shipped #231 + #237).
+
+**Notes**
+
+- **Autonomous decisions** (per the standing `ASSUMPTIONS.md` deferral): plain arrows
+  matched to layout (Focused = horizontal ‹/› → ←/→; Accordion = vertical list → ↑/↓);
+  **panel-scoped `onKeyDown` + `tabIndex={0}`** rather than the global `useKeyboardNav`
+  (multiple panels/detached windows can mount, so a global listener couldn't know which
+  to move); reuse the wrapping `stepFile`; scroll the active accordion card into view
+  after a keyboard step. A modifier variant (Alt+Arrow) is the noted fallback.
+- **Cross-platform:** plain **unmodified** arrows only — identical on WKWebView (macOS)
+  and WebView2 (Windows), no `platform` branching and no `metaKey||ctrlKey` needed; any
+  *future* modifier shortcut here must route through `metaKey||ctrlKey`. Frontend-only;
+  Rust unaffected. `npm run build` / `lint` (0 warnings) / `test` (405) + `cargo test`
+  (119) all green.
+
+---
+

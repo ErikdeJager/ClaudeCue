@@ -1,6 +1,6 @@
-### 256. [ ] Release v1.0.1 — version bump, patch notes, green test/lint suite, push to main
+### 256. [x] Release v1.0.1 — version bump, patch notes, green test/lint suite, push to main
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-29
 
@@ -136,17 +136,17 @@ list from `git log v1.0.0..HEAD` and the DONE/archived task entries.)
 
 **Acceptance criteria**
 
-- [ ] `src-tauri/tauri.conf.json` and `package.json` both read `"version": "1.0.1"`.
-- [ ] `src/patchnotes/1.0.1.json` exists, is valid (loads via `normalizePatchNotes` /
+- [x] `src-tauri/tauri.conf.json` and `package.json` both read `"version": "1.0.1"`.
+- [x] `src/patchnotes/1.0.1.json` exists, is valid (loads via `normalizePatchNotes` /
   `patchnotesFor("1.0.1")`), and summarizes the real changes since `v1.0.0` in
   user-facing language under appropriate categories.
-- [ ] `npm run build`, `npm run lint`, `npm run format:check`, `npm test`,
+- [x] `npm run build`, `npm run lint`, `npm run format:check`, `npm test`,
   `npm run lint:rust` (no clippy warnings), and `cargo test` all pass — **nothing red**.
-- [ ] The change is committed and **pushed to `main`**; the release workflow's version
+- [x] The change is committed and **pushed to `main`**; the release workflow's version
   gate accepts `1.0.1` (a draft release run starts).
-- [ ] No feature/behavior code changed beyond the version + patch notes (and any
+- [x] No feature/behavior code changed beyond the version + patch notes (and any
   formatting fix required to keep the suite green).
-- [ ] Cross-platform integrity preserved: this is a version + JSON + docs change with no
+- [x] Cross-platform integrity preserved: this is a version + JSON + docs change with no
   platform-specific code; the suite (which both macOS and Windows CI run) stays green, and
   the pipeline builds **both** OS bundles from the bump.
 
