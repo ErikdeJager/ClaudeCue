@@ -129,7 +129,16 @@ even though it works in `tauri dev`.
   manager best-effort `resume_session`s each via `claude --resume <id>`.
 - **Git:** `working_diff(cwd)` / `current_branch(cwd)` / `compare_branches(cwd, base,
   target)` (the #81 two-dot branch compare) shell out to `git`; the `DiffInspector` and
-  sidebar render the structured result. `list_branches` returns both **local** (`all`)
+  sidebar render the structured result. The `DiffInspector` shows the changed files in a
+  **Focused** (one file + a ‹/› prev/next strip) or **Accordion** (single-open cards)
+  mode (#231, persisted #237), and is **keyboard-navigable** (#255): the panel is
+  focusable (`tabIndex`, token `:focus-visible`) and a **panel-scoped** `onKeyDown` steps
+  between files with **←/→ in Focused** (Up/Down still scroll the body) and **↑/↓ in
+  Accordion** (scrolling the open card into view) via the pure `diffNavDelta`
+  (`DiffInspector/diffNav.ts`) + the existing wrapping `stepFile` — plain unmodified
+  arrows (identical on macOS/Windows), ignored while an input/select/picker-listbox has
+  focus or there are <2 files, so other diff panels / terminals are unaffected.
+  `list_branches` returns both **local** (`all`)
   and **remote-tracking** (`remote`, qualified `<remote>/<name>`, deduped vs local,
   `*/HEAD` excluded) branches (#180); `fetch_remotes(cwd)` runs a best-effort `git
   fetch --prune` (the app's first git **network** read, `GIT_TERMINAL_PROMPT=0` so a

@@ -1,6 +1,6 @@
-### 255. [ ] Keyboard navigation between files in the diff viewer (focused + accordion modes)
+### 255. [x] Keyboard navigation between files in the diff viewer (focused + accordion modes)
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** none
 **Created:** 2026-06-29
 
@@ -77,67 +77,67 @@ look at accordion mode for a way to jump between items."
 **Subtasks**
 
 1. [ ] **Make the panel focusable + add the key handler** (`DiffInspector.tsx`).
-   - [ ] Add `tabIndex={0}` to the root `<div className={styles.panel}>` and an
+   - [x] Add `tabIndex={0}` to the root `<div className={styles.panel}>` and an
      `onKeyDown={onPanelKeyDown}`.
-   - [ ] Implement `onPanelKeyDown(e)`: bail if `files.length < 2`; bail if a modifier
+   - [x] Implement `onPanelKeyDown(e)`: bail if `files.length < 2`; bail if a modifier
      (`metaKey||ctrlKey||altKey`) is held; bail if `e.target` is within an
      input/select/contenteditable/listbox/combobox (the guard above). Then:
      - Focused mode: `ArrowLeft` → `stepFile(-1)`, `ArrowRight` → `stepFile(1)`;
        `preventDefault()` on a handled key.
      - Accordion mode: `ArrowUp` → `stepFile(-1)`, `ArrowDown` → `stepFile(1)`;
        `preventDefault()`.
-   - [ ] (Optional, recommended) Extract the pure key→delta decision
+   - [x] (Optional, recommended) Extract the pure key→delta decision
      (`diffNavDelta(key, displayMode)` → `-1 | 1 | null`) so it can be unit-tested
      without the DOM.
 
 2. [ ] **Accordion: scroll the active card into view.**
-   - [ ] Add a ref to the **open** card's header element; in an effect keyed on
+   - [x] Add a ref to the **open** card's header element; in an effect keyed on
      `activeFile?.path` (only while `displayMode === "accordion"`), call
      `ref.scrollIntoView({ block: "nearest" })` so keyboard stepping keeps the open card
      visible. (Guard so it doesn't fight a mouse click that already scrolled.)
 
 3. [ ] **Focus affordance + styles** (`DiffInspector.module.css`).
-   - [ ] A subtle `.panel:focus-visible` outline (token-driven, e.g. `--accent` /
+   - [x] A subtle `.panel:focus-visible` outline (token-driven, e.g. `--accent` /
      `--border` — no off-system color, no platform-divergent CSS) so the focusable panel
      is discoverable; nothing on plain `:focus` to avoid an outline on every mouse click.
-   - [ ] Optionally surface the shortcut in the ‹/› button `title`s (e.g. "Previous file
+   - [x] Optionally surface the shortcut in the ‹/› button `title`s (e.g. "Previous file
      (←)") and the accordion via `aria-keyshortcuts` — keeps it discoverable.
 
 4. [ ] **Cross-platform + a11y.**
-   - [ ] Confirm unmodified arrow keys behave identically on WKWebView (macOS) and
+   - [x] Confirm unmodified arrow keys behave identically on WKWebView (macOS) and
      WebView2 (Windows) — they do; no `platform` branching, no `metaKey||ctrlKey`
      needed (only unmodified arrows are bound). Note in the PR/commit that any *future*
      modifier shortcut here must route through `metaKey||ctrlKey`.
-   - [ ] `aria-keyshortcuts` on the relevant controls; ensure `tabIndex={0}` doesn't trap
+   - [x] `aria-keyshortcuts` on the relevant controls; ensure `tabIndex={0}` doesn't trap
      focus or interfere with the existing buttons' tab order.
 
 5. [ ] **Tests + docs.**
-   - [ ] Vitest: unit-test the pure `diffNavDelta(key, mode)` mapping (Left/Right in
+   - [x] Vitest: unit-test the pure `diffNavDelta(key, mode)` mapping (Left/Right in
      focused, Up/Down in accordion, null otherwise) and that `stepFile`'s wrap math is
      correct at the ends (reuse/confirm the existing index math).
-   - [ ] `npm run build` + `npm run lint` + `npm test` + `cargo test` green (frontend-
+   - [x] `npm run build` + `npm run lint` + `npm test` + `cargo test` green (frontend-
      only; Rust unaffected).
-   - [ ] Update `CLAUDE.md`'s DiffInspector note (#231/#237) to mention arrow-key file
+   - [x] Update `CLAUDE.md`'s DiffInspector note (#231/#237) to mention arrow-key file
      navigation (Left/Right focused, Up/Down accordion), and add the shortcut to the
      keyboard-nav legend if one is user-visible.
 
 **Acceptance criteria**
 
-- [ ] In **Focused** mode, with the diff panel focused, **←/→** step to the
+- [x] In **Focused** mode, with the diff panel focused, **←/→** step to the
   previous/next changed file (wrapping), exactly like the ‹/› buttons; the diff body's
   vertical scroll via ↑/↓ still works.
-- [ ] In **Accordion** mode, with the panel focused, **↑/↓** move the open card to the
+- [x] In **Accordion** mode, with the panel focused, **↑/↓** move the open card to the
   previous/next file and **scroll that card into view**.
-- [ ] Arrow keys do nothing when the diff has fewer than 2 files, and never fire while a
+- [x] Arrow keys do nothing when the diff has fewer than 2 files, and never fire while a
   text input / branch-or-commit picker / the file-picker listbox has focus.
-- [ ] The handler is **panel-scoped**: arrows in one diff panel never move another diff
+- [x] The handler is **panel-scoped**: arrows in one diff panel never move another diff
   panel, a terminal, or the Canvas; it works in Overview columns, Canvas panels, and a
   detached canvas window.
-- [ ] The focusable panel has a discoverable, token-styled `:focus-visible` affordance,
+- [x] The focusable panel has a discoverable, token-styled `:focus-visible` affordance,
   and the existing ‹/› buttons, picker pill, and accordion clicks all still work.
-- [ ] **Works on both macOS and Windows** (unmodified arrows, no platform branching, no
+- [x] **Works on both macOS and Windows** (unmodified arrows, no platform branching, no
   `metaKey||ctrlKey` dependence; DOM-standard key handling identical in both WebViews).
-- [ ] `npm run build`, `npm run lint`, `npm test`, and the Rust suite pass.
+- [x] `npm run build`, `npm run lint`, `npm test`, and the Rust suite pass.
 
 **Notes**
 

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -25,9 +31,8 @@ import type {
 
 import { prismLang } from "../FileViewer/fileType";
 import { highlightToHtml } from "../FileViewer/prism";
+import { type DisplayMode, diffNavDelta } from "./diffNav";
 import styles from "./DiffInspector.module.css";
-
-type DisplayMode = "focused" | "accordion";
 
 /** Human label for a file's status code (badge tooltip, #231). */
 function statusLabel(status: FileDiff["status"]): string {
@@ -449,6 +454,38 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
     setPickerOpen(false);
   };
 
+  // Arrow-key file navigation (#255), **panel-scoped** so multiple diff panels (Overview
+  // columns, Canvas panels, detached windows) never move each other. Focused mode: ←/→
+  // step files (Up/Down stay free for body scroll); Accordion mode: ↑/↓ step the open
+  // card. Plain unmodified arrows only — identical on macOS and Windows (no
+  // metaKey||ctrlKey). Ignored while a text input / select / branch-or-commit picker /
+  // the focused-mode file-picker listbox has focus, and when there are <2 files.
+  const onPanelKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (files.length < 2) return;
+    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey)
+      return;
+    if (
+      (event.target as HTMLElement).closest(
+        "input, textarea, select, [contenteditable], [role=listbox], [role=combobox]",
+      )
+    ) {
+      return;
+    }
+    const delta = diffNavDelta(event.key, displayMode);
+    if (delta === null) return;
+    event.preventDefault();
+    stepFile(delta);
+  };
+
+  // Accordion mode (#255): keep the open card in view after a keyboard step. `block:
+  // "nearest"` is a no-op when the card is already visible, so a mouse click on an
+  // on-screen card never triggers a jarring scroll (only an off-screen move scrolls).
+  const openCardRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (displayMode !== "accordion") return;
+    openCardRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeFile?.path, displayMode]);
+
   const emptyMessage = loading
     ? "Loading…"
     : error
@@ -466,7 +503,9 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
           : "No changes yet on this branch.";
 
   return (
-    <div className={styles.panel}>
+    // Focusable + panel-scoped key handling (#255): arrow keys step between files only
+    // when this panel has focus, so other diff panels / terminals are unaffected.
+    <div className={styles.panel} tabIndex={0} onKeyDown={onPanelKeyDown}>
       <div className={styles.summary}>
         <div className={styles.summaryRow}>
           <span className={styles.branch} title={headerLabel}>
@@ -645,9 +684,11 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
               >
                 <button
                   type="button"
+                  ref={open ? openCardRef : undefined}
                   className={styles.cardHeader}
                   onClick={() => setSelectedFile(file.path)}
                   aria-expanded={open}
+                  aria-keyshortcuts="ArrowUp ArrowDown"
                   title={file.path}
                 >
                   <StatusBadge status={file.status} />
@@ -673,8 +714,9 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
               className={styles.navArrow}
               onClick={() => stepFile(-1)}
               disabled={files.length < 2}
-              title="Previous file"
+              title="Previous file (←)"
               aria-label="Previous file"
+              aria-keyshortcuts="ArrowLeft"
             >
               <ChevronLeft size={16} strokeWidth={1.5} />
             </button>
@@ -732,8 +774,9 @@ function DiffInspector({ repoPath, active }: DiffInspectorProps) {
               className={styles.navArrow}
               onClick={() => stepFile(1)}
               disabled={files.length < 2}
-              title="Next file"
+              title="Next file (→)"
               aria-label="Next file"
+              aria-keyshortcuts="ArrowRight"
             >
               <ChevronRight size={16} strokeWidth={1.5} />
             </button>

@@ -5,6 +5,15 @@
   flex-direction: column;
 }
 
+/* The panel is focusable for arrow-key file navigation (#255). Show a subtle outline
+   only on keyboard focus (`:focus-visible`) so a plain mouse click never draws one.
+   Token-driven (no off-system color / no platform-divergent CSS). Inset so it isn't
+   clipped by the panel's container. */
+.panel:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
 /* --- Summary --- */
 .summary {
   flex-shrink: 0;
