@@ -961,3 +961,28 @@ standing directive 2026-06-26):
   `mermaid.render(useId(), chart)` → `dangerouslySetInnerHTML`, latest-wins guard.
 - **Cross-platform:** pure WebView SVG, no native/path/shell code, no platform branching;
   works on WKWebView + WebView2 alike. **Depends on: none.** (Adds the `mermaid` npm dep.)
+
+## TASK-255 — Keyboard navigation between files in the diff viewer
+
+Card: "In the diff view I want to use the arrow keys (or some other keyboard shortcut) to
+jump between files when in focussed mode. Also look at accordion mode for a way to jump
+between items." Grounded: `DiffInspector` already has Focused (‹/› + i/N picker, pure
+`stepFile` wrap, #231) and Accordion (single-open cards) modes (#237 persists them); the panel
+root isn't focusable and there's no key handling; `useKeyboardNav` is global. Decided
+autonomously (refine loop, user not answering — standing directive 2026-06-26):
+
+- **Plain (unmodified) arrows, direction matched to layout:** Focused = **Left/Right** (the
+  ‹/› strip), Accordion = **Up/Down** (vertical list). Minimizes scroll conflict — Focused
+  leaves ↑/↓ for body scroll; Accordion takes ↑/↓ for stepping (wheel/PageUp-Down still
+  scroll). Alt+Arrow modifier variant is the noted fallback.
+- **Panel-scoped `onKeyDown` + `tabIndex={0}`, NOT the global `useKeyboardNav`** — multiple
+  diff panels + detached windows mount at once, so a global handler can't know which to move;
+  scoping to the focused panel keeps terminals/inputs/other panels unaffected. Guard ignores
+  inputs/selects/contenteditable/listbox/combobox + held modifiers + `files.length < 2`.
+- **Reuse the existing `stepFile` (wraps)** for both modes (consistent with the ‹/› buttons);
+  clamping is a trivial alternative. **Scroll the active accordion card into view** after a
+  keyboard step (`scrollIntoView({block:"nearest"})`).
+- **Out of scope:** in-picker listbox arrow selection, a modifier shortcut, vim/hjkl, body-
+  scroll changes. **Cross-platform:** unmodified arrows identical on macOS/Windows, no
+  `platform`/`#[cfg]` branching; any future modifier shortcut must use `metaKey||ctrlKey`.
+  **Depends on: none** (builds on shipped #231/#237).
