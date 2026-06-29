@@ -6693,3 +6693,49 @@ updater to serve it; the pipeline tags the commit `v1.0.1`.
 
 ---
 
+### 257. [x] Larger, vertically resizable Kanban card input fields
+
+**Status:** Done
+**Depends on:** none _(the foundational Kanban-input task; later cards build on the same KanbanPanel files)_
+**Created:** 2026-06-30
+
+**Description**
+
+The two card-editing textareas in the in-app Kanban board panel — the **add-card
+composer** and the **inline card editor** — were too thin (started at `rows={3}` with no
+`min-height`), so the existing `resize: vertical` drag handle was barely usable. This is a
+pure sizing/affordance change: make both textareas comfortably taller by default and
+genuinely vertically resizable by dragging, with no behavioral change to add/edit/save.
+
+**What shipped** (commit `da0e56d`, PR
+[#8](https://github.com/ErikdeJager/ReCue/pull/8), merged `15c270f`, 2026-06-30):
+
+- **Taller default** — `rows={3}` → `rows={5}` on both `KanbanPanel.tsx` textareas (the
+  `SortableCard` inline editor and the `BoardColumn` add-card composer).
+- **Floored + capped drag range** — `KanbanPanel.module.css` adds `min-height: 88px`
+  (~5 lines, so a drag can't shrink it below a usable size) and `max-height: 320px` (so a
+  very tall drag never blows out the board layout — the textarea scrolls internally past
+  that) to both `.cardEditInput` and `.composerInput`. `resize: vertical` was already
+  present (the drag handle); no JS added.
+- The Raw-view editor (`.rawEditor`, `resize: none`) was intentionally left untouched.
+
+**Key files/areas touched:** `src/components/Kanban/KanbanPanel.tsx` (two `rows`),
+`src/components/Kanban/KanbanPanel.module.css` (`.cardEditInput` / `.composerInput`
+min/max-height).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Autonomous decisions** (per the standing `ASSUMPTIONS.md` deferral): `rows={5}` as the
+  taller default; `min-height: 88px` / `max-height: 320px` as the floor/cap; reuse the
+  already-present `resize: vertical` rather than any JS drag handle; leave width, padding,
+  and font tokens unchanged (stay on-system).
+- **Cross-platform:** pure CSS + `rows` props rendered in the WebView — identical on
+  WKWebView (macOS) and WebView2 (Windows); `resize: vertical` and the `::-webkit-resizer`
+  handle render on both, so no platform branch. Frontend-only; Rust unaffected.
+- **Foundational** for the later Kanban-input cards (Enter-creates-and-reopens-composer,
+  undo-on-delete) that build on the same `KanbanPanel` files.
+
+---
+
