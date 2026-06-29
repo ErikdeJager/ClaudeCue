@@ -820,22 +820,56 @@ cargo llvm-cov --manifest-path src-tauri/Cargo.toml --html   # html report
   full-window dim overlays, and `--status-*` repointed to Catppuccin accents. A
   custom accent from Settings (#102) overrides `--accent` **and** its derived
   companions `--accent-hover` / `--accent-dim` / `--accent-fg` together
-  (`accentCompanions`, #107). See the **Design reference** in `TASKS.md` (the
+  (`accentCompanions`, #107). See the **Design reference** in `TASK_ARCHIVE.md` (the
   original near-black v1 palette; superseded by the Mocha tokens).
 
 ## Tasks
 
-Work is tracked in `TASKS.md`. **#1–#151 have shipped; #152–#153 are open.** Completed
-tasks are condensed into an **Implemented (completed tasks)** summary at the top (one
-line each, grouped by theme), with full per-task detail in git history; the `## Tasks`
-body holds the open tasks (currently #152 — make the left panel the single source of
-truth and cascade its removals to Canvas/Overview — and #153 — an agent-row "Open in
-canvas" context-menu item). New tasks go there in `TASKS-TEMPLATE.md` format with
-`Depends on:` prerequisites. The `(#N)` provenance markers throughout this doc index back
-to that summary + git history.
+Work is driven by the **`kanban-dev-pima`** pipeline (installed from cc-lib) — an
+autonomous, four-lane board over `KANBAN.md` at the repo root. Cards flow strictly left to
+right across four columns:
 
-**Never skip a task.** When implementing the backlog (`/develop-tasks`,
-`/isolate-agent`, `/handoff`), implement **every** open task whose dependencies are
-complete — lowest-numbered first — and **never skip one for being big, risky, or hard to
-verify**. A task too large for a single pass is **split into smaller dependent sub-tasks**
-(as #93 → #93 + #94) and then implemented; deferring it is not an option.
+`## PLAN` → `## IMPLEMENT` → `## MERGE` → `## ARCHIVE` → recorded in `TASK_ARCHIVE.md`
+
+Each lane is an independent **monitor-driven** skill (run one per terminal/session as
+`/<name>`, **not** via `/loop`): it drains its input column, then arms a `Monitor` on that
+column and waits, waking the instant a new card arrives. They coordinate only through the
+repo-root board files:
+
+- **`/plan-tasks`** — takes the topmost terse `PLAN` idea, explores the codebase,
+  assigns the next task number `N` (one greater than the highest used **anywhere** — board,
+  `PLAN-*.md`, `TASK_ARCHIVE.md`; next is **#257**), writes a self-contained `PLAN-<N>.md`,
+  records interpretation decisions under a `## Task <N>` section in the tracked
+  `ASSUMPTIONS.md`, sets the card's `deps:`, and moves it to `IMPLEMENT`.
+- **`/implement-tasks`** — the one fan-out lane: dispatches up to **5**
+  **`worktree-implementer`** subagents in parallel, each building one unblocked `IMPLEMENT`
+  card in its own git worktree (`.worktree/<slug>`), running ReCue's checks, and opening a
+  PR; the card moves to `MERGE` with its `PR:` url. A card is **unblocked** only when every
+  `deps:` task is in `## ARCHIVE` or already in `TASK_ARCHIVE.md`. (Watches `IMPLEMENT` +
+  `ARCHIVE` — a landed dependency can unblock a waiting card.)
+- **`/merge-prs`** — lands the topmost `MERGE` card's PR onto `main` (conflicts resolved via
+  `gh`, never by checking a branch out in the main tree), fast-forwards local `main`, and
+  moves the card to `ARCHIVE`.
+- **`/archive-tasks`** — appends a `## Task <N>` entry to `TASK_ARCHIVE.md` (the permanent,
+  tracked record), deletes the transient `PLAN-<N>.md`, removes the card, and commits & pushes.
+
+Card shape (every lane reads/writes it):
+
+```
+- [ ] Task <N>: <title> — PLAN-<N>.md
+  - deps: <comma-separated task numbers, or "none">
+  - PR: <url, once opened>
+```
+
+**Board files at the repo root.** `KANBAN.md` (the live board) and `PLAN-<N>.md` (per-task
+plans) are **git-ignored / local-only**; `ASSUMPTIONS.md` (refinement decisions) and
+`TASK_ARCHIVE.md` (permanent history — #1–#256 to date) are **tracked**. All feature work
+happens in isolated worktrees — the **main checkout never leaves its branch**; the plan and
+archive lanes commit only their own tracked file (`ASSUMPTIONS.md` / `TASK_ARCHIVE.md`) so the
+concurrent lanes don't collide. Task numbers are **global and never reused**. The `(#N)`
+provenance markers throughout this doc index back to `TASK_ARCHIVE.md` + git history.
+
+Add work by writing one-line cards under `## PLAN` in `KANBAN.md`; the pipeline numbers,
+plans, builds, merges, and archives them. **Never skip a card** — implement every unblocked
+card (lowest number first); a card too large for one pass is **split into smaller dependent
+cards** (as #93 → #93 + #94), never deferred.

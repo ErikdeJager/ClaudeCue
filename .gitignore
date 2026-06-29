@@ -6,11 +6,13 @@
 # This project's CLAUDE.md is committed (the global ignore hides it elsewhere).
 !CLAUDE.md
 
-# Isolated agent worktrees (managed by the isolate-agent / develop-tasks skills)
-.worktree/
+# kanban-dev-pima pipeline: local-only board + per-task plans.
+# (ASSUMPTIONS.md and TASK_ARCHIVE.md stay tracked — do not ignore them.)
+KANBAN.md
+PLAN-*.md
 
-# Generated task handoff briefs
-.handoffs/
+# Isolated agent worktrees (created by the worktree-implementer agent)
+.worktree/
 
 # --- Frontend (Vite / React) ---
 node_modules

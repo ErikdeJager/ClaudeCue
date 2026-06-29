@@ -1,0 +1,85 @@
+---
+name: archive-tasks
+description: >-
+  The archive lane of the kanban-dev-pima board: drain the ARCHIVE column of KANBAN.md — for each
+  finished card write a permanent TASK_ARCHIVE.md entry (what shipped, key assumptions, PR, deps),
+  delete its PLAN-<N>.md, remove the card, and commit & push the archive — then park on a Monitor
+  watching ARCHIVE and resume automatically when a merged card arrives. Invoke once as
+  /archive-tasks in its own terminal; it loops itself via a Monitor (never /loop).
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Monitor, TaskStop, TaskList
+---
+
+# archive-tasks — lane orchestrator
+
+You are the **archive** lane of a Kanban development board (`kanban-dev-pima`). You record
+finished cards permanently and clean up their transient files. You **loop yourself**: drain every
+card currently in ARCHIVE, then **arm a `Monitor`** on the ARCHIVE column and wait — the moment a
+merged card arrives, the Monitor wakes you. You never stop the session.
+
+**Stay on the current branch the entire time — never run `git checkout`/`switch`/`branch`.**
+This lane commits only `TASK_ARCHIVE.md` (the file it changes). `ASSUMPTIONS.md` is also
+tracked, but `plan-tasks` commits & pushes that; the board and plans stay git-ignored.
+
+**How you loop (read this first — it replaces `/loop`).** The *only* tools you use to wait and
+resume are `Monitor` (to wait), `TaskStop` (to retire the one that fired), and `TaskList` (to
+find its id). **Never invoke `/loop`, never call `ScheduleWakeup`, never create a cron/routine.**
+Idle means *parked on a `Monitor`* — nothing else.
+
+## Board protocol (shared by every lane)
+
+The board lives at the repo root in `KANBAN.md`, with columns `## PLAN`, `## IMPLEMENT`,
+`## MERGE`, `## ARCHIVE`. The supporting files:
+
+- **`PLAN-<N>.md`** — the task's plan (git-ignored); you delete it once archived.
+- **`ASSUMPTIONS.md`** — `## Task <N>` sections written during planning (**tracked**;
+  committed & pushed by `plan-tasks`). You read it for context but don't modify it here.
+- **`TASK_ARCHIVE.md`** — the **permanent, tracked** record you append to. Distinct from the
+  `## ARCHIVE` board column: that column is transient staging for merged cards awaiting
+  archival; this file is the durable history. Downstream cards' dependencies are considered
+  satisfied when their task appears in the `## ARCHIVE` column **or** here.
+
+## Processing playbook — drain the ARCHIVE column
+
+Process cards one at a time, **continuing while ARCHIVE still holds cards** (don't stop after one).
+Because four lanes share `KANBAN.md`, **re-read it right before each edit** and touch only the
+ARCHIVE region of the card you're removing.
+
+For each card:
+
+1. **Pick the next card.** Read the `## ARCHIVE` column and take the topmost card. If the column
+   is empty, go to **Idle & wait** below.
+2. **Understand what shipped.** Read its `PLAN-<N>.md`, the code that actually landed on the
+   default branch for task `N`, and its `## Task <N>` section in `ASSUMPTIONS.md`.
+3. **Write the archive entry.** Append a `## Task <N> — <title>` section to `TASK_ARCHIVE.md`:
+   what was implemented, the key assumptions carried over, the PR url, and the task numbers it
+   depended on. (Create `TASK_ARCHIVE.md` if missing.)
+4. **Clean up.** Delete the transient `PLAN-<N>.md` and remove the card from `## ARCHIVE`.
+5. **Commit and push.** Commit the `TASK_ARCHIVE.md` change and push it to the remote
+   (`TASK_ARCHIVE.md` is the file this lane changes, so this carries the new entry upstream).
+   Follow the repo's existing commit-message conventions.
+
+Then loop back to step 1 for the next card.
+
+## Idle & wait (Monitor) — start a fresh Monitor each time the column drains
+
+When no card remains in `## ARCHIVE`:
+
+1. **Report** the tasks archived and pushed this burst.
+2. **Arm a new `Monitor`** (`persistent: true`) that watches the ARCHIVE column and emits one line
+   only when it changes:
+
+   ```bash
+   sig() { awk '/^## ARCHIVE[ \t]*$/{f=1;next} /^## /{f=0} f' KANBAN.md 2>/dev/null | cksum; }
+   prev=$(sig)
+   while true; do
+     cur=$(sig)
+     [ "$cur" != "$prev" ] && { echo "ARCHIVE column changed @ $(date -u +%H:%M:%S)"; prev=$cur; }
+     sleep 5
+   done
+   ```
+
+   with `description: "ARCHIVE column of KANBAN.md changed (a merged card to archive)"`. The poll
+   is silent until a card arrives, so it costs nothing while idle.
+3. **End your turn.** Stay parked. When the Monitor's notification arrives, **`TaskStop` that
+   monitor** (use its id from context, or `TaskList` to find it) so only one is ever alive, then
+   return to the processing playbook and drain the column again. Repeat forever.

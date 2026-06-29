@@ -1,12 +1,15 @@
 # Tasks
 
-This file tracks tasks. Each task is **numbered** (ordered) and has a top-level
-**completion marker** — `[ ]` for open, `[x]` for done. Copy the template from
-[TASKS-TEMPLATE.md](TASKS-TEMPLATE.md) for every new task and increment the number.
+This is the **permanent archive** of completed tasks, maintained by the `kanban-dev-pima`
+pipeline's **`/archive-tasks`** lane (it appends a `## Task <N>` entry as each `ARCHIVE` card is
+finished). A task number counts as a satisfied dependency once it appears here (or in the
+board's `## ARCHIVE` column). Numbers are **global and never reused** — the next number is one
+greater than the highest used anywhere (board, `PLAN-*.md`, this file).
 
-List cross-task ordering in each task's **Depends on** field (e.g. `#2, #3`); tasks
-whose dependencies are all complete can run in parallel. The automation skills
-(`/handoff`, `/isolate-agent`, `/develop-tasks`) read these fields.
+The entries below were carried over from the prior pipeline: an **Implemented (completed
+tasks)** index for #1–#153, then full `### N. [x]` entries for #152–#256. New entries the
+archiver appends use the `## Task <N>` heading — both styles coexist and are matched by
+number.
 
 ---
 
@@ -398,21 +401,17 @@ one soft shadow for popovers/modals only (`0 8px 28px rgba(0,0,0,.45)`). **Motio
 
 ## Tasks
 
-Tasks **#1–#153 are complete** — see **Implemented (completed tasks)** above for the
-index and git history for per-task detail. **There are no open tasks right now.**
-_(Tasks #139–#140 are reserved on another branch. The Kanban content-type task was
+Open work no longer lives in this file — it flows through the `kanban-dev-pima` board
+(`KANBAN.md`: `PLAN → IMPLEMENT → MERGE → ARCHIVE`) and per-task `PLAN-<N>.md` files. This
+file is the completed-task archive only. The **Implemented (completed tasks)** index above
+covers #1–#153; the full `### N. [x]` entries that follow cover #152–#256.
+_(Tasks #139–#140 were reserved on another branch. The Kanban content-type task was
 renumbered #142 → #145 to avoid colliding with the separately merged template task #142.)_
-New work goes here as a fresh `### N.` entry in [TASKS-TEMPLATE.md](TASKS-TEMPLATE.md)
-format, with its `Depends on:` prerequisites.
 
-> **Implementing tasks — never skip one.** The agent implementing this backlog
-> (`/develop-tasks`, `/isolate-agent`, `/handoff`) MUST implement **every** open task
-> whose dependencies are all complete — take the lowest-numbered such `### N.` first —
-> and must **never skip a task because it looks big, risky, or hard to verify**. Size is
-> not a reason to defer: a task that is genuinely too large for one pass must be **split
-> into smaller dependent sub-tasks** first (as #93 was split into #93 + #94), and then
-> one of those is implemented — skipping is never the answer. Every task is carried to a
-> finished, building, lint-clean state.
+> **Never skip a card.** The pipeline implements **every** unblocked card — one whose
+> `deps:` are all in `## DONE` or already archived here — lowest task number first, and never
+> skips one for being big, risky, or hard to verify. A card too large for one pass is
+> **split into smaller dependent cards** (as #93 → #93 + #94), not deferred.
 
 ---
 
