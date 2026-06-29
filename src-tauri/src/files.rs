@@ -5,6 +5,18 @@
 //! Read content is returned verbatim and treated as untrusted by the frontend
 //! (markdown rendered sanitized with no raw HTML; code highlighted from escaped
 //! source).
+//!
+//! **Deliberate writes (path-validated).** Beyond `write_text_file` (#141, the first
+//! arbitrary write) and `move_into_repo` (#253, the second), the file-tree context
+//! menu (#267) adds the **third and fourth**: `create_dir` makes one new directory
+//! level (new-path validation: the *parent* must canonicalize inside the repo, no
+//! clobber), and `delete_path` removes a file or directory tree. `delete_path` is the
+//! genuinely destructive one, so it keeps hard safety rails: the target must
+//! canonicalize **strictly inside** the repo, it **refuses the repo root itself**, and
+//! it **never follows a symlink** (a symlinked leaf is rejected, so a delete can't
+//! reach the link's target outside the repo). All four reject `..`/symlink/out-of-repo
+//! targets and use only `std::fs` (no shell-out), so they behave identically on
+//! macOS/Windows.
 
 use serde::Serialize;
 use std::fs;
@@ -532,6 +544,74 @@ pub fn move_into_repo(
     })
 }
 
+/// Create one new (empty) directory at repo-relative `path` (#267 — the **third**
+/// deliberate `files.rs` write). Validated like `write_text_file`'s new-path branch:
+/// the target's **parent** directory must canonicalize **inside** the repo (so `..` /
+/// absolute / out-of-repo paths are rejected), and the target must **not already
+/// exist** (no clobber, mirroring `move_into_repo`). Only the single leaf directory is
+/// created — the parent is an existing tree level. The caller (`commands::create_dir`)
+/// additionally guards the new leaf's *name* (no separators, `.`/`..`, or — on Windows
+/// — a reserved device name).
+pub fn create_dir(repo: impl AsRef<Path>, path: &str) -> Result<(), String> {
+    let repo = repo.as_ref();
+    let canon_repo = repo.canonicalize().map_err(|e| e.to_string())?;
+    let target = repo.join(path);
+    // Refuse to clobber an existing file/dir/symlink (no overwrite).
+    if target.symlink_metadata().is_ok() {
+        return Err("a file or folder with that name already exists".to_string());
+    }
+    // The parent dir must exist and be inside the repo (we create one level only).
+    let parent = target.parent().ok_or("invalid path")?;
+    let canon_parent = parent.canonicalize().map_err(|e| e.to_string())?;
+    if !canon_parent.starts_with(&canon_repo) {
+        return Err("path is outside the repository".to_string());
+    }
+    let name = target.file_name().ok_or("invalid folder name")?;
+    fs::create_dir(canon_parent.join(name)).map_err(|e| e.to_string())
+}
+
+/// Delete the repo-relative file or directory at `path` (#267 — the **fourth**
+/// deliberate `files.rs` write, and the genuinely destructive one; a directory is
+/// removed **recursively**). Hard safety rails, all enforced before any removal:
+///   - `path` must be non-empty;
+///   - the **leaf is never a symlink** — a symlinked target is rejected (we don't
+///     follow it, so a delete can't reach the link's target outside the repo, nor
+///     wipe a directory the link merely points at);
+///   - the canonical (symlink-resolved) target must stay **strictly inside** the
+///     repo (rejecting `..` / out-of-repo escapes), and must **not equal the repo
+///     root** (we never delete the repository itself).
+///
+/// Any failed check returns a typed error and removes nothing.
+pub fn delete_path(repo: impl AsRef<Path>, path: &str) -> Result<(), String> {
+    let repo = repo.as_ref();
+    if path.trim().is_empty() {
+        return Err("refusing to delete the repository root".to_string());
+    }
+    let canon_repo = repo.canonicalize().map_err(|e| e.to_string())?;
+    let target = repo.join(path);
+    // `symlink_metadata` does not follow the leaf — so we can both reject a symlink
+    // and read the true file/dir type without traversing it.
+    let meta = fs::symlink_metadata(&target).map_err(|e| e.to_string())?;
+    if meta.file_type().is_symlink() {
+        return Err("refusing to delete a symlink".to_string());
+    }
+    // Canonicalize + confine: the real path must stay inside the repo and not be the
+    // repo root. (Intermediate components are symlink-resolved here; anything landing
+    // outside the repo is rejected by the containment check.)
+    let canon = target.canonicalize().map_err(|e| e.to_string())?;
+    if !canon.starts_with(&canon_repo) {
+        return Err("path is outside the repository".to_string());
+    }
+    if canon == canon_repo {
+        return Err("refusing to delete the repository root".to_string());
+    }
+    if meta.is_dir() {
+        fs::remove_dir_all(&canon).map_err(|e| e.to_string())
+    } else {
+        fs::remove_file(&canon).map_err(|e| e.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -850,5 +930,87 @@ mod tests {
 
         let _ = fs::remove_dir_all(&repo);
         let _ = fs::remove_dir_all(&ext);
+    }
+
+    #[test]
+    fn creates_a_directory_at_the_root_and_in_a_subdir() {
+        let dir = tmp("mkdir");
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        // New dir at the repo root and inside an existing subdir.
+        create_dir(&dir, "fresh").unwrap();
+        create_dir(&dir, "sub/inner").unwrap();
+        assert!(dir.join("fresh").is_dir());
+        assert!(dir.join("sub/inner").is_dir());
+        // A file can then be written into the new dir (it's a real tree level).
+        write_text_file(&dir, "fresh/note.md", "hi").unwrap();
+        assert_eq!(read_text_file(&dir, "fresh/note.md").unwrap(), "hi");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_dir_refuses_collision_and_out_of_repo_and_missing_parent() {
+        let dir = tmp("mkdir-reject");
+        fs::create_dir_all(dir.join("exists")).unwrap();
+        fs::write(dir.join("file.txt"), "x").unwrap();
+        // Collision with an existing dir or file → no clobber.
+        assert!(create_dir(&dir, "exists").is_err());
+        assert!(create_dir(&dir, "file.txt").is_err());
+        // Traversal / absolute → rejected (parent canonicalizes outside the repo).
+        assert!(create_dir(&dir, "../escape").is_err());
+        assert!(create_dir(&dir, "../../../../tmp/recue-escape-dir").is_err());
+        // A missing parent level → rejected (we create one level only).
+        assert!(create_dir(&dir, "nope/deep").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn deletes_a_file_and_a_directory_tree_inside_the_repo() {
+        let dir = tmp("delete-ok");
+        fs::write(dir.join("a.md"), "x").unwrap();
+        fs::create_dir_all(dir.join("folder/nested")).unwrap();
+        fs::write(dir.join("folder/b.txt"), "y").unwrap();
+        fs::write(dir.join("folder/nested/c.txt"), "z").unwrap();
+        // A file is removed.
+        delete_path(&dir, "a.md").unwrap();
+        assert!(!dir.join("a.md").exists());
+        // A directory is removed recursively (contents and all).
+        delete_path(&dir, "folder").unwrap();
+        assert!(!dir.join("folder").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_refuses_repo_root_traversal_outside_and_missing_target() {
+        let dir = tmp("delete-reject");
+        fs::write(dir.join("keep.md"), "x").unwrap();
+        // The repo root itself is never deletable (empty / "." / explicit).
+        assert!(delete_path(&dir, "").is_err());
+        assert!(delete_path(&dir, "   ").is_err());
+        assert!(delete_path(&dir, ".").is_err());
+        assert!(dir.exists());
+        // Traversal / absolute escapes are rejected, leaving the in-repo file intact.
+        assert!(delete_path(&dir, "../").is_err());
+        assert!(delete_path(&dir, "../../../../etc/hosts").is_err());
+        // A missing target errors clearly (nothing to remove).
+        assert!(delete_path(&dir, "nope.md").is_err());
+        assert_eq!(read_text_file(&dir, "keep.md").unwrap(), "x");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn delete_refuses_to_follow_a_symlink() {
+        use std::os::unix::fs::symlink;
+        // A symlink inside the repo pointing at an *outside* directory must not be
+        // followed — deleting it would otherwise wipe the link's real target.
+        let repo = tmp("delete-symlink-repo");
+        let outside = tmp("delete-symlink-outside");
+        fs::write(outside.join("precious.txt"), "do not delete").unwrap();
+        symlink(&outside, repo.join("link")).unwrap();
+        assert!(delete_path(&repo, "link").is_err());
+        // The link's target (and its file) survive untouched.
+        assert!(outside.join("precious.txt").exists());
+        let _ = fs::remove_dir_all(&repo);
+        let _ = fs::remove_dir_all(&outside);
     }
 }

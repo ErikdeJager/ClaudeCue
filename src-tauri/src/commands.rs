@@ -518,6 +518,55 @@ pub fn move_into_repo(
     crate::files::move_into_repo(&repo, &dest_subdir, &source).map_err(SessionError::Io)
 }
 
+/// Reject a new file-tree folder name (#267) that isn't a single, safe path segment:
+/// empty, `.`/`..`, or one containing a path separator are rejected on every OS; on
+/// **Windows** a reserved device name (`CON`, `NUL`, …) or a trailing dot/space is
+/// also rejected (reusing `windows_safe_seg`, which only diverges from identity
+/// there — so a name whose recorded form would desync from what the OS actually
+/// writes is refused). Refusing up front gives a clear error instead of an obscure
+/// mid-create failure.
+fn validate_new_segment(name: &str) -> Result<(), SessionError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty()
+        || trimmed == "."
+        || trimmed == ".."
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+    {
+        return Err(SessionError::Io(format!(
+            "`{name}` is not a valid folder name"
+        )));
+    }
+    if windows_safe_seg(trimmed.to_string()) != trimmed {
+        return Err(SessionError::Io(format!(
+            "`{name}` is not a valid folder name on this system"
+        )));
+    }
+    Ok(())
+}
+
+/// Create one new (empty) directory at repo-relative `path` (#267 — the third
+/// deliberate file write). The new leaf's name is guarded
+/// (`validate_new_segment` — no separators / `.`/`..` / Windows reserved device
+/// names), then `files::create_dir` validates the parent is inside the repo and
+/// refuses to clobber an existing item.
+#[tauri::command]
+pub fn create_dir(repo: String, path: String) -> Result<(), SessionError> {
+    let trimmed = path.trim().trim_end_matches(['/', '\\']);
+    let name = trimmed.rsplit(['/', '\\']).next().unwrap_or("");
+    validate_new_segment(name)?;
+    crate::files::create_dir(&repo, trimmed).map_err(SessionError::Io)
+}
+
+/// Delete the repo-relative file or directory at `path` (#267 — the fourth, and
+/// genuinely destructive, file write; a directory is removed recursively). The path
+/// is validated to stay strictly inside the repo, refuses the repo root, and never
+/// follows a symlink (see `files::delete_path`).
+#[tauri::command]
+pub fn delete_path(repo: String, path: String) -> Result<(), SessionError> {
+    crate::files::delete_path(&repo, &path).map_err(SessionError::Io)
+}
+
 /// Best-effort slash-invokable skills/commands for a folder (#114) — the
 /// scheduled-prompt autocomplete. Reads project `<cwd>/.claude` + user `~/.claude`
 /// (project shadows user); a missing/unreadable dir simply yields fewer entries.
@@ -1630,6 +1679,38 @@ mod tests {
         // macOS preservation: the guard must not alter any segment off-Windows.
         assert_eq!(windows_safe_seg("con".to_string()), "con");
         assert_eq!(windows_safe_seg("feature.".to_string()), "feature.");
+    }
+
+    #[test]
+    fn validate_new_segment_rejects_unsafe_names_on_every_os() {
+        // Cross-platform rejections: empty, `.`/`..`, and embedded separators.
+        assert!(validate_new_segment("").is_err());
+        assert!(validate_new_segment("   ").is_err());
+        assert!(validate_new_segment(".").is_err());
+        assert!(validate_new_segment("..").is_err());
+        assert!(validate_new_segment("a/b").is_err());
+        assert!(validate_new_segment("a\\b").is_err());
+        // Ordinary folder names are accepted everywhere.
+        assert!(validate_new_segment("docs").is_ok());
+        assert!(validate_new_segment("my-folder_2").is_ok());
+    }
+
+    // On Windows the reserved-device guard also rejects names that `windows_safe_seg`
+    // would alter; on unix those are ordinary names and stay valid.
+    #[cfg(windows)]
+    #[test]
+    fn validate_new_segment_rejects_windows_reserved_names() {
+        assert!(validate_new_segment("con").is_err());
+        assert!(validate_new_segment("NUL").is_err());
+        assert!(validate_new_segment("lpt1").is_err());
+        assert!(validate_new_segment("trailing.").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_new_segment_allows_reserved_names_on_unix() {
+        assert!(validate_new_segment("con").is_ok());
+        assert!(validate_new_segment("nul").is_ok());
     }
 
     // The explorer `/select,` token is pure string logic — verify it on every OS so the
