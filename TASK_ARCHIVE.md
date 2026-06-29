@@ -7594,3 +7594,48 @@ resized composer from #257.
 
 ---
 
+### 279. [x] Scheduled worktree should not appear as a duplicate top-level folder when it starts
+
+**Status:** Done
+**Depends on:** 259
+**Created:** 2026-06-30
+
+**Description**
+
+When a scheduled **worktree** session fired, its worktree folder appeared **both** as a
+worktree sub-group under its parent repo **and** as a phantom empty top-level primary folder
+in the sidebar. Root cause: the frontend `onFired` handler prepended the fired session's
+`repo_path` (the **worktree folder** for a worktree schedule) to `recents`, so that folder
+entered `repoOrder(...)` and rendered its own top-level `RepoGroup` (empty, since the live
+agent has `worktreeParent` set and is filtered into the sub-group). A **live-only frontend
+artifact** — the backend `fire_due_schedules` adds the **parent** `sched.cwd` to recents, so
+it vanished on restart; the interactive `spawn_worktree_agent` path never touches recents,
+which is why interactive worktree agents didn't duplicate. (Second half of the
+scheduled-worktree card; the first half — eager creation — is #259, which this builds on.)
+
+**What shipped** (commit `0ebef4f`, PR
+[#27](https://github.com/ErikdeJager/ReCue/pull/27), merged `c90507e`, 2026-06-30):
+
+- `store.ts` `onFired` — the recents prepend now uses `const recentPath =
+  session.worktree_parent ?? session.repo_path;`, so a worktree session adds its **parent
+  repo** to recents (matching the backend's `sched.cwd` recent and a restart) instead of the
+  worktree folder; non-worktree fired sessions still prepend `repo_path`. The dedup filter
+  uses the same `recentPath`. No top-level duplicate is introduced; the live and persisted
+  sidebar views agree.
+
+**Key files/areas touched:** `src/store.ts` (`onFired` recents handling for worktree
+sessions).
+
+**Dependencies:** 259 (builds on the eager-worktree lifecycle; both touch the
+scheduled-worktree sidebar/`onFired` path).
+
+**Notes**
+
+- **Autonomous decisions** (per the standing `ASSUMPTIONS.md` deferral): add the **parent**
+  repo to recents (not the worktree folder, and not nothing) so the live view matches both
+  the backend recent and a restart, mirroring the interactive worktree path.
+- **Cross-platform:** pure frontend store logic, identical on both platforms. `npm run build`
+  / `lint` / `test` green.
+
+---
+
