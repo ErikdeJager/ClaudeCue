@@ -986,3 +986,30 @@ autonomously (refine loop, user not answering — standing directive 2026-06-26)
   scroll changes. **Cross-platform:** unmodified arrows identical on macOS/Windows, no
   `platform`/`#[cfg]` branching; any future modifier shortcut must use `metaKey||ctrlKey`.
   **Depends on: none** (builds on shipped #231/#237).
+
+## TASK-256 — Release v1.0.1
+
+Card: "Increment version number to 1.0.1. Write a patchnotes file for v1.0.1 based on all
+changes since release tag 1.0.0. Run all tests, satisfy all clippy warnings, no tests fail.
+Commit & push directly to main." Grounded: version is in `src-tauri/tauri.conf.json` (gate-read)
++ `package.json`, both `1.0.0`; patch notes are `src/patchnotes/<version>.json`
+(`{version,date,changes:[{category,items}]}`, categories feature/fix/improvement/other via
+`patchnotes.ts`); push to main auto-triggers `release.yml` (version-gate → draft release →
+signed macOS+Windows builds; maintainer publishes). Changes since `v1.0.0`: #252 (file-tree git
+colors), #253 (drag OS files into tree), #254 (mermaid), #255 (diff keyboard nav). Decided
+autonomously (refine loop, user not answering — standing directive 2026-06-26):
+
+- **Bump both `tauri.conf.json` AND `package.json`** (in sync today; gate reads tauri.conf).
+- **Patch-notes categories = feature/improvement/fix** (not the launch `welcome` group); items
+  are user-facing prose, not task numbers. Regenerate the list from `git log v1.0.0..HEAD` +
+  DONE/archive at implementation time (more tasks may land first).
+- **Push directly to main, no branch/PR** — explicitly requested + required to trigger the
+  on-push release pipeline.
+- **The version bump is intentional + user-requested**, overriding the refine/loop agent's
+  standing "never bump the version" guard (which guards against *accidental* bumps). The
+  *implementing* agent performs the bump; the refine agent only writes the plan — I did not
+  touch the version.
+- **Out of scope:** building/signing/tagging/publishing (pipeline + maintainer do those);
+  release infra / updater / keys. Run full green suite: build, lint, format:check, test,
+  lint:rust (clippy -D warnings), cargo test. **Depends on: none** (documents already-merged
+  work; captures main's state at implementation time).

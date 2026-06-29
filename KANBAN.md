@@ -6,10 +6,11 @@ kanban-plugin: board
 
 ## Refine
 
-- [ ] Release v1.0.1
-	Increment version number to 1.0.1. And write a patchnotes file for v1.0.1 based on all changes that were made since release tag 1.0.0. Run all tests, make sure all clippy warnings are satisfied and no tests fail. Then commit push changes when done directly to main
-
 ## READY
+
+- [ ] #256 — Release v1.0.1 (version bump + patch notes + green suite, push to main)
+	Plan: TASK-256.md
+	Depends on: none
 
 ## DONE
 
