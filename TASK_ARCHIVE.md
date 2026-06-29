@@ -7114,3 +7114,52 @@ visibility/focus poll + debounce), `src/components/FileTree/FileTree.tsx`,
 
 ---
 
+### 263. [x] Make the New/Schedule Session modal open instantly (load branches async)
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-30
+
+**Description**
+
+Opening the New/Schedule Session modal was slow. The card guessed the remote `git fetch`
+was blocking — but investigation **corrected** that: the fetch is already non-blocking and
+off the open path (the modal's auto-fetch effect runs `void fetchRemotes(...)`
+fire-and-forget once at the branch step). The real cause was a **pre-open `await
+ipc.listBranches(repo)`** in `startRepoSession` (the per-repo "+" / context-menu "New
+session" path), which gated `newSessionOpen: true` behind a Tauri round-trip + git shell-out,
+so the modal didn't render until branches returned. (The global ⌘N folder-step path already
+opened instantly with `newSessionInitialBranches: null`.)
+
+**What shipped** (commit `f324ba3`, PR
+[#16](https://github.com/ErikdeJager/ReCue/pull/16), merged `bbed1e1`, 2026-06-30):
+
+- **`startRepoSession` opens immediately** — changed from `async … => Promise<void>` to a
+  synchronous `(repo) => void` that sets `newSessionOpen: true` with
+  `newSessionInitialBranches: null` (no pre-open `await`). The modal's existing
+  branch-detection effect (deps `[open, cwd]`) then fills the list asynchronously inside the
+  already-visible modal — local branches first, remotes streaming in after the background
+  fetch.
+- **Loading affordance** — a `branchesLoading = step === "branch" && branches === null`
+  state shows a "loading…" cue (vs the empty/"no branches" state) and gates the branch-step
+  actions until the list resolves, so a too-early Enter/create is a no-op. The remote
+  "fetching…" hint is unchanged.
+- Test updates in `store.refresh.test.ts` for the now-synchronous `startRepoSession`.
+
+**Key files/areas touched:** `src/store.ts` (`startRepoSession` — drop pre-open await),
+`src/components/NewSessionModal/NewSessionModal.tsx` (null-list detection + loading state),
+`src/store.refresh.test.ts`.
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Autonomous decisions** (per the standing `ASSUMPTIONS.md` deferral): **corrected the
+  card's "remote fetch blocks" guess** (already async) and fixed the actual gating await;
+  open at the branch step with `initialBranches: null` and let the existing detection effect
+  load the list rather than adding new async plumbing.
+- **Cross-platform:** pure frontend control-flow change, no OS-specific code — identical on
+  both platforms. `npm run build` / `lint` green.
+
+---
+
