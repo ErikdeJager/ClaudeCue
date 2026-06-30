@@ -8354,3 +8354,48 @@ No behavior, styling, visibility logic, IPC, persistence, or backend/Rust/native
 
 ---
 
+### 289. [x] Leave the schedule-session modal's prompt field empty (remove its placeholder)
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-30
+
+**Description**
+
+In the **Schedule session** modal's schedule step, the **"Prompt (optional)"** field now appears
+genuinely empty — the lingering placeholder text `"Initial prompt for claude…"`, which the user
+read as a **pre-filled prompt for the agent**, was removed. The field's *value* was already
+always empty (traced end to end: the modal's `prompt` state is `useState("")` reset to `""` on
+open, `openSchedule` seeds nothing, and the backend `create_schedule` drops a blank prompt with
+no default injected at fire time), so the only thing that read as "prefilled" was the
+placeholder. The field stays fully functional — typing sets the prompt, the `/`-skill
+autocomplete still works, and a typed prompt is still saved — and the "Prompt (optional)" label
+already names the field, so no placeholder is needed.
+
+**What shipped** (commit `28a52d7`, PR
+[#40](https://github.com/ErikdeJager/ReCue/pull/40), merged `c068013`, 2026-06-30):
+
+- **`src/components/NewSessionModal/NewSessionModal.tsx`** — removed the
+  `placeholder="Initial prompt for claude…"` prop from the schedule-step `SkillAutocomplete`
+  (one-line deletion). `value` / `onChange` / `skills` / `rows` / `ariaLabel="Initial prompt"`
+  all unchanged — `ariaLabel` keeps the field an accessible name without a visible placeholder.
+
+**Key files/areas touched:** `src/components/NewSessionModal/NewSessionModal.tsx` (one prop
+removed). No store/backend changes, no change to how a typed prompt is handled, no IPC,
+persistence, or native/Rust code.
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 289): "prefilled prompt" = the **placeholder text,
+  not an actual value** (every path verified to leave the value empty), so "just leave it empty"
+  = remove the placeholder; scope is the **NewSessionModal schedule step only** — the separate
+  `ScheduledPanel` (editing an existing schedule, where a saved prompt is a real value) is left
+  as-is, and the immediate (non-schedule) new-session flow has no prompt field; `ariaLabel` kept
+  for accessibility.
+- **Cross-platform:** a pure frontend prop removal (no native/path/shell surface), identical on
+  macOS and Windows. Project checks green: `npm run build` / `lint` / `test`.
+
+---
+
