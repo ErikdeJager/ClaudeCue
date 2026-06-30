@@ -836,28 +836,37 @@ Each lane is an independent **monitor-driven** skill (run one per terminal/sessi
 column and waits, waking the instant a new card arrives. They coordinate only through the
 repo-root board files:
 
-- **`/plan-tasks`** — takes the topmost terse `PLAN` idea, explores the codebase,
-  assigns the next task number `N` (one greater than the highest used **anywhere** — board,
-  `PLAN-*.md`, `TASK_ARCHIVE.md`; next is **#257**), writes a self-contained `PLAN-<N>.md`,
-  records interpretation decisions under a `## Task <N>` section in the tracked
-  `ASSUMPTIONS.md`, sets the card's `deps:`, and moves it to `IMPLEMENT`.
-- **`/implement-tasks`** — the one fan-out lane: dispatches up to **5**
+- **The plan lane** ships as **two interchangeable variants** — run **one** at a time in
+  the plan terminal; both explore the codebase, assign the next task number `N` (one greater
+  than the highest used **anywhere** — board, `PLAN-*.md`, `TASK_ARCHIVE.md`; next is
+  **#257**), write a self-contained `PLAN-<N>.md`, set the card's `Dependencies:`, and move it
+  to `IMPLEMENT`, producing **identical board output**:
+  - **`/plan-assume-kanban-dev`** (autonomous) — where a card is ambiguous it makes the most
+    reasonable interpretation itself and **records each call** under a `## Task <N>` section in
+    the tracked `ASSUMPTIONS.md`. No interruptions.
+  - **`/plan-ask-kanban-dev`** — pauses to **ask clarifying questions** (via `AskUserQuestion`)
+    before planning each card, then records your confirmed answers in `ASSUMPTIONS.md` (run it
+    in an interactive terminal).
+- **`/implement-kanban-dev`** — the one fan-out lane: dispatches up to **5**
   **`worktree-implementer`** subagents in parallel, each building one unblocked `IMPLEMENT`
   card in its own git worktree (`.worktree/<slug>`), running ReCue's checks, and opening a
   PR; the card moves to `MERGE` with its `PR:` url. A card is **unblocked** only when every
-  `deps:` task is in `## ARCHIVE` or already in `TASK_ARCHIVE.md`. (Watches `IMPLEMENT` +
-  `ARCHIVE` — a landed dependency can unblock a waiting card.)
-- **`/merge-prs`** — lands the topmost `MERGE` card's PR onto `main` (conflicts resolved via
-  `gh`, never by checking a branch out in the main tree), fast-forwards local `main`, and
-  moves the card to `ARCHIVE`.
-- **`/archive-tasks`** — appends a `## Task <N>` entry to `TASK_ARCHIVE.md` (the permanent,
-  tracked record), deletes the transient `PLAN-<N>.md`, removes the card, and commits & pushes.
+  `Dependencies:` task is in `## ARCHIVE` or already in `TASK_ARCHIVE.md`. (Watches `IMPLEMENT`
+  + `ARCHIVE` — a landed dependency can unblock a waiting card.)
+- **`/merge-kanban-dev`** — lands the topmost `MERGE` card's PR onto `main`, fast-forwards
+  local `main`, and moves the card to `ARCHIVE`. Conflicts are resolved through the **forge
+  API** (`gh`) — or, when real code conflicts exceed what the API can do, by **dispatching a
+  `worktree-implementer`** to resolve them in an isolated worktree — **never** by checking a
+  branch out in the main tree.
+- **`/archive-kanban-dev`** — appends a `## Task <N>` entry to `TASK_ARCHIVE.md` (the
+  permanent, tracked record), deletes the transient `PLAN-<N>.md`, removes the card, and
+  commits & pushes.
 
 Card shape (every lane reads/writes it):
 
 ```
 - [ ] Task <N>: <title> — PLAN-<N>.md
-  - deps: <comma-separated task numbers, or "none">
+  - Dependencies: <comma-separated task numbers, or "none">
   - PR: <url, once opened>
 ```
 
