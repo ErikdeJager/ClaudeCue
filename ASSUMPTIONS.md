@@ -1326,3 +1326,13 @@ directive (2026-06-26) all interpretation calls below were made autonomously.
   reduce-motion users still see a clearly-distinguished static glowing border.
 - **Scope = the available state only.** The "Update failed" error variant keeps its current
   treatment (no glow added).
+
+## Task 288
+
+- **"A simple '>' arrow" = the Lucide `ChevronRight` icon.** It is the closest single-glyph `>`
+  chevron in the project's icon set (lucide-react), matching the card's request over the current
+  `ArrowRightToLine` (→|).
+- **Same metrics, glyph only.** Size (13), stroke (1.5), title/aria-label, visibility condition,
+  and the `moveAllCardsRight` handler are all preserved; only the rendered icon changes.
+- **This is the app's Kanban board UI** (`components/Kanban/KanbanPanel.tsx`, the #283 move-all
+  button), not the development pipeline's `KANBAN.md` files.
