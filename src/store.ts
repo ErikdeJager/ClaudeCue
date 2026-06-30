@@ -35,6 +35,7 @@ import { applyTerminalSettings } from "./components/Terminal/terminalPool";
 import { decodeOutputB64 } from "./decodeOutput";
 import * as ipc from "./ipc";
 import { emitSessionOutput } from "./outputBus";
+import { isWindows } from "./platform";
 import {
   effectiveRepo,
   type OverviewFilter,
@@ -4298,7 +4299,17 @@ export const useStore = create<AppState>()((set, get) => ({
 
   copyToClipboard: async (text, label) => {
     try {
-      await navigator.clipboard.writeText(text);
+      // On Windows, route the write through the clipboard-manager plugin (#282): the
+      // WebView2 async Clipboard API rejects `writeText` with "Document is not focused"
+      // for a copy fired from a context menu / hover button, where WKWebView allows it.
+      // The plugin writes the native OS clipboard (no document-focus requirement) — the
+      // write twin of the #220 read seam. macOS keeps `navigator.clipboard.writeText`
+      // byte-for-byte.
+      if (isWindows(get().platform)) {
+        await ipc.clipboardWriteText(text);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
       get().pushToast(label ? `Copied ${label}` : "Copied");
     } catch {
       get().pushToast("Copy failed", "error");

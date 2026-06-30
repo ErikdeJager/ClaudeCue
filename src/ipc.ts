@@ -4,7 +4,10 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { readText as readClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import {
+  readText as readClipboardText,
+  writeText as writeClipboardText,
+} from "@tauri-apps/plugin-clipboard-manager";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
 import type {
@@ -513,6 +516,16 @@ export async function clipboardReadText(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Write `text` to the OS clipboard (#282) via the clipboard-manager plugin — the
+ * write counterpart of `clipboardReadText` (#220). Reliable under WebView2, where
+ * `navigator.clipboard.writeText` can reject with "Document is not focused" for a copy
+ * triggered from a context menu / hover button (a stricter focus requirement than
+ * WKWebView's). Writes to the native OS clipboard, so no document focus is needed.
+ * Rejects on failure so the caller can toast. */
+export async function clipboardWriteText(text: string): Promise<void> {
+  await writeClipboardText(text);
 }
 
 /** Save the OS clipboard **image** (#220) to a temp PNG and return its absolute path,
