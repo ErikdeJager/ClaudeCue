@@ -8205,3 +8205,53 @@ not rely on `Ctrl+E`.
 
 ---
 
+### 286. [x] Move "Update now" button above patch notes in Settings → Updates
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-30
+
+**Description**
+
+In the **Settings → Updates** pane, when an update is available, the **"Update now & restart"**
+install button (and, while installing, the progress bar) now renders **directly under the
+"Update available · v<version>" label**, **above** the release-carried **"What's new"** notes —
+so a long set of release notes can no longer grow the block and push the install button below
+the scrollable fold where the user can't reach it. Pure presentational reorder: the
+(potentially arbitrarily tall) `updateState.notes` markdown block now comes **last** in the
+available/downloading `.field`, and the install action sits at the top.
+
+**What shipped** (commit `3bf202a`, PR
+[#37](https://github.com/ErikdeJager/ReCue/pull/37), merged `928226e`, 2026-06-30):
+
+- **JSX reorder in `src/components/Settings/Settings.tsx`** (the `updateState.status ===
+  "available" || "downloading"` `.field` block): the `downloading ? <.updateProgress> :
+  <"Update now & restart" button>` ternary was moved to sit **immediately after** the
+  `fieldLabel`, and the `.whatsNew` "What's new in v<version>" notes block moved to **last** in
+  the field. Every prop, handler (`installUpdate`), className, icon (`Download`), and the
+  downloading/available ternary kept **byte-for-byte** — only the source order of the two
+  siblings changed (27 insertions / 23 deletions, one file).
+- **No CSS change** needed — `.field` / `.updates` already lay out with `gap`, so spacing stayed
+  correct after the reorder.
+
+**Key files/areas touched:** `src/components/Settings/Settings.tsx` (the only file changed). No
+CSS, no store/updater logic, no backend/Rust/native code, no IPC or persistence.
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 286): "the update modal (inside settings)" = the
+  **Settings → Updates pane**, not the separate sidebar-indicator `UpdateModal` confirm dialog
+  (which has no patch notes); "above the patchnotes" = above the **not-yet-installed update's
+  "What's new"** block (the release-carried `updateState.notes`), with the running-version
+  `PatchNotes` ("What's new in this version") section left untouched; and the fix is a **pure
+  render-order change with no scroll cap added** — ordering the button first solves the
+  off-screen concern, so a `max-height`/scroll on the notes slot was deliberately out of scope.
+- **Cross-platform:** purely a JSX/CSS-layout reorder with no OS-specific code (no native, path,
+  or shell surface), so it behaves identically on macOS and Windows. No change to the
+  running-version patch notes, the "Check for updates" button, status/error text, the
+  `UpdateModal`, the sidebar `UpdateIndicator`, or any non-updates Settings section.
+
+---
+
