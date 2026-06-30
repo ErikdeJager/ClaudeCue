@@ -1191,3 +1191,28 @@ directive (2026-06-26) all interpretation calls below were made autonomously.
   performs the bump (refine lane never bumps). Push to main triggers the pipeline → draft →
   maintainer publishes. Out of scope: build/sign/publish. Mirrors #256.
 - **`deps:` ALL of 257–280** — the release gates on every refined task being implemented.
+  **Updated for Task 282:** `deps:` now also includes **282** (the pre-release Windows-parity
+  audit must land before v1.0.2 is cut). PLAN-281.md's Dependencies section is updated to match.
+
+## Task 282 — Windows parity audit (pre-release gate for v1.0.2)
+- The terse card ("Using the '/windows-parity-audit' skill … check the system for windows
+  compatibility … Do this before release task 281") is refined as a **fix-mode** audit, not a
+  report-only pass: the explicit purpose is to ensure parity *before shipping*, so the task
+  audits → confirms → **applies remediations** through ReCue's established seams (macOS arm
+  byte-for-byte, Windows arm additive + `#[cfg]`/`platform`-gated).
+- **Always produces a reviewable PR.** Because the pipeline deliverable is a PR, the implementer
+  **always appends a dated audit entry to the tracked `TRAJECTORY_TO_WINDOWS.md`** (scope ·
+  findings or explicit "clean" · fixes · pending real-box checks) — so the diff is non-empty
+  and durable even in the (likely, given the port's maturity) case of few/zero code fixes.
+- **The implementer cannot fan out `Agent` subagents** (the `worktree-implementer` has only
+  Bash/Read/Write/Edit/Glob/Grep). So the plan directs it to run the skill's
+  `windows-landmines.md` **grep seeds itself** (single-agent, all 13 categories) and confirm
+  each hit by reading — rather than the skill's default Explore fan-out. The catalog is built
+  for this grep-driven sweep.
+- **`deps: 280`** — the audit covers the **final** shipping code, so it gates on the last
+  in-flight feature fix (Task 280) to avoid auditing a moving target; 257–279 are already
+  archived. The release (281) depends on 282, giving the order **280 → 282 → 281**.
+- Scope = whole codebase, with extra confirmation effort on the newest, possibly-unaudited
+  code since the port stabilized (#202/#231/#237/#252/#253/#254/#255/#275/#277/#278). Out of
+  scope: the version bump/patch notes (Task 281) and performing the real-box manual checks
+  (those are logged for a maintainer, not run in CI).
