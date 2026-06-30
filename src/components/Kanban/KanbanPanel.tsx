@@ -28,7 +28,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  ArrowRightToLine,
+  ChevronRight,
   Code2,
   Eye,
   Pencil,
@@ -496,7 +496,7 @@ function BoardColumn(props: ColumnProps) {
               title="Move all cards right"
               aria-label="Move all cards to the next column"
             >
-              <ArrowRightToLine size={13} strokeWidth={1.5} />
+              <ChevronRight size={13} strokeWidth={1.5} />
             </button>
           )}
           <button
