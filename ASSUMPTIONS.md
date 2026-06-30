@@ -1290,3 +1290,19 @@ directive (2026-06-26) all interpretation calls below were made autonomously.
 - **Overview-only.** The sidebar already nests a worktree's agents and panels together under its
   `WorktreeHeader`, so adjacency there is inherent; only the Overview cluster's intra-order needed
   fixing.
+
+## Task 286
+
+- **"The update modal (inside settings)" = the Settings → Updates pane**, not the separate
+  sidebar-indicator `UpdateModal` confirm dialog. The patch-notes-vs-install-button layout the
+  card describes only exists in the Settings → Updates section (`Settings.tsx`, `section ===
+  "updates"`); the confirm dialog has no patch notes.
+- **"Above the patchnotes" means the not-yet-installed update's "What's new" block** (the
+  release-carried `updateState.notes`) shown in the available/downloading `.field`. The fix
+  moves the **"Update now & restart"** button (and the downloading progress bar that replaces
+  it) to sit immediately under the "Update available · v<version>" label, before that notes
+  block. The running-version `PatchNotes` ("What's new in this version") section is unrelated
+  and left as-is.
+- **Pure render-order change, no scroll cap added.** The card's concern ("button moved off
+  screen") is solved by ordering the button first; adding a `max-height`/scroll to the notes
+  slot is not required and is out of scope.
