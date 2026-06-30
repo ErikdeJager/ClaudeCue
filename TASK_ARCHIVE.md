@@ -8128,3 +8128,80 @@ pass the worktree folder as `repoPath`).
 
 ---
 
+### 284. [x] Keyboard shortcut (⌘E / Ctrl+E) to toggle big mode for the selected item
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-30
+
+**Description**
+
+A single global keyboard shortcut — **⌘E on macOS / Ctrl+E on Windows** — now **toggles big
+mode** (#157, the near-fullscreen `BigModeModal` overlay) for the **currently selected item**:
+pressing it when big mode is **closed** opens the selected item maximized; pressing it again
+(while open) closes it. This completes the intended UX flow — step selection with **Shift+←/→**,
+then press the chord to maximize the focused item and the same chord to return. Works in both
+views (Overview **and** Canvas) and in a **detached canvas window**, and is safe inside a focused
+`claude` PTY (the capture-phase handler `stopPropagation`s it so it never echoes into the
+terminal). Pressing it with **nothing selected** is a safe no-op (no empty modal).
+
+**Keybind rationale:** **E** = **E**nlarge/**E**xpand (matches the `Maximize2` icon). It is a
+simpler two-key chord, chosen after the planner's first pick `⌘⇧M` was returned by the user as
+"a bad keybind — think of something simpler." It deliberately avoids `⌘M`/`Ctrl+M` because
+**`Ctrl+M` is carriage-return (Enter)** in a terminal (a direct in-Claude conflict) and `⌘M` is
+the macOS *minimize* shortcut; it also avoids the bound app letters (S/N/B/K/T), `⌘⇧N`
+(schedule), and the worktree-create `⌘⏎`. On macOS ⌘-combos never reach the terminal; on Windows
+the capture-phase handler shadows `Ctrl+E` (readline end-of-line) inside terminals — an accepted
+tradeoff consistent with the app already shadowing `Ctrl+B/K/N/T/S`, and Claude Code's TUI does
+not rely on `Ctrl+E`.
+
+**What shipped** (commit `16267d6`, PR
+[#36](https://github.com/ErikdeJager/ReCue/pull/36), merged `91b4383`, 2026-06-30):
+
+- **Store action `toggleMaximizeSelected()`** + a pure exported **`contentForSelected(state)`**
+  helper in `src/store.ts`. The action: `if (maximizedItem) closeMaximized()` else resolve the
+  selection to a `CanvasContent` and `maximizeItem(content)` (no-op when `null`).
+  `contentForSelected` resolves `selectedId` the same way the click-to-maximize buttons do —
+  preferring the active Canvas leaf's `content`, else mapping a session id →
+  `{ kind:"agent", ... }`, a schedule id → `{ kind:"scheduled", ... }`, or an Overview panel id
+  via the existing `overviewPanelToContent` (worktree-keyed `repoPath` preserved).
+- **Chord handler in `src/useKeyboardNav.ts`:** detection `(e.metaKey || e.ctrlKey) &&
+  !e.shiftKey && !e.altKey && e.code === "KeyE"` (the `metaKey || ctrlKey` convention + physical
+  `e.code`, so the same handling fires ⌘E on macOS / Ctrl+E on Windows), with
+  `preventDefault()` + `stopPropagation()` in capture phase. **Not gated on `IS_MAIN_WINDOW`** —
+  big mode works in the detached canvas window too. Top-of-file shortcut summary updated.
+- **Discoverability:** the platform-correct chord appended to the existing `Maximize2` button
+  tooltips via `kbdHint` — three in `src/components/Overview/Overview.tsx`, one in
+  `src/components/Canvas/CanvasSurface.tsx` — reading `⌘E` on macOS / `Ctrl+E` on Windows (never
+  a hardcoded `⌘`).
+- **Unit tests** in `src/store.test.ts` covering `contentForSelected` (session / schedule /
+  Overview-panel / Canvas-leaf resolution; `null` for unknown/none) and the toggle semantics
+  (close-when-open regardless of selection; no-op when nothing maximizable is selected).
+- **`TRAJECTORY_TO_WINDOWS.md`** entry recording the Windows-keyboard real-box check still owed
+  (confirm Ctrl+E toggles big mode, doesn't collide with a WebView2 default, and the tooltips
+  read "Ctrl+E").
+
+**Key files/areas touched:** `src/store.ts` (`toggleMaximizeSelected` + `contentForSelected`),
+`src/useKeyboardNav.ts` (chord handler + summary), `src/components/Overview/Overview.tsx` &
+`src/components/Canvas/CanvasSurface.tsx` (tooltip hints), `src/store.test.ts` (tests),
+`TRAJECTORY_TO_WINDOWS.md` (Windows real-box note). No backend/Rust/native code.
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 284): chord **⌘E / Ctrl+E** (revised down from the
+  user-rejected `⌘⇧M`); **toggle semantics** (one chord opens-when-closed / closes-when-open);
+  **nothing-selected = safe no-op**; "selected item" = `selectedId` resolved to a `CanvasContent`
+  exactly like the existing click-to-maximize buttons; **works in both windows and both views**
+  (not `IS_MAIN_WINDOW`-gated); discoverability via the `Maximize2` tooltips through `kbdHint`.
+  Rejected alternatives (`⌘⇧M`, `⌘M`/`Ctrl+M`, `⌘⏎`, the bound letters) recorded so they aren't
+  re-litigated.
+- **Cross-platform:** detection uses `metaKey || ctrlKey` + `e.code` and tooltips route through
+  `kbdHint`/the cached `platform` signal, so the same code is ⌘E on macOS and Ctrl+E on Windows
+  with no native/path/shell surface; the only OS-sensitive bit (modifier label) is already
+  abstracted, and the Windows real-box keyboard check is logged in `TRAJECTORY_TO_WINDOWS.md`.
+  Project checks green: `npm run build` / `lint` / `test` / `format:check`.
+
+---
+
