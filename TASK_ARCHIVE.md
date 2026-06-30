@@ -7933,3 +7933,70 @@ on the last in-flight feature fix; order is **280 → 282 → 281**; 257–279 a
 
 ---
 
+### 281. [x] Release v1.0.2 (version bump + patch notes)
+
+**Status:** Done
+**Depends on:** 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272,
+273, 274, 275, 276, 277, 278, 279, 280, 282
+
+**Created:** 2026-06-30
+
+**Description**
+
+Cut **v1.0.2**: bump the app version everywhere it's declared and author the in-app
+current-version patch notes summarizing everything since v1.0.1, then push to `main` so the
+release pipeline produces a draft release (a maintainer publishes it). The **final task of the
+batch** — gated on every task refined alongside it (257–280) **plus** the pre-release
+Windows-parity audit (282), so the shipping code is complete and Windows-clean before the
+version is cut. Order: **280 → 282 → 281**. Mirrors the v1.0.1 release task (#256).
+
+**What shipped** (commit `cacb1a4`, PR
+[#33](https://github.com/ErikdeJager/ReCue/pull/33), merged `3b4ff68`, 2026-06-30):
+
+- **Version bumped to `1.0.2`** in both `src-tauri/tauri.conf.json` (the pipeline's version
+  gate, `1.0.2 > v1.0.1` → triggers `release.yml`) and `package.json` (kept in sync). The
+  **implementing** agent performs the bump (the refine lane never bumps version — that guard
+  only blocks *accidental* bumps).
+- **New `src/patchnotes/1.0.2.json`** — the in-app "What's new" for Settings → Updates (loaded
+  by `src/patchnotes.ts`, rendered by `components/PatchNotes`), with user-facing prose
+  **regenerated at implementation time from `git log v1.0.1..HEAD` + the new `TASK_ARCHIVE.md`
+  entries**, grouped into **feature / improvement / fix**:
+  - **feature:** natural-language schedule launch time (`1h`/`6pm`/`tomorrow 9am`) w/ live
+    preview, **Start now** for a scheduled session, diff-viewer **Seen/Not-seen/Changed-since-seen**
+    review markers (`s` key, persisted), file-tree **new-folder / delete** right-click actions,
+    repo **Checkout branch…** (switch/create a branch without starting an agent), **export/import
+    Canvas templates** (JSON), **Copy** button on rendered markdown code blocks, and Kanban
+    **Undo** for an accidental card delete.
+  - **improvement:** snappier typing under heavy terminal output, instant-opening New/Schedule
+    Session modals (branch list loads in background), diff-file ordering (by-change vs
+    alphabetical, persisted), self-refreshing file tree, dimmed **gitignored** rows, larger
+    resizable Kanban card inputs, Enter-adds-and-keeps-composer-open, usage bar red at 90%.
+  - **fix:** terminal last-line no longer slips below view, scheduled-worktree tidy-up
+    (up-front worktree/branch, no duplicate top-level folder, clean header), Canvas scheduled
+    panel shows the live terminal on fire (incl. detached window) instead of "no longer
+    pending", Template Editor block-config layout, Canvas tabs **+** sizing, and reliable
+    **Copy** on macOS **and** Windows.
+- **Push to `main`** triggers the on-push `release.yml` version gate → a **draft** GitHub
+  release (Claude-constructed body from the tag range) + a 2-OS matrix of signed macOS/Windows
+  bundles + merged `latest.json`. A **maintainer publishes** the draft (the "latest" endpoint
+  only resolves to a published release).
+
+**Key files/areas touched:** `src-tauri/tauri.conf.json` + `package.json` (version → `1.0.2`),
+`src/patchnotes/1.0.2.json` (new). No runtime code — version strings + a JSON notes file.
+
+**Dependencies:** all of 257–280 **plus 282** — the release gates on every refined task being
+implemented and on the pre-release Windows-parity audit landing first. Must run last.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 281): the *implementing* agent performs the bump;
+  patch-notes item list **regenerated from the actual merged set** at implementation time (not
+  the plan's illustrative examples); out of scope = building / signing / tagging / **publishing**
+  the release (the pipeline + a maintainer do those).
+- **Cross-platform:** version strings + a JSON patch-notes file + docs; no OS branch. The
+  pipeline builds **both** macOS and Windows; patch-notes copy that names a platform reads
+  "macOS and Windows" (the Copy-reliability note). Full green suite: `npm run build` / `lint` /
+  `format:check` / `test` / `lint:rust` + `cargo test`.
+
+---
+
