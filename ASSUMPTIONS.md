@@ -1239,15 +1239,20 @@ directive (2026-06-26) all interpretation calls below were made autonomously.
 
 ## Task 284
 
-- **Chosen chord: ⌘⇧M / Ctrl+⇧M (Cmd/Ctrl+Shift+M).** Picked for zero Claude-instance conflict on
-  both OSes: the global handler intercepts in capture phase + `stopPropagation`, macOS never
-  routes ⌘-combos to the terminal, and on Windows `Ctrl+Shift+letter` is **not** a readline/TUI
-  control code (those are bare `Ctrl+letter`), so nothing the Claude TUI uses is shadowed. M =
-  Maximize/big Mode (matches the `Maximize2` icon).
-- **Rejected alternatives (recorded so the implementer doesn't re-litigate):** `⌘M` — collides
-  with the macOS-system *minimize*; `⌘⏎` — already the worktree-create gesture in the
-  NewSessionModal (#74/#204); `⌘E`/`Ctrl+E` — shadows the Windows readline *end-of-line*; bound
-  app letters S/N/B/K/T and `⌘⇧N` (schedule) are taken.
+- **Chosen chord: ⌘E / Ctrl+E (Cmd/Ctrl+E).** *(Revised: the first pick `⌘⇧M` was returned by
+  the user as "a bad keybind — think of something simpler", so this is now a simpler two-key
+  chord.)* E = **E**nlarge/**E**xpand to big mode (matches the `Maximize2` icon). On macOS
+  ⌘-combos never reach the terminal (the capture-phase handler `stopPropagation`s it), so it is
+  fully Claude-safe; it deliberately avoids `⌘M`/`Ctrl+M` because **`Ctrl+M` is carriage-return
+  (Enter)** in a terminal — a direct in-Claude conflict — and `⌘M` is the macOS *minimize*
+  shortcut.
+- **Rejected alternatives (recorded so the implementer doesn't re-litigate):** `⌘⇧M` — rejected
+  by the user as not simple enough; `⌘M`/`Ctrl+M` — `Ctrl+M` is the terminal carriage-return and
+  `⌘M` is macOS minimize; `⌘⏎` — already the worktree-create gesture in the NewSessionModal
+  (#74/#204); bound app letters S/N/B/K/T and `⌘⇧N` (schedule) are taken.
+- **Windows tradeoff (accepted):** the capture-phase handler shadows `Ctrl+E` (readline
+  end-of-line) inside Windows terminals — consistent with the app already shadowing
+  `Ctrl+B/K/N/T/S`; Claude Code's TUI does not rely on `Ctrl+E`. macOS has no such tradeoff.
 - **Toggle semantics:** one chord both opens (when closed) and closes (when open) — `if
   (maximizedItem) closeMaximized() else maximize the selected item`. Pressing it with **nothing
   selected** is a **safe no-op** (no empty modal).
