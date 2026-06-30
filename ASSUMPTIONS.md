@@ -1336,3 +1336,18 @@ directive (2026-06-26) all interpretation calls below were made autonomously.
   and the `moveAllCardsRight` handler are all preserved; only the rendered icon changes.
 - **This is the app's Kanban board UI** (`components/Kanban/KanbanPanel.tsx`, the #283 move-all
   button), not the development pipeline's `KANBAN.md` files.
+
+## Task 289
+
+- **"Prefilled prompt" = the placeholder text, not an actual value.** I traced every path: the
+  schedule modal's `prompt` state is always `""` (init + reset), `SkillAutocomplete` is fully
+  controlled with no internal default, `openSchedule` seeds nothing, and the backend
+  `create_schedule` drops a blank prompt with no default injected at fire time. The only thing
+  visible in the empty field is the placeholder `"Initial prompt for claude…"`, which the user
+  reads as a pre-filled prompt — so "just leave it empty" means **remove that placeholder**.
+- **Scope = the NewSessionModal schedule step only.** The "Prompt (optional)" label already
+  names the field, so no placeholder is needed there. The separate `ScheduledPanel` (editing an
+  existing schedule, where a saved prompt shows as a real value) is intentionally left unchanged,
+  and the immediate new-session flow has no prompt field at all.
+- **`ariaLabel="Initial prompt"` is kept** so the field retains an accessible name without the
+  visible placeholder.
