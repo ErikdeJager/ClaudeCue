@@ -1,0 +1,20 @@
+{
+  "version": "1.0.4",
+  "date": "2026-06-30",
+  "changes": [
+    {
+      "category": "improvement",
+      "items": [
+        "The sidebar \"Update available\" chip now carries a calm, continuous glowing border instead of a one-time blink — easy to spot the whole time an update is waiting, with a static glow under reduced motion.",
+        "In Settings → Updates, the \"Update now & restart\" button now sits directly under the version label, above the release notes — so long notes can no longer push it below the scroll fold.",
+        "The Kanban board's \"move all cards right\" button now uses a simple \">\" chevron, reading more clearly as \"move to the next column.\""
+      ]
+    },
+    {
+      "category": "fix",
+      "items": [
+        "The Schedule session modal's optional prompt field now appears genuinely empty instead of showing placeholder text that looked like a pre-filled prompt for the agent."
+      ]
+    }
+  ]
+}
