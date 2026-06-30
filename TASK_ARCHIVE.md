@@ -8060,3 +8060,71 @@ wire-up), `src/components/Kanban/kanbanOps.test.ts` (tests). No CSS, no backend,
 
 ---
 
+### 285. [x] Place a new item next to the agent running in its worktree/branch
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-06-30
+
+**Description**
+
+When a user creates a new **non-agent panel** (file viewer, diff, shell terminal, kanban,
+filetree) scoped to a folder that already has a **running agent** — most notably a **worktree
+folder** — the new Overview column now appears **immediately to the right of that agent**,
+instead of being appended at the far end of the parent repo's cluster. So a panel opened from a
+worktree agent's card header (or the sidebar worktree header) lands right next to the worktree
+agent it belongs with, ready to use instantly. This is a **placement/ordering** change only — all
+the worktree-scoping plumbing already existed; when **no** agent runs in the panel's folder the
+long-standing append-at-end behavior is preserved unchanged.
+
+**What shipped** (commit `de69f81`, PR
+[#35](https://github.com/ErikdeJager/ReCue/pull/35), merged `c519292`, 2026-06-30):
+
+- **Two pure helpers + one action helper** in `src/store.ts`:
+  - `placeAfterAnchor(orderedKeys, id, anchorId)` — removes any prior occurrence of `id` and
+    re-inserts it immediately **after** `anchorId`; returns the input unchanged when `anchorId`
+    is absent or equals `id` (idempotent — an `id` already directly after `anchorId` round-trips).
+  - `anchorAgentForPanel({ ... })` — resolves the anchor: an agent running in the panel's
+    **exact** folder (`session.repoPath === repoPath`), scanning the cluster's current render
+    order so the **last** such agent (the worktree's agent block) is chosen; returns `null` when
+    no agent shares the folder.
+  - `repositionPanelAfterAgent` — computes the parent cluster's order via the same
+    `overviewClusters` / `mergeRepoOrder` the UI renders from, splices the new panel after the
+    anchor, and persists through the existing **`reorderOverview` → `set_overview_order`** drag
+    path; a **no-op when no anchor agent exists**.
+- **`addOverviewPanel` augmented** to run the reposition after the new panel is added to state,
+  so **every** creation path benefits from one source of truth — the worktree/agent card-header
+  `OpenViewButton`, the sidebar `WorktreeHeader` `ViewsMenu`, the ExtraPanel header,
+  `CreatePanelModal`, the sidebar-tree click (`openFileFromTree`), and kanban-board creation.
+  **Dedup early-returns and the terminal-spawn-failure (`return null`) path never reposition.**
+- **Unit tests** in `src/store.test.ts`: cover `placeAfterAnchor` (insert-after, absent-anchor
+  no-op, idempotent, preserves other keys' order) and the store-level anchor resolution
+  (worktree panel lands after the worktree agent; normal-repo panel lands after its agent;
+  no-agent folder leaves `overviewOrder` unwritten; a dedup hit does not reposition).
+
+**Key files/areas touched:** `src/store.ts` (`placeAfterAnchor`, `anchorAgentForPanel`,
+`repositionPanelAfterAgent`, augmented `addOverviewPanel`), `src/store.test.ts` (tests). **No
+Rust change** (`set_overview_order` already existed); **no UI change** (entry points already
+pass the worktree folder as `repoPath`).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 285): "near the agent on that branch/worktree" =
+  insert immediately **after the agent that shares the new panel's folder** (`session.repoPath
+  === repoPath`), preferring the **selected** agent on a tie. A "specific branch" is identified
+  by its **folder**, not a new branch field — a worktree is the concrete per-branch folder and
+  every entry point already carries it. **Reposition only when an agent shares the folder**;
+  otherwise the established append-at-end behavior is left untouched (this is an additive nicety
+  for the active-agent/worktree case, not a global panel-reorder). **Overview-only** — the
+  sidebar already nests a worktree's agents and panels together under its `WorktreeHeader`, so
+  adjacency there is inherent. Persistence reuses the manual-drag path, so a later manual drag
+  still wins and persists via `mergeRepoOrder`.
+- **Cross-platform:** pure store/React/TS ordering logic over the already-cross-platform
+  `set_overview_order` command — **identical on macOS and Windows**; folder paths are used only
+  as opaque map keys (compared, never parsed/joined), so no path/shell/`#[cfg]` surface. Project
+  checks green: `npm run build` / `lint` / `test` / `format:check`.
+
+---
+
