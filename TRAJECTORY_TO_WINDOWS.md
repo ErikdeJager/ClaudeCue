@@ -636,3 +636,110 @@ there is no OS-specific path/shell/key code in any of the touched files
   fire while detached — confirm the detached panel becomes the live agent terminal too; and
   (d) cancel a schedule — confirm its panel/leaf is removed and the gone state shows only
   when truly cancelled.
+
+### Iteration 9 — full Windows-parity audit (pre-v1.0.2 release gate, #282)
+
+A grep-driven, single-agent sweep of **all 13 landmine categories**
+(`.claude/skills/windows-parity-audit/windows-landmines.md`) across `src/`,
+`src-tauri/src/`, the CSS, and the build/bundle/CI config — the pre-release gate for the
+v1.0.2 cut (#281). Each grep seed was run and **every hit confirmed by reading the cited
+code** against the established seams. The core has been hardened over Iterations 1–8, so
+the highest-yield target was the newest code (#252–#280); each was re-verified. Net: **one
+confirmed defect fixed** (clipboard write), every other category **clean / already-seamed**.
+
+#### Confirmed finding + fix
+
+- **Bug (Medium — degraded UX, #282)**: `store.ts` `copyToClipboard` (every "Copy session
+  ID / path / branch name", the FileViewer code-block **Copy** button, file-tree Copy-path)
+  wrote the clipboard via **`navigator.clipboard.writeText`**. WebView2's async Clipboard
+  API is **stricter than WKWebView about document focus** and rejects `writeText` with
+  *"Document is not focused"* for a copy fired from a context menu / hover button (focus is
+  on a non-document element) — so a copy that succeeds on macOS could toast **"Copy failed"**
+  on Windows. This is the **write-side twin** of the #220 read defect: #220 already moved the
+  clipboard **read** to the `tauri-plugin-clipboard-manager` (`clipboardReadText`, "reliable
+  under WebView2, unlike `navigator.clipboard`") but left the **write** on the Web API.
+  **Fix (through the established #220 clipboard-manager seam)**: added
+  `ipc.clipboardWriteText` (the plugin's `writeText`, the write counterpart of
+  `clipboardReadText`), and `copyToClipboard` now **routes the write through the plugin on
+  Windows** (gated by `isWindows(get().platform)` — the native OS clipboard needs no document
+  focus), keeping **`navigator.clipboard.writeText` on macOS byte-for-byte**. Granted
+  `clipboard-manager:allow-write-text` in `capabilities/default.json` (additive; read-text /
+  read-image were already granted).
+  **Files**: `src/ipc.ts`, `src/store.ts`, `src-tauri/capabilities/default.json`
+  **macOS**: Preserved — the `isWindows` gate's `else` branch is the unchanged
+  `navigator.clipboard.writeText` call; macOS never enters the plugin path.
+
+#### Swept clean / already-seamed (confirmed by reading, not re-flagged)
+
+1. **POSIX paths & separators** — clean. Rust path building uses `Path/PathBuf::join`;
+   `files.rs` content-search/list (#202/#167) normalizes repo-rel paths with
+   `to_string_lossy().replace('\\', "/")` (lines 229/312); `move_into_repo` (#253) /
+   `create_dir` (#267) build repo-rel POSIX results. Frontend `split("/")` /
+   `` `${a}/${b}` `` joins (FileTree #252/#267, fileStatus, DiffInspector #231/#278,
+   FilePicker, FileSwitcher) all operate on **backend `/`-separated repo-relative** paths;
+   absolute paths route through `joinPath`/`splitPath` (`[\\/]`). No `/`-rooted assumptions.
+2. **Home dir / `$HOME`** — clean. Every `~/.claude` read (`skills.rs`, `usage.rs` #154,
+   `title.rs`) goes through `path_env::home_dir()` (`%USERPROFILE%` on Windows). No raw
+   `env::var("HOME")` outside the unix-gated login-shell probe.
+3. **Shelling out (console-flash)** — clean. All `git` + the `<cli> --version` probe route
+   through `git::hidden_command` (`CREATE_NO_WINDOW`). Remaining `Command::new` sites are the
+   `hidden_command` seam itself, `os_open`/`open_url`/`reveal_file_in_finder` (all
+   `#[cfg]`-gated), the macOS-gated Keychain `security` (with a non-macOS `None` stub), the
+   unix-gated login-shell probe, and `#[cfg(test)]` helpers.
+4. **Process / CLI resolution** — clean. `pty::resolve_command`/`find_on_path`/`launch_target`
+   (PATHEXT + `cmd.exe /C` for `.cmd`) and `default_shell` (PowerShell/`COMSPEC` on Windows)
+   carry both arms with the unix arm unchanged; `agents.rs` resolves `binary_name` through them.
+5. **URLs vs reveal** — clean. URLs → `open_url` (macOS `open` / Windows `cmd /C start "" <url>`
+   / `xdg-open`, #217); folder open → `os_open` (`explorer.exe`); file reveal →
+   `explorer.exe /select,"<path>"` via `explorer_select_arg` + `raw_arg` (#194). Frontend
+   `openUrl`/`revealPath`/`revealFileInFinder` map 1:1.
+6. **Keyboard ⌘ vs Ctrl** — clean. Every shortcut handler is `metaKey || ctrlKey`
+   (`useKeyboardNav`, terminal link-open). The two non-paired hits are correct: the
+   Windows-gated Ctrl+V paste intercept (`!event.metaKey`) and the DiffInspector arrow/`s`
+   nav (#255/#278) that deliberately **rejects all modifiers** (plain unmodified keys).
+7. **Platform copy** — clean. The two UI literals (`"⌘B"`, `"⌘S"`) route through
+   `kbdHint(platform, mac, win)`; reveal labels through `revealLabel`. All other `⌘` are comments.
+8. **`cfg`-gating gaps** — clean. Every `#[cfg(unix)]`/`#[cfg(target_os="macos")]` has its
+   Windows counterpart (`is_cross_device` #253 has unix/windows/other; `usage.rs` Keychain has
+   the `None` stub; `path_env` unix-only is the documented no-op-on-Windows PATH probe).
+9. **Reserved names / FS rules** — clean. `windows_safe_seg` guards the worktree branch
+   segment (`worktree_path`) and `validate_new_segment` guards new folder/file names (#267),
+   both rejecting `CON`/`NUL`/… + trailing dots/spaces + separators.
+10. **CSS / WebView** — clean. No `backdrop-filter`/vibrancy; `-webkit-` is paired with the
+    standard prop (Slider ships `-webkit-`+`-moz-`+standard; Kanban ships `-webkit-user-select`
+    +`user-select`); `-webkit-font-smoothing` is a harmless macOS no-op. `color-mix()` stays in
+    the 5 previously-verified files (evergreen WebView2 ≥111); the new DiffInspector #278 /
+    Kanban #277 CSS introduces none. Scrollbars are `::-webkit-scrollbar`-only (Iter 1).
+11. **Build / bundle / CI** — clean. `tauri.conf.json` `targets:"all"` → NSIS+MSI alongside
+    dmg/app; `icon.ico` **and** `icon.icns` listed. `release.yml` builds the 2-OS matrix
+    (macOS universal + Windows MSVC). `cfg(unix)` tests are the POSIX-shell/EXDEV suites with
+    cross-platform pure-logic tests running on both.
+12. **Line endings** — clean. `.gitattributes` pins `* text=auto eol=lf` (+ binary assets), so
+    `cargo fmt`/`prettier` pass on a Windows checkout.
+13. **macOS-only integration** — clean. The `usage.rs` Keychain (`security`) is
+    `#[cfg(target_os="macos")]` with a Windows/Linux `None` stub; `Info.plist` is a macOS-only
+    bundle merge (no Windows effect); `temp_dir()` is cross-platform; `save_clipboard_image`
+    (#220) uses the cross-platform clipboard plugin + `temp_dir()`. All fail-open.
+
+**Newest-code re-verification (#252–#280)**: file-tree git status (#252, token-only colors +
+`hidden_command` git), OS-file drop / `move_into_repo` (#253, DPR hit-test + std-fs move, no
+shell), in-tree content search (#202, `\`→`/` normalized), Mermaid (#254, bundled `import()`,
+no CDN/fetch/native), diff seen-marker (#278, pure digest, `/`-keyed persistence blob), diff
+keyboard nav (#255, plain arrows), Kanban undo (#277, pure ops), export/import templates (#275,
+`splitPath` + `write_text_file`), folder create/rename/delete (#267, `validate_new_segment`),
+usage bar (#154, `home_dir()` + macOS-gated Keychain), and the Task-280 scheduled-canvas event
+logic (pure cross-window events, global on both OSes) — **all confirmed cross-platform-correct.**
+
+#### Still needs manual Windows verification (Iteration 9)
+
+- **Clipboard copy on WebView2 (#282)**: on a Windows build, exercise **Copy session ID**,
+  **Copy absolute path** / **Copy relative path** (sidebar + file tree), **Copy branch name**,
+  and the FileViewer code-block **Copy** button — each must land the text on the OS clipboard
+  with a "Copied …" toast and **no "Copy failed"**, including when triggered from a right-click
+  context menu (the document-not-focused case). Re-confirm macOS still copies via
+  `navigator.clipboard.writeText` (the gated `else` branch — unchanged).
+- **(Carried, unchanged)** the xterm `windowsPty` backend/buildNumber (Iter 4/6/7), and the
+  GUI/installer items from prior iterations (`claude.cmd` packaged spawn, NSIS+MSI install,
+  `explorer.exe` open/reveal/url, themed scrollbars, the #253 drag-drop + DPR hit-test, the
+  #275 export/import dialog, the #259/#280 worktree/detached-window flows) — none re-opened by
+  this pass; they remain real-box spot-checks for a maintainer.
