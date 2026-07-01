@@ -9302,3 +9302,41 @@ Repo has one home — the background menu).
 
 ---
 
+### 304. [x] Remove "Clone Repo" from the "…" session-options menu
+
+**Status:** Done
+**Depends on:** Task 303
+
+**Description**
+
+Completed the menu reorganization begun in Task 303: the **"…"** (more session options) dropdown
+next to the "Schedule session" button no longer contains a **Clone Repo…** entry. The dots menu is
+now just the session-creation extras — **Recurring session…** and (Claude-only) **Auto continue
+after limit reset** — while Clone Repo lives solely in the sidebar **background** context menu
+(under "New folder…", per Task 303), giving Clone Repo exactly one home.
+
+**What shipped** (commit
+[`646cac0`](https://github.com/ErikdeJager/ReCue/commit/646cac0), PR
+[#55](https://github.com/ErikdeJager/ReCue/pull/55), merged `0d306cd`, 2026-07-01):
+
+- **`src/components/Sidebar/Sidebar.tsx`:** the `dotsMenuItems` array (rendered by the shared
+  `RowContextMenu` from the `.dotsButton`) drops its `{ label: "Clone Repo…", onActivate: () =>
+  openCloneRepo() }` entry, leaving `Recurring session…` + the conditional `autoContinueItem`.
+  `openCloneRepo` stays referenced by `bgMenuItems` (Task 303), so no unused-symbol lint error.
+
+**Key files/areas touched:** `src/components/Sidebar/Sidebar.tsx` (single-line array edit).
+
+**Dependencies:** Task 303 (which established Clone Repo's home in the background menu; sequencing
+after 303 kept the two adjacent menu-array edits on the same `Sidebar.tsx` region from conflicting
+and preserved the "Clone Repo has exactly one home" invariant).
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 304): only the `dotsMenuItems` Clone Repo entry was
+  removed — the Clone Repo feature and its modal are untouched, and the affordance is not lost from
+  the app (it remains in the background menu).
+- **Cross-platform:** a pure menu-array edit, no OS-specific code → identical on macOS and Windows.
+  Checks green: `npm run build` / `lint` / `format:check`.
+
+---
+
