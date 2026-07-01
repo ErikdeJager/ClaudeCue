@@ -1,0 +1,30 @@
+{
+  "version": "1.1.0",
+  "date": "2026-07-01",
+  "changes": [
+    {
+      "category": "feature",
+      "items": [
+        "Clone a git repository right inside the app and start a session on it. The clone runs in the background so the app stays responsive — a placeholder folder with a progress bar appears immediately — and the new session opens on the repository's default branch.",
+        "Schedule an agent to launch on a repeating cadence, not just once, so recurring work kicks off on its own.",
+        "Each session now has a \"…\" options menu gathering its per-session actions in one place.",
+        "Claude agents can automatically continue once the five-hour usage limit resets, so long-running work picks back up on its own — with a per-agent switch to opt any individual agent out."
+      ]
+    },
+    {
+      "category": "improvement",
+      "items": [
+        "Tidied the sidebar's background right-click menu and moved Clone Repo alongside New folder so it's easier to find.",
+        "The schedule-session action row now stays on a single, stable line instead of shifting as you fill it in.",
+        "Small polish to the auto-continue menu item so its checkmark reads more clearly."
+      ]
+    },
+    {
+      "category": "fix",
+      "items": [
+        "A recurring session set to start \"now\" launches immediately and no longer leaves behind duplicate or empty ghost panels.",
+        "Fixed a stray \"C\" character that could appear in the input line of a freshly-started session on Windows."
+      ]
+    }
+  ]
+}
