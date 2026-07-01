@@ -1553,3 +1553,42 @@ Interpretations chosen (assume-variant):
   context menu, opening a dedicated `CloneRepoModal`.
 - **Cross-platform**: git shell-out via `hidden_command`; dest path via `PathBuf::join`; frontend passes
   whole paths (backend computes/returns the dest) — identical on macOS and Windows.
+
+## Task 296 — Auto-continue Claude agents after the usage limit resets
+
+Card: "Auto continue after limit is reset. In the dots menu ... a checkable option; shows a checkmark
+if enabled (also show it in settings). Only show this option if claude code is the default agent,
+otherwise the setting is disabled by default / shown disabled in settings. When the limit is reached it
+knows when it will reset; waits for the limit to hit 0% again (do not poll alone, also look at the known
+reset time). Once it resets, sends input to all claude agents that were running: enter, 'continue',
+enter."
+
+Interpretations chosen (assume-variant):
+
+- **Single boolean setting** `autoContinueAfterLimit` (default false) backs both the ⋯-menu checkable
+  item and a Settings → Sessions toggle; they stay in sync.
+- **Claude-only gating:** the ⋯-menu item is shown only when `defaultAgent === "claude"`; the Settings
+  toggle is always visible but disabled/greyed and treated as off when the default agent isn't Claude
+  (with a "requires Claude as default agent" hint), re-applying the stored value when switched back.
+- **Frontend/store-only** — no backend changes. `usage.rs` already returns `usedPercent` + `resetsAt`,
+  and `write_stdin` already accepts arbitrary bytes; the arm/wait/fire state machine lives in the store,
+  main-window-only, driven by the existing usage poll. Runtime arm-state is transient (not persisted).
+- **Limit-reached signal = the usage snapshot** (`usedPercent >= ~100`), NOT terminal-output scraping
+  (the monitor never inspects output content; scraping claude's message is fragile and out of scope).
+- **Reset confirmation uses BOTH signals** (honoring "do not poll alone"): reset ⇔ `now >= resetsAtMs`
+  AND `usedPercent` dropped below a confirm threshold (~90). If the API omits `resetsAt`, fall back to
+  the percentage dropping alone.
+- **Tighter polling while armed** (~45s) so the continue fires promptly after reset, reverting to the
+  180s base cadence when disarmed; bounded, main-window-only.
+- **Nudge target = the live Claude sessions captured at the moment the limit was detected**, intersected
+  with those still alive (and still Claude) at reset time; exited/newer unrelated sessions are skipped.
+  Non-Claude agents are never nudged.
+- **Continue sequence follows the card literally** — per session, in order: Enter (`"\r"`), type
+  `"continue"`, Enter (`"\r"`), with tiny inter-send delays; isolated in a `sendContinue(id)` helper so
+  the exact sequence is a one-line change if a real rate-limited Claude session shows the leading Enter
+  is unhelpful (fallback `"continue\r"`). Flagged for real-CLI sanity check.
+- **Checkable menu item** = extend the existing `RowMenuItem` (Sidebar.tsx) with an optional
+  `checked?: boolean` (backward-compatible, like the #293 `confirmLabel` extension) rendering a leading
+  checkmark; all existing menu items are unaffected.
+- **Fail-open:** unavailable usage data ⇒ the feature is inert (no false nudges).
+- **Cross-platform:** frontend-only; `writeStdin` is platform-neutral → identical on macOS and Windows.
