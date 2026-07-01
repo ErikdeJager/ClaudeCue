@@ -1,0 +1,20 @@
+{
+  "version": "1.0.5",
+  "date": "2026-07-01",
+  "changes": [
+    {
+      "category": "feature",
+      "items": [
+        "Right-clicking the empty area of the sidebar now offers global \"Kill all agents\" and \"Close all items\" actions, so you can tear down every running session or every open item across all your folders in one step (both confirm-gated unless you turn that off in Settings).",
+        "The file tree's folder right-click menu gained Rename…, Reveal in Finder / Explorer, Copy absolute path, and Copy relative path — the same locate-and-copy actions files already had, now for folders too."
+      ]
+    },
+    {
+      "category": "fix",
+      "items": [
+        "macOS microphone/voice dictation and access to protected folders (Downloads, Documents, Desktop) now work and are remembered: the app is built with a stable code signature, Hardened Runtime, and the required entitlements, so macOS no longer re-asks for permission on every launch and then fails.",
+        "Resolved a low-severity security advisory in a development-only dependency (the esbuild dev server), bringing the dependency audit to a clean state. No change to the shipped app's behavior."
+      ]
+    }
+  ]
+}
