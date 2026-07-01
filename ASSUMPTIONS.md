@@ -1351,3 +1351,33 @@ directive (2026-06-26) all interpretation calls below were made autonomously.
   and the immediate new-session flow has no prompt field at all.
 - **`ariaLabel="Initial prompt"` is kept** so the field retains an accessible name without the
   visible placeholder.
+
+## Task 257
+
+Card (terse): "Resolve any dependency vulnerabilities (if there are any). Make sure to check
+everything properly and audit. If no vulnerabilities are found, you may drop this task."
+
+- **Audited BOTH ecosystems, not just npm.** "Check everything properly" for a Tauri app means
+  the npm/Vite frontend (`npm audit`) **and** the Rust/Cargo backend (`cargo audit` over
+  `src-tauri/Cargo.lock`). I installed `cargo-audit` (0.22.2) and ran both.
+- **Did NOT drop the task.** The card allows dropping "if no vulnerabilities are found", but
+  `npm audit` found **1 low-severity** vulnerability (esbuild `>=0.27.3 <0.28.1`,
+  GHSA-g7r4-m6w7-qqqr, dev-server file-read on Windows), transitive via `vite@7.3.5`. It is
+  genuine and fixable, so the task proceeds.
+- **"Resolve vulnerabilities" = fix actual security VULNERABILITIES; the Rust advisory
+  WARNINGS are documented-and-accepted, not chased.** `cargo audit` returns **0 vulnerabilities**
+  but 18 warnings (16 unmaintained + 2 unsound), all transitive: 10 gtk-rs GTK3 crates + `glib`
+  (Linux-only Tauri webkit backend, not compiled on macOS/Windows), plus `proc-macro-error`,
+  the `unic-*` family, and `anyhow` (not a direct dep; ReCue uses `thiserror`). None are
+  exploitable and none have a ReCue-side fix (they'd require upstream Tauri changes). I judged
+  chasing them out of scope and instead have the plan document them as reviewed/accepted.
+- **Fix mechanism = bump `vite` to `^7.3.6` (NOT vite 8.x) + move esbuild to 0.28.1.** vite
+  7.3.6 (a patch already inside the repo's `^7.0.4` range) declares `esbuild "^0.27.0 ||
+  ^0.28.0"`, so it officially supports the fixed esbuild 0.28.1. Chose the minimal in-major
+  patch bump over a vite-8 major upgrade (lower risk) and over blindly force-overriding esbuild
+  under vite 7.3.5 (which only supports `^0.27.0`). Noted that a vite bump alone won't upgrade
+  the already-satisfying transitive esbuild, so the plan explicitly also moves esbuild
+  (`npm update esbuild`, or an `overrides.esbuild` fallback) and verifies with a green
+  `npm run build`/`npm test`.
+- **Durability + no CI gate.** The fix must persist (commit `package-lock.json`), but adding
+  `npm audit`/`cargo audit` to CI was not requested, so it's out of scope.
