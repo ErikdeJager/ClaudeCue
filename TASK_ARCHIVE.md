@@ -8807,3 +8807,157 @@ recurrings' `current_session_id` set) and kept alive in `App.tsx`'s reconcile `a
 
 ---
 
+### 296. [x] Auto-continue Claude agents after the usage limit resets
+
+**Status:** Done
+**Depends on:** Task 294
+
+**Description**
+
+Added an opt-in **"Auto continue after limit reset"** behavior for Claude Code sessions. When the
+five-hour usage limit is hit, ReCue notes the reset time, waits for the window to reset — watching
+**both** the known reset time **and** the usage percentage dropping (per the card's "do not poll
+alone") — then automatically nudges the Claude agents that were running by sending **Enter →
+`continue` → Enter** to each, so every agent picks its work back up.
+
+The option is surfaced two ways, kept in sync by a single boolean setting `autoContinueAfterLimit`
+(default off): a **checkable item in the ⋯ session-options menu** (built by #294; leading checkmark
+when on) and a **toggle in Settings → Sessions**. It is **Claude-only** — the ⋯-menu item is shown
+only when `defaultAgent === "claude"`, and the Settings toggle is always visible but disabled/greyed
+and treated as off (with a "requires Claude as default agent" hint) when the default agent isn't
+Claude, re-applying the stored value when switched back.
+
+Entirely **frontend/store-only** — every backend primitive already existed (`usage.rs` returns
+`usedPercent` + `resetsAt` since #154; `write_stdin` accepts arbitrary bytes). The arm/wait/fire
+state machine lives in the store, main-window-only, driven by the existing usage poll; its runtime
+arm-state is transient (only the boolean setting persists). **Fail-open:** if usage data is
+unavailable the feature is inert (no false nudges).
+
+**What shipped** (commit
+[`ee1767d`](https://github.com/ErikdeJager/ReCue/commit/ee1767d), PR
+[#47](https://github.com/ErikdeJager/ReCue/pull/47), merged `9495762`, 2026-07-01):
+
+- **Setting** (`src/types/index.ts`, `store.ts`): `autoContinueAfterLimit: boolean` added to the
+  Sessions group of `Settings` + `DEFAULT_SETTINGS` (default `false`); `mergeSettings` auto-merges it
+  so existing `sessions.json` upgrades cleanly (no Rust/migration change).
+- **Settings UI** (`Settings.tsx`): a gated `<Checkbox>` in Settings → Sessions bound to the setting,
+  **disabled and shown off with a hint** when `defaultAgent !== "claude"`, enabled when Claude is the
+  default.
+- **Checkable menu item** (`Sidebar.tsx` + `.module.css`): `RowMenuItem` extended with an optional
+  `checked?: boolean` (backward-compatible, like the #293 `confirmLabel` extension) rendering a
+  leading checkmark (or an equal-width spacer when false, so alignment is stable); the item is wired
+  into both the #294 ⋯ dropdown and the sidebar background menu, **only when Claude is default**.
+- **State machine** (`src/autoContinue.ts` new + `store.ts`): a pure exported reducer
+  `evaluateAutoContinue(prev, snapshot, now, settings, liveClaudeIds) -> { next, fireIds }` with
+  constants `LIMIT_REACHED_PCT = 100` (tolerance 99.5) / `RESET_CONFIRM_PCT = 90` — arms at
+  `usedPercent >= 100` capturing the live-Claude session set, stays armed until reset is confirmed by
+  **both** `now >= resetsAtMs` **and** `usedPercent < 90` (falls back to the percentage alone if the
+  API omitted `resetsAt`), then fires on `prev.sessionIds ∩ liveClaudeIds` and disarms (so a reset
+  fires exactly once). Hooked into `refreshUsage`; a tighter **armed poll cadence** (`ARMED_POLL_MS =
+  45_000`) runs while armed (main-window-only, idempotent) and reverts to the 180s base when disarmed.
+  `sendContinue(id)` sends `"\r"` → `"continue"` → `"\r"` with tiny inter-send delays (isolated so the
+  exact sequence is a one-line change).
+- **Tests:** `src/autoContinue.test.ts` (261 lines — table-driven across arm/wait/fire/no-reset-time
+  fallback/off/non-Claude) + `src/store.autoContinue.test.ts` (a store-wiring integration test
+  asserting the injected sequence per fired session).
+
+**Key files/areas touched:** `src/types/index.ts`, `src/store.ts`, `src/autoContinue.ts` (new),
+`src/components/Settings/Settings.tsx`, `src/components/Sidebar/Sidebar.tsx` (+ `.module.css`);
+tests `src/autoContinue.test.ts`, `src/store.autoContinue.test.ts`. **No backend/Rust/IPC change**
+(+690 / −1 across 8 files).
+
+**Dependencies:** Task 294 (the ⋯ menu + `RowContextMenu` this checkable item lives in).
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 296): a single boolean backs both surfaces; Claude-only
+  gating (menu hidden / toggle disabled off-Claude). **Limit-reached signal = the usage snapshot**
+  (`usedPercent >= ~100`), **not** terminal-output scraping (fragile, out of scope). **Reset uses both
+  signals** (time AND percent), falling back to percent alone when `resetsAt` is null. Nudge target =
+  live Claude sessions captured when the limit was detected, intersected with those still alive + still
+  Claude at reset — exited / freshly-spawned unrelated sessions are skipped; non-Claude agents are never
+  nudged. The Enter/continue/Enter sequence follows the card literally and is **flagged for a real-CLI
+  sanity check** (fallback `"continue\r"` if the leading Enter proves unhelpful).
+- **Follow-up:** **Task 297** (per-agent opt-out — a per-session `auto_continue_disabled` flag that
+  excludes one agent from the #296 fire step) depends on this card.
+- **Cross-platform:** frontend/store-only; `writeStdin` is platform-neutral → identical on macOS and
+  Windows. Rollback = the setting defaults off and the reducer is inert, so shipping it disabled is a
+  no-op. Project checks green: `npm run build` / `lint` / `test` (incl. the two new test files),
+  `npm run format:check`, `npm run lint:rust`, `cargo test`.
+
+---
+
+### 295. [x] Clone Repo — clone a git repo and start a session on main
+
+**Status:** Done
+**Depends on:** Task 294
+
+**Description**
+
+Added a **"Clone Repo…"** entry to the three-dots (⋯) session-options menu (built by #294) next to
+the sidebar's "Schedule session" button, and the same entry to the sidebar background context menu.
+It opens a dedicated **`CloneRepoModal`** with a **git URL** field and a **destination parent-dir**
+picker (native folder dialog). Clicking **Clone** shows a "Cloning…" busy state, runs `git clone`
+into `<parent>/<repo-name>` (name derived from the URL basename), ensures **`main`** is checked out
+(created from the cloned HEAD if the repo has none), registers the folder as a known repo (recents),
+and **auto-starts a `claude` session** inside the freshly-cloned repo on `main`.
+
+Clone is added as another **deliberate git write** (alongside checkout / worktree / branch-create /
+fetch / pull), following the exact same `hidden_command` shell-out pattern with the network guards
+(`GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND="ssh -oBatchMode=yes"`) so an authed/private remote
+**fails fast** instead of hanging the GUI process on a credential prompt. A non-empty existing
+destination is refused (no overwrite — data safety), and a failure (bad URL, auth, network, existing
+dest) shows git's stderr inline in the modal without starting a session or adding a recent.
+
+**What shipped** (merged
+[`8b4fd4e`](https://github.com/ErikdeJager/ReCue/commit/8b4fd4e), PR
+[#48](https://github.com/ErikdeJager/ReCue/pull/48), 2026-07-01):
+
+- **Backend** (`src-tauri/src/git.rs`): a **pure** `repo_dir_name(url)` helper (trims trailing `/`,
+  takes the segment after the last `/` or `:` — handling `https://…/owner/repo.git` and
+  `git@host:owner/repo.git` — strips a trailing `.git`, falls back to `"repo"`; unit-tested);
+  `clone_repo(url, dest)` (modeled on `fetch_remotes` — `git clone <url> <dest>` with the two network
+  guard env vars, returns trimmed stderr on failure); and `ensure_main(cwd)` (checks out `main` if it
+  exists in `list_branches`, else `create_branch(cwd, "main", "")` to create + check out `main` from
+  HEAD, covering a `master`-default or unborn/empty clone).
+- **Command** (`commands.rs`, registered in `lib.rs`): `clone_repo(store, url, parent) ->
+  Result<String, String>` — validates the URL, computes `dest = PathBuf::join(parent, repo_dir_name)`,
+  refuses a non-empty existing dest, `git::clone_repo` → `git::ensure_main` → `store.touch_recent`,
+  returns the dest path string.
+- **Frontend** (`src/ipc.ts`, `store.ts`, `App.tsx`, `Sidebar.tsx`): a `cloneRepo` IPC wrapper;
+  store `cloneRepoOpen` + `openCloneRepo`/`closeCloneRepo` and a `cloneRepo(url, parent)` action
+  (calls IPC, prepends `dest` to recents locally, `spawnSession(dest)` to start the agent on the
+  already-checked-out `main`, toasts, returns `true` or the error string); the "Clone Repo…" item
+  added to the ⋯ dropdown + `bgMenuItems`; `<CloneRepoModal>` mounted once in `App.tsx`.
+- **`CloneRepoModal`** (new `src/components/CloneRepoModal/` — `.tsx` + `.module.css`): store-driven,
+  focus-trapped; a URL input (auto-focused) + a destination row with a "Choose…" button
+  (`ipc.pickDirectory()`) + Clone (disabled until URL + parent set, and while busy) / Cancel; local
+  busy + inline-error state; Enter submits, Escape closes.
+- **Tests:** Rust `#[cfg(test)]` for `repo_dir_name` (`.git` suffix, trailing slash, `https://` and
+  `git@…:…` forms) + `src/store.test.ts` cases for the `cloneRepo` action (mocked IPC).
+
+**Key files/areas touched:** `src-tauri/src/git.rs`, `commands.rs`, `lib.rs`; `src/ipc.ts`,
+`src/store.ts`, `src/App.tsx`, `src/components/Sidebar/Sidebar.tsx`,
+`src/components/CloneRepoModal/` (new); tests in `src/store.test.ts`; `TRAJECTORY_TO_WINDOWS.md`
+(+766 / −2 across 11 files).
+
+**Dependencies:** Task 294 (the ⋯ three-dots menu the "Clone Repo…" entry lives in).
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 295): destination = a user-picked **parent** dir, clone
+  into `<parent>/<repo-name>` (URL-basename), refuse a non-empty existing folder. "Checks out main /
+  creates main if missing" = checkout existing `main`, else `git checkout -b main` from HEAD (covers
+  `master`-default and unborn/empty clones); the card's "default branch" is read as this `main`.
+  Auto-start a normal interactive agent (no seeded prompt) on success, reusing `spawnSession` — no
+  extra new-session modal step. **Synchronous** clone with a busy state (large clones block the modal —
+  accepted for v1, flagged in TRAJECTORY). Fail-fast on auth via the reused `fetch_remotes`/`pull_ff`
+  network guards.
+- **Cross-platform:** git shell-out via `hidden_command` (the `CREATE_NO_WINDOW` console-flash guard);
+  dest path via `PathBuf::join` (never string concat); the frontend passes whole paths (backend
+  computes/returns the dest) — identical on macOS and Windows. The write is additive (a fresh clone,
+  no mutation of existing repos), so rollback is trivial. Project checks green: `npm run build` /
+  `lint` / `test`, `npm run format:check`, `npm run lint:rust`, `cargo test`, `cargo fmt --check`.
+
+---
+
