@@ -1381,3 +1381,34 @@ everything properly and audit. If no vulnerabilities are found, you may drop thi
   `npm run build`/`npm test`.
 - **Durability + no CI gate.** The fix must persist (commit `package-lock.json`), but adding
   `npm audit`/`cargo audit` to CI was not requested, so it's out of scope.
+
+## Task 291
+
+Card (terse): "Filetree folder contextmenu should have additional options: Copy absolute path,
+Copy relateive path, Reveal in finder, Rename".
+
+- **Scope = the FOLDER branch of the FileTree's existing inline context menu only.** The card
+  says "folder contextmenu". The FileTree already has its own inline menu (not the Sidebar's
+  `RowContextMenu`); its **file** branch already implements Reveal + Copy absolute + Copy
+  relative, and its folder branch has only New folder… / Delete folder. So the work is adding
+  the four items to the folder branch. **"relateive" is read as "relative".**
+- **NOT adding Rename to the file menu.** The card asks for the folder menu; files aren't in
+  scope. The new generic `rename_path` command means a later card could add a file Rename
+  cheaply, but I kept this task to folders to avoid scope creep.
+- **Reveal semantics for a folder = OPEN the folder (`revealPath`/`os_open`), not select-in-
+  parent (`revealFileInFinder`/`open -R` / `explorer /select`).** Chosen to match ReCue's
+  established precedent for **folders** (the sidebar repo menu's "Reveal in Finder" opens the
+  repo folder via `reveal_path`) and to reuse the FileTree file-menu code verbatim. The
+  select-in-parent variant was considered and rejected for consistency.
+- **Rename needs a NEW backend command `rename_path(repo, from, to)`.** No in-repo rename/move
+  exists (`move_into_repo` only moves an *external* path *in* and forces the source basename).
+  Reuse the existing validators — `confine` (in-repo, rejects `..`/symlink/escape) +
+  `validate_new_segment`/`windows_safe_seg` (rejects separators + Windows-reserved names) — plus
+  a no-clobber check and `fs::rename`. This is cross-platform by construction (CLAUDE.md hard
+  requirement).
+- **Rename UX = inline input reusing the New-folder form (a new `"rename"` menu mode), seeded
+  with the current name, Enter-to-commit / Escape-cancel, blank/unchanged = no-op, NOT
+  confirm-gated** (a rename is reversible; matches ungated *New folder…*, unlike gated Delete).
+- **Menu item order:** New folder… → Rename… → Reveal → Copy absolute path → Copy relative path
+  → Delete folder (danger, last) — mirrors the file menu's reveal/copy ordering and keeps the
+  destructive action at the bottom.
