@@ -2177,11 +2177,8 @@ function Sidebar() {
   );
   const bgMenuItems: RowMenuItem[] = [
     { label: "New folder…", onActivate: () => void addFolder() },
-    { label: "New session", onActivate: () => openNewSession() },
-    { label: "Schedule session", onActivate: () => openSchedule() },
-    { label: "Recurring session…", onActivate: () => openRecurring() },
     { label: "Clone Repo…", onActivate: () => openCloneRepo() },
-    ...(autoContinueItem ? [autoContinueItem] : []),
+    { label: "Schedule session", onActivate: () => openSchedule() },
     {
       label: sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar",
       onActivate: () => toggleSidebarCollapsed(),
