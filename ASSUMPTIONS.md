@@ -1476,3 +1476,52 @@ Card (terse): right-clicking the left panel base (not an item) should offer "Kil
   so worktree agents are killed via their parent with correct #74 ref-counted cleanup and one
   summary toast (no per-folder toast spam).
 - **Pure frontend/store** (no OS-specific code) → identical on macOS and Windows.
+
+## Task 294 — Three-dots session-options menu + Recurring sessions
+
+Card: "Next to the 'schedule session' button, make a small button with three dots ... dropdown
+menu with additional session options. The first option ... is a 'recurring session' ... repeats ...
+It can both be scheduled ... but also repeated. User enters a 'repeats' field (e.g. every hour /
+every day). Stays available in the left panel as long as active. When the trigger hits, the previous
+session process is killed and the new session spawned in its stead, in the same panel (so it doesn't
+constantly spawn new panels)."
+
+Interpretations chosen (assume-variant):
+
+- **Foundational split.** This card builds BOTH the reusable ⋯ overflow menu (shared infrastructure)
+  AND its first item, the Recurring session. Later cards (Clone Repo, Auto-continue) add their own
+  entries to the same menu and therefore depend on this one. The menu is not shipped empty — the
+  Recurring item is its first, testable entry. Kept as one card because splitting the menu from its
+  only item, or the recurring backend from its UI, yields untestable/non-shippable halves.
+- **Recurring session = a first-class persisted record that OWNS a rotating child agent session**,
+  modeled closely on the existing Scheduled-session subsystem (#93/#94) but persistent + self-re-arming.
+  Not a bare session, and not a one-shot ScheduledSession. This is the model that cleanly satisfies
+  every clause of the card (scheduled OR immediate first run; stays in the sidebar; same panel).
+- **"Same panel" / "doesn't spawn new panels"** = the sidebar row / Overview card / Canvas panel key
+  on the stable **recurring id** (new content `kind: "recurring"`) and render the *current* child
+  session's pooled terminal, so a fire only swaps the hosted child terminal — never creates a new
+  row/column/panel. The child session is **owned, not independently listed** (excluded from the normal
+  session row/card lists via the recurrings' `current_session_id` set); its PTY is kept alive by adding
+  those ids to the `App.tsx` reconcile `active` set.
+- **Fire semantics:** on each interval fire the poll loop kills + forgets the previous child (no
+  lingering exit overlay), spawns a **fresh** claude session (new uuid, NOT `--resume`) seeded with the
+  recurring session's prompt, sets `current_session_id`, advances `next_fire_at += interval_secs`, and
+  emits `recurring://fired`. Fresh-each-cycle (not resume) is the read of "spawned in its stead"; it
+  also sidesteps any `--session-id <existing>` reuse ambiguity.
+- **"Repeats" field** = a numeric amount + unit dropdown (**Minutes / Hours / Days**), minimum **1
+  minute**, stored as `interval_secs`. No cron / weekday scheduling (out of scope).
+- **"Can both be scheduled":** the recurring creation step has an optional **first-run time**
+  (free-text, default "now" via the existing `parseWhen`). Immediate = `next_fire_at = now` (fires on
+  next ≤5s poll tick); scheduled = a future `next_fire_at`.
+- **Restart/catch-up:** recurring records persist across restarts; on boot nothing auto-spawns unless
+  due, then the first poll tick fires anything overdue once (mirroring schedule catch-up) and resumes
+  cadence. A child live at shutdown is gone on boot (PTY not resumed); the item shows a "next run in …"
+  placeholder until the next fire.
+- **Failure handling:** unlike a one-shot schedule (which is dropped on fire error), a recurring record
+  is KEPT on spawn failure and its `next_fire_at` is still advanced, so a failing folder can't hot-loop.
+- **Menu placement:** the ⋯ button sits immediately right of the expanded-sidebar "Schedule session"
+  button (both wrapped in a flex row); the dropdown reuses the existing `RowContextMenu` primitive; the
+  same items are also added to the background (empty-area) context menu. The collapsed icon rail is left
+  unchanged (out of scope).
+- **Cross-platform:** no new shell-outs beyond reused git seams; ⋯ button/menu/CSS use design tokens +
+  existing primitives → identical on macOS and Windows.
