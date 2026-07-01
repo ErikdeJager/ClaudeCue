@@ -123,14 +123,26 @@ function useRowMenu() {
 
 /** One entry in a `RowContextMenu` (#132/#133). `danger` paints it red
  * (`menuItemDanger`) for destructive actions (Remove / Cancel); otherwise it
- * uses the neutral `menuItem` style (the worktree header's Reveal / Copy, #133). */
-type RowMenuItem = { label: string; onActivate: () => void; danger?: boolean };
+ * uses the neutral `menuItem` style (the worktree header's Reveal / Copy, #133).
+ * `confirmLabel` (#293) opts a row into an inline two-step confirm — the first
+ * click swaps the row into a danger button showing `confirmLabel` (the menu stays
+ * open), a second click runs it — honoring the #103 destructive-confirm setting
+ * without a modal. Omit it for the default single-click behavior. */
+type RowMenuItem = {
+  label: string;
+  onActivate: () => void;
+  danger?: boolean;
+  confirmLabel?: string;
+};
 
 /** A minimal cursor-positioned context menu for the non-agent sidebar rows
  * (#132/#133): renders one or more `items`, each calling its `onActivate` and
  * closing the menu. The non-agent rows show a single red Remove (or Cancel)
  * item; the worktree header (#133) shows two neutral items (Reveal in Finder,
- * Copy absolute path). Reuses the `.menuOverlay` / `.menu` classes. */
+ * Copy absolute path). Reuses the `.menuOverlay` / `.menu` classes. An item with
+ * a `confirmLabel` gets a backward-compatible inline confirm (#293/#103): the
+ * first click arms it (danger label, menu stays open), a second click runs it;
+ * clicking any other item or dismissing resets. */
 function RowContextMenu({
   menu,
   items,
@@ -140,6 +152,12 @@ function RowContextMenu({
   items: RowMenuItem[];
   onClose: () => void;
 }) {
+  // Which item (by index) is armed for its inline confirm step (#293). Reset
+  // whenever the menu opens or closes so a stale confirm never carries over.
+  const [pending, setPending] = useState<number | null>(null);
+  useEffect(() => {
+    setPending(null);
+  }, [menu]);
   if (!menu) return null;
   return (
     <>
@@ -156,20 +174,33 @@ function RowContextMenu({
         style={{ left: menu.x, top: menu.y }}
         role="menu"
       >
-        {items.map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            role="menuitem"
-            className={item.danger ? styles.menuItemDanger : styles.menuItem}
-            onClick={() => {
-              onClose();
-              item.onActivate();
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
+        {items.map((item, i) => {
+          const confirming = pending === i && item.confirmLabel != null;
+          return (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className={
+                confirming || item.danger
+                  ? styles.menuItemDanger
+                  : styles.menuItem
+              }
+              onClick={() => {
+                // A confirm-gated item's first click arms it in place (#293) —
+                // keep the menu open; the second click (below) runs it.
+                if (item.confirmLabel != null && !confirming) {
+                  setPending(i);
+                  return;
+                }
+                onClose();
+                item.onActivate();
+              }}
+            >
+              {confirming ? item.confirmLabel : item.label}
+            </button>
+          );
+        })}
       </div>
     </>
   );
@@ -1848,6 +1879,8 @@ function Sidebar() {
   const forgetRepo = useStore((s) => s.forgetRepo);
   const killAllAgents = useStore((s) => s.killAllAgents);
   const closeAllItems = useStore((s) => s.closeAllItems);
+  const killAllAgentsGlobal = useStore((s) => s.killAllAgentsGlobal);
+  const closeAllItemsGlobal = useStore((s) => s.closeAllItemsGlobal);
   const setView = useStore((s) => s.setView);
   const overviewRepoFilter = useStore((s) => s.overviewRepoFilter);
   const setOverviewRepoFilter = useStore((s) => s.setOverviewRepoFilter);
@@ -1947,6 +1980,15 @@ function Sidebar() {
     if (event.target !== event.currentTarget) return;
     bgMenu.openMenu(event);
   };
+  // App-wide bulk-action counts (#293) — every running agent (the #91 `exitedCode
+  // === undefined` predicate) and every non-agent item, across all folders.
+  const globalRunning = sessions.filter(
+    (s) => s.exitedCode === undefined,
+  ).length;
+  const globalPanels = Object.values(overviewPanels).reduce(
+    (n, ps) => n + ps.length,
+    0,
+  );
   const bgMenuItems: RowMenuItem[] = [
     { label: "New folder…", onActivate: () => void addFolder() },
     { label: "New session", onActivate: () => openNewSession() },
@@ -1960,6 +2002,34 @@ function Sidebar() {
           {
             label: "Clear Overview filter",
             onActivate: () => setOverviewRepoFilter(null),
+          },
+        ]
+      : []),
+    // Global destructive complements to the per-repo #91 actions — placed after
+    // the constructive items; each shown only when it has something to act on, and
+    // inline-confirm-gated per the #103 setting (Close all items only when it kills).
+    ...(globalRunning > 0
+      ? [
+          {
+            label: "Kill all agents",
+            danger: true,
+            confirmLabel: confirmDestructive
+              ? `Kill ${globalRunning} agent${globalRunning === 1 ? "" : "s"}?`
+              : undefined,
+            onActivate: () => void killAllAgentsGlobal(),
+          },
+        ]
+      : []),
+    ...(globalRunning > 0 || globalPanels > 0
+      ? [
+          {
+            label: "Close all items",
+            danger: true,
+            confirmLabel:
+              confirmDestructive && globalRunning > 0
+                ? `Close all items (kill ${globalRunning} agent${globalRunning === 1 ? "" : "s"})?`
+                : undefined,
+            onActivate: () => void closeAllItemsGlobal(),
           },
         ]
       : []),

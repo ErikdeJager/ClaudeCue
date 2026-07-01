@@ -1495,6 +1495,14 @@ export interface AppState {
   /** Clear a folder's workspace — kill all its agents AND remove all its non-agent
    * items (each terminal's shell killed) — but keep the folder in recents (#91). */
   closeAllItems: (repoPath: string) => Promise<void>;
+  /** Kill + forget every running agent across **all** folders at once (#293) — the
+   * sidebar background menu's global complement to the per-repo #91 action. Reuses
+   * the shared per-repo mechanics (incl. #74 worktree cleanup); one summary toast. */
+  killAllAgentsGlobal: () => Promise<void>;
+  /** Clear every folder's workspace at once (#293) — kill all agents AND remove all
+   * non-agent items app-wide (each terminal's shell killed) — keeping folders in
+   * recents. The global complement to the per-repo #91 Close all items; one toast. */
+  closeAllItemsGlobal: () => Promise<void>;
   /** Create a scheduled session (#93). Resolves `true` on success, else an error
    * message for inline display (e.g. a worktree schedule's bad/duplicate branch —
    * its worktree + branch are created eagerly at schedule time, #259). */
@@ -4382,6 +4390,54 @@ export const useStore = create<AppState>()((set, get) => ({
     if (killed > 0) parts.push(`${killed} agent${killed === 1 ? "" : "s"}`);
     if (panelCount > 0)
       parts.push(`${panelCount} view${panelCount === 1 ? "" : "s"}`);
+    get().pushToast(
+      parts.length > 0 ? `Closed ${parts.join(" + ")}` : "Nothing to close",
+    );
+  },
+
+  killAllAgentsGlobal: async () => {
+    // Every folder that could host an agent — recents ∪ each session's parent repo
+    // (a worktree agent maps to its #74 parent) ∪ every overviewPanels key.
+    const s = get();
+    const folders = [
+      ...new Set([
+        ...s.recents,
+        ...s.sessions.map((x) => x.worktreeParent ?? x.repoPath),
+        ...Object.keys(s.overviewPanels),
+      ]),
+    ];
+    // Reuse the module-level helper (not the per-repo action) so there's no
+    // per-folder toast spam. killAgentsInRepo(parent) sweeps a folder's worktree
+    // agents via worktreeParent, so iterating the parent set kills each agent
+    // exactly once with correct #74 ref-counted worktree cleanup.
+    let killed = 0;
+    for (const f of folders) killed += await killAgentsInRepo(f);
+    if (killed > 0) {
+      get().pushToast(`Killed ${killed} agent${killed === 1 ? "" : "s"}`);
+    }
+  },
+
+  closeAllItemsGlobal: async () => {
+    // Same folder set as killAllAgentsGlobal — kill every agent AND drop every
+    // non-agent item app-wide, keeping folders in recents (mirrors per-repo #91).
+    const s = get();
+    const folders = [
+      ...new Set([
+        ...s.recents,
+        ...s.sessions.map((x) => x.worktreeParent ?? x.repoPath),
+        ...Object.keys(s.overviewPanels),
+      ]),
+    ];
+    let killed = 0;
+    let views = 0;
+    for (const f of folders) {
+      killed += await killAgentsInRepo(f);
+      views += await closeRepoItems(f);
+    }
+    // One summary toast (#83) — no per-folder spam; mirrors closeAllItems wording.
+    const parts: string[] = [];
+    if (killed > 0) parts.push(`${killed} agent${killed === 1 ? "" : "s"}`);
+    if (views > 0) parts.push(`${views} view${views === 1 ? "" : "s"}`);
     get().pushToast(
       parts.length > 0 ? `Closed ${parts.join(" + ")}` : "Nothing to close",
     );
