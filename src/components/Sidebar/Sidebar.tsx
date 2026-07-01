@@ -16,6 +16,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   AlertTriangle,
   Bug,
+  Check,
   Clock,
   FileDiff,
   FileText,
@@ -136,12 +137,16 @@ function useRowMenu() {
  * `confirmLabel` (#293) opts a row into an inline two-step confirm — the first
  * click swaps the row into a danger button showing `confirmLabel` (the menu stays
  * open), a second click runs it — honoring the #103 destructive-confirm setting
- * without a modal. Omit it for the default single-click behavior. */
+ * without a modal. Omit it for the default single-click behavior. `checked` (#296)
+ * makes the row a checkable toggle: non-null renders a leading checkmark slot (a
+ * check when `true`, an equal-width spacer when `false`) so labels stay aligned;
+ * omit it for a plain action row. */
 type RowMenuItem = {
   label: string;
   onActivate: () => void;
   danger?: boolean;
   confirmLabel?: string;
+  checked?: boolean;
 };
 
 /** A minimal cursor-positioned context menu for the non-agent sidebar rows
@@ -206,6 +211,14 @@ function RowContextMenu({
                 item.onActivate();
               }}
             >
+              {/* Checkable row (#296): a fixed-width leading slot keeps every label
+              aligned whether or not the item is a toggle (an equal-width spacer when
+              unchecked / non-checkable). */}
+              {item.checked != null && (
+                <span className={styles.menuCheck} aria-hidden>
+                  {item.checked && <Check size={13} strokeWidth={2} />}
+                </span>
+              )}
               {confirming ? item.confirmLabel : item.label}
             </button>
           );
@@ -2019,6 +2032,13 @@ function Sidebar() {
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const toggleSidebarCollapsed = useStore((s) => s.toggleSidebarCollapsed);
   const autoNameOn = useStore((s) => s.settings.autoName);
+  // Auto-continue-after-limit (#296): the ⋯-menu + background-menu checkable item,
+  // shown only when Claude is the default agent (the usage feed it reads is Claude's).
+  const defaultAgent = useStore((s) => s.settings.defaultAgent);
+  const autoContinueAfterLimit = useStore(
+    (s) => s.settings.autoContinueAfterLimit,
+  );
+  const toggleAutoContinue = useStore((s) => s.toggleAutoContinue);
   const folderOrder = useStore((s) => s.folderOrder);
   const refreshBranches = useStore((s) => s.refreshBranches);
   const refreshFileStatuses = useStore((s) => s.refreshFileStatuses);
@@ -2130,8 +2150,19 @@ function Sidebar() {
   // options. Reuses the shared cursor-menu primitive; later cards (Clone Repo #295,
   // Auto-continue #296) add entries here.
   const dotsMenu = useRowMenu();
+  // Auto-continue (#296): a checkable toggle, only meaningful for Claude (the usage
+  // feed the machine watches is Claude's), so it's shown only when Claude is default.
+  const autoContinueItem: RowMenuItem | null =
+    defaultAgent === "claude"
+      ? {
+          label: "Auto continue after limit reset",
+          checked: autoContinueAfterLimit,
+          onActivate: () => toggleAutoContinue(),
+        }
+      : null;
   const dotsMenuItems: RowMenuItem[] = [
     { label: "Recurring session…", onActivate: () => openRecurring() },
+    ...(autoContinueItem ? [autoContinueItem] : []),
   ];
   // App-wide bulk-action counts (#293) — every running agent (the #91 `exitedCode
   // === undefined` predicate) and every non-agent item, across all folders.
@@ -2147,6 +2178,7 @@ function Sidebar() {
     { label: "New session", onActivate: () => openNewSession() },
     { label: "Schedule session", onActivate: () => openSchedule() },
     { label: "Recurring session…", onActivate: () => openRecurring() },
+    ...(autoContinueItem ? [autoContinueItem] : []),
     {
       label: sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar",
       onActivate: () => toggleSidebarCollapsed(),
