@@ -1621,3 +1621,139 @@ Interpretations chosen (assume-variant):
   `evaluateAutoContinue` reducer at the call site, keeping the reducer agnostic), covered by a unit test.
 - **Cross-platform:** a `#[serde(default)]` record field + a tiny command + frontend UI, no OS-specific
   code → identical on macOS and Windows.
+
+## Task 298
+
+Card: "In the clone model it says 'clones repo and checks out main'. But this is false. It clones
+and checks out the default branch (or should, check if this behaviour is configured). IF NO BRANCH
+EXISTS. Then it needs to create a main branch and check it out. You can also just remove this
+comment entirely from the clone modal. But make sure the flow works correctly."
+
+- **Primary intent = correctness of the flow, not just the copy.** The card gives two options
+  (fix the flow to land on the default branch, OR just remove the misleading comment) but ends
+  with "make sure the flow works correctly." Interpreted the primary requirement as: the clone
+  should land on the **repository's actual default branch** (whatever the remote HEAD points at),
+  not a forced `main`. The current backend `git::ensure_main` fabricates a `main` from HEAD for a
+  `master`-default repo — that is the bug.
+- **"IF NO BRANCH EXISTS → create main":** interpreted "no branch exists" as the **empty/unborn
+  clone** (a remote with zero commits, so `git clone` leaves an unborn HEAD with no branch). Only
+  that degenerate case creates a local `main`. A normal non-empty clone already has HEAD on its
+  default branch (git does this), so the post-clone step should leave it alone.
+- **The modal copy is fixed, not deleted.** The card allows removing the comment entirely, but a
+  short accurate hint is better UX, so reworded it to say the clone "opens on its default branch"
+  rather than removing it (removal would also be acceptable). Chose the reword.
+- **Kept the clone command sync-shaped here** (no async refactor) — the non-blocking/phantom-folder
+  work is deliberately split into Task 299 (which depends on 298) so 298 stays a small, safe
+  correctness fix.
+
+## Task 299
+
+Card: "Cloning a repo can take a long time. It blocks the entire UI. It should be a background
+non-blocking process. Show a 'phantom folder' in the UI left panel with a progress bar underneath
+of the cloning process."
+
+- **Progress bar = indeterminate/animated, not a real percentage.** Parsing `git clone --progress`
+  stderr for byte percentages is finicky and adds cross-platform test burden; the card says
+  "progress bar underneath of the cloning process" without requiring a percentage. Chose an
+  **indeterminate animated bar** (with a static reduced-motion fallback) as the requirement; real
+  percentage streaming is explicitly a possible future enhancement, out of scope.
+- **Modal closes immediately on submit** and the clone proceeds in the background; success/failure
+  is reported via **toast** (not the now-closed modal's inline error). This is the natural way to
+  make it "non-blocking" from the user's view.
+- **Phantom folder is a transient, in-memory, non-draggable placeholder** rendered outside the
+  dnd-kit `SortableContext` in the sidebar repo list, labeled with the repo name derived from the
+  URL. Not persisted across restarts; concurrent clones each get their own keyed phantom.
+- **Backend goes async off the main thread** (`spawn_blocking` / async command) while keeping the
+  same IPC name/shape (`clone_repo` → dest path / git error), so only the threading changes.
+- **Collapsed rail:** phantoms may be omitted (or shown as a minimal indicator) in the collapsed
+  rail — an acceptable simplification to avoid rail layout churn.
+- **Depends on Task 298** so the background flow builds on the corrected default-branch behavior +
+  fixed modal copy (and to avoid two tasks editing the clone modal/command in parallel).
+
+## Task 300
+
+Card: "Recurring agents dont spawn imidiatly when running them woth the 'now' parameter. They
+instead start their first run after the first interval time has been started. Another issue: When
+spawning a reoccuring agent; two panels are spawned. Both these panels have the same parameters but
+only one shows the agent. There are some serious logic problems with the recurring sessions.
+Inspect it carefully and Fix these bugs."
+
+- **Two-panels root cause = non-idempotent optimistic add.** `store.ts createRecurring` does
+  `recurrings: [record, ...s.recurrings]` with no dedupe by id; it races the backend
+  `recurring://changed` broadcast (and the immediate poll-fire broadcast for a "now" recurring),
+  producing two records with the same id → two identical cards, one blank (a pooled xterm attaches
+  to only one DOM node). Fix: dedupe by id. Applied the same fix to the sibling `createSchedule`
+  (identical latent pattern) as low-risk hardening.
+- **"now" not immediate root cause = the 5s poll owns the first fire.** The create path already
+  sends `first_fire_at = now`, but the poll sleeps 5s before firing and only ticks every 5s, and
+  the visible card immediately shows "next run in {interval}" while the child attaches elsewhere —
+  so the user perceives a delayed first run. Fix: **fire the first run at create time** when
+  `first_fire_at <= now` (reuse `fire_one_recurring`, best-effort, then return the post-fire
+  record). This makes "now" instant AND closes the race window driving the two-panel bug. Future
+  first-fire times still wait for the poll tick (unchanged; ≤5s granularity accepted).
+- **onFired hardened** so a fired event arriving before the optimistic add lands cannot leave the
+  child rendered as its own standalone column (guard the child as owned / rely on the imminent
+  broadcast). The child must never appear as an independent agent column.
+- **No data-model or poll-cadence redesign, no "run now" button for existing recurrings** — only
+  the create-time "now" and the duplicate/ghost bugs are in scope.
+
+## Task 301
+
+Card: "Schedule session button; if it doesnt fit on a single line, the text should have ellipses
+and be cut off. Also the clock icon should not increase or decrease in size, it should always be
+the same size. Also decrease the padding of the '…' button (button with dropdown menu) on the
+horizontal axis. (it should keep the same height). From a users perspective, these buttons always
+have the same height. That means text should not wrap."
+
+- **Ellipsis via a wrapping `<span>` around the label** (the label is currently a bare text node,
+  which can't ellipsize) with `flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap`. The icon and the `<kbd>` hint get `flex-shrink:0` so only the label
+  truncates.
+- **"decrease the padding of the '…' button on the horizontal axis":** the `.dotsButton` already
+  has `padding: 0`; its horizontal footprint is the fixed `width: 30px`. Interpreted "decrease
+  horizontal padding" as **make the button narrower** — reduce `width: 30px` → ~`24px`. Height is
+  untouched (kept equal via the row's `align-items: stretch`), matching "keep the same height."
+- **Scope limited to the schedule action row** (the expanded-sidebar Schedule button + its "…"
+  button). The collapsed-rail icon button and the New-session button are left as-is.
+
+## Task 302
+
+Card: "The checkmark of 'auto continue after limit reset' should be after (behind) the text not in
+front."
+
+- **"after (behind) the text" = render the checkmark to the right of / after the label**, inline
+  immediately after the label text. Chose the minimal change: reorder the `RowContextMenu` renderer
+  so the label comes first then the checkmark slot, and swap `.menuCheck` `margin-right` →
+  `margin-left`. Right-aligning the checkmark to the far edge (flex + `margin-left:auto`) is
+  optional polish only if it reads better without disturbing the danger/confirm variants.
+- **Shared renderer is fine to edit:** `RowContextMenu` is shared, but "Auto continue after limit
+  reset" is the only checkable item, so the reorder affects only it in practice. Did not touch the
+  separate `Checkbox`-based `AutoContinueToggle` per-agent strip (different component, not what the
+  card means).
+
+## Task 303
+
+Card: "The following options are not supposed to be in the context menu of the left panel, when
+user rightclicks the plane (not any one folder, but the background plane). New session, Recurring
+session, Auto continue after limit reset. Also, make the 'clone Repo' option appear underneath the
+'new folder' button."
+
+- **Only `bgMenuItems` (the background/plane menu) is edited.** Removed exactly the three named
+  items (New session, Recurring session…, Auto continue after limit reset) and moved Clone Repo… to
+  be the item **directly after** New folder….
+- **"Schedule session" stays** in the background menu — the card did not ask to remove it.
+- **`autoContinueItem`, `openNewSession`, `openRecurring` remain defined** (still used by the
+  New-session button / the "…" dots menu), so removing them from this one array causes no
+  unused-symbol errors.
+- Together with Task 304 this reorganizes menus so Clone Repo lives solely in the background menu
+  (under New folder) and the dots menu holds the session-creation extras.
+
+## Task 304
+
+Card: "Remove the clone repo button from the '…' context menu next to the schedule session button."
+
+- **Only the `dotsMenuItems` array's Clone Repo… entry is removed.** `openCloneRepo` stays
+  referenced by the background menu (Task 303), so no unused-symbol error.
+- **Depends on Task 303** so the two adjacent menu-array edits land in sequence (avoids a merge
+  conflict on the same `Sidebar.tsx` region) and preserves the "Clone Repo has exactly one home"
+  invariant — it must remain reachable from the background menu, which 303 guarantees.
