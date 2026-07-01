@@ -9173,3 +9173,132 @@ standalone column.
 
 ---
 
+### 301. [x] Schedule-session button layout — ellipsis label, fixed-size clock icon, narrower "…" button
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+Made the sidebar's **"Schedule session"** action row keep a stable, single-line appearance at any
+sidebar width (the sidebar is resizable, #108, [180, 560]): the button label now truncates with an
+ellipsis instead of wrapping to a second line, the clock icon never grows or shrinks, and the
+adjacent **"…"** (more-options) button takes less horizontal space while keeping the exact same
+height. From the user's perspective the two buttons always share one height and the text never
+wraps.
+
+**What shipped** (commit
+[`5b28593`](https://github.com/ErikdeJager/ReCue/commit/5b28593), PR
+[#51](https://github.com/ErikdeJager/ReCue/pull/51), merged `65e14a4`, 2026-07-01):
+
+- **`src/components/Sidebar/Sidebar.tsx`:** the bare `Schedule session` text node is wrapped in a
+  `<span className={styles.scheduleLabel}>` and the `<Clock size={15}>` gets a `scheduleIcon` class
+  (the `kbdHint(platform, "⌘⇧N", "Ctrl+Shift+N")` hint is untouched — still `Ctrl+Shift+N` on
+  Windows).
+- **`src/components/Sidebar/Sidebar.module.css`:** `.scheduleLabel` gets `flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left` so **only the label
+  absorbs the squeeze** and ellipsizes on one line; `.scheduleIcon` (and the `.kbd` hint) get
+  `flex-shrink:0` so neither icon nor hint distorts. `.dotsButton` width drops `30px → 24px`
+  (padding was already `0`); no fixed height is added, so the row's `align-items:stretch` keeps it
+  exactly equal to the schedule button's height.
+
+**Key files/areas touched:** `src/components/Sidebar/Sidebar.tsx` (+8/−2),
+`src/components/Sidebar/Sidebar.module.css` (+22/−1).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 301): the ellipsis is achieved via a **wrapping span**
+  (a bare text node can't ellipsize). "Decrease the padding of the '…' button on the horizontal
+  axis" was interpreted as **make the button narrower** (`width: 30px → 24px`) since its padding was
+  already `0` and its footprint is the fixed width; height is untouched. Scope was limited to the
+  expanded-sidebar schedule action row — the collapsed-rail icon button and the New-session button
+  were left as-is.
+- **Cross-platform:** pure CSS + one JSX wrapper span, no OS-specific code → identical on macOS and
+  Windows; uses design tokens throughout. Checks green: `npm run build` / `lint` / `format:check`.
+
+---
+
+### 302. [x] Move the "Auto continue after limit reset" checkmark to after the label text
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+In the sidebar context menus, the checkable **"Auto continue after limit reset"** row now shows its
+checkmark **after** (to the right of / behind) the label text rather than in front of it. When the
+toggle is off, no checkmark shows and there's no leading empty gap before the label.
+
+**What shipped** (commit
+[`a32dd08`](https://github.com/ErikdeJager/ReCue/commit/a32dd08), PR
+[#52](https://github.com/ErikdeJager/ReCue/pull/52), merged `bd6dffe`, 2026-07-01):
+
+- **`src/components/Sidebar/Sidebar.tsx`:** the shared `RowContextMenu` renderer now emits the label
+  first, then the `.menuCheck` checkmark slot (the `Check` icon + accent color unchanged).
+- **`src/components/Sidebar/Sidebar.module.css`:** `.menuCheck` swaps `margin-right: var(--space-6)`
+  → `margin-left: var(--space-6)` so the gap sits between the label and the trailing checkmark.
+
+**Key files/areas touched:** `src/components/Sidebar/Sidebar.tsx` (+4/−4),
+`src/components/Sidebar/Sidebar.module.css` (+4/−4).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 302): the **minimal inline** reorder was chosen (label
+  then checkmark, `margin-left` gap) rather than the optional right-alignment (`margin-left:auto`),
+  since inline placement already satisfies "after/behind the text" without disturbing the
+  danger/confirm menu variants. Editing the **shared** `RowContextMenu` renderer is safe because
+  "Auto continue after limit reset" is the only checkable item (any non-checkable item has
+  `checked == null` and renders no slot), so the reorder affects only that toggle in practice. The
+  separate `Checkbox`-based per-agent `AutoContinueToggle` strip (#297) was intentionally **not**
+  touched — a different component, not what the card meant.
+- **Cross-platform:** pure DOM-order + margin change, no OS-specific code → identical on macOS and
+  Windows. Checks green: `npm run build` / `lint` / `format:check` / `test`.
+
+---
+
+### 303. [x] Trim the sidebar background context menu + move "Clone Repo" under "New folder"
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+The right-click context menu on the **empty sidebar background** (the "plane", not any folder/repo)
+no longer offers **New session**, **Recurring session…**, or **Auto continue after limit reset**,
+and **Clone Repo…** now sits **directly under "New folder…"** at the top of that menu. This is part
+of a two-card reorganization (with the dependent Task 304): the **background menu** owns
+folder/clone/schedule + view/bulk actions, while the **"…" dots menu** owns the session-creation
+extras.
+
+**What shipped** (commit
+[`3a02a58`](https://github.com/ErikdeJager/ReCue/commit/3a02a58), PR
+[#50](https://github.com/ErikdeJager/ReCue/pull/50), merged `2a47e21`… on `main`, 2026-07-01):
+
+- **`src/components/Sidebar/Sidebar.tsx`:** the `bgMenuItems` array (rendered by the shared
+  `RowContextMenu` for `openBgMenu`) drops the `New session`, `Recurring session…`, and
+  `...(autoContinueItem ? … : [])` entries, and moves `Clone Repo…` to immediately after
+  `New folder…`. Order is now: **New folder… → Clone Repo… → Schedule session →** Expand/Collapse
+  sidebar → (Clear Overview filter / Kill all agents / Close all items, under their existing
+  conditions). `autoContinueItem`, `openNewSession`, and `openRecurring` remain **defined** (still
+  used by the New-session button / the dots menu), so no unused-symbol lint errors.
+
+**Key files/areas touched:** `src/components/Sidebar/Sidebar.tsx` (+1/−4).
+
+**Dependencies:** none. **Enables:** Task 304 (removes Clone Repo from the "…" dots menu so Clone
+Repo has one home — the background menu).
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 303): only the `bgMenuItems` array was edited — exactly
+  the three named items removed and Clone Repo… reordered under New folder…. **"Schedule session"
+  stays** in the background menu (the card didn't ask to remove it). The per-folder / per-repo
+  context menus are unaffected.
+- **Cross-platform:** a pure menu-array edit, no OS-specific code → identical on macOS and Windows.
+  Checks green: `npm run build` / `lint` / `format:check`.
+
+---
+
