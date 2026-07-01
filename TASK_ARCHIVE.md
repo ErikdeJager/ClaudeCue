@@ -8399,3 +8399,68 @@ persistence, or native/Rust code.
 
 ---
 
+### 290. [x] Resolve dependency vulnerabilities (esbuild dev-server advisory)
+
+**Status:** Done
+**Depends on:** none
+**Created:** 2026-07-01
+
+> **Number note:** originally planned as **257**, this card was renumbered to **290** (its
+> collision-free next number — the archive already ran to #289; the unrelated `### 257.` above
+> is *"Larger, vertically resizable Kanban card input fields"*). The **git branch/commit still
+> carry the old naming** — branch `task-257-esbuild-advisory`, commit `b2eaabc` ("Task 257:
+> …") — so match this entry to **PR #41** rather than to the commit subject.
+
+**Description**
+
+Brought ReCue's dependency tree to a clean security-audit state by fixing the one **actionable**
+finding from `npm audit`: a **low-severity esbuild dev-server advisory**
+(**GHSA-g7r4-m6w7-qqqr** / "esbuild allows arbitrary file read when running the development
+server on Windows", CVSS 2.5; vulnerable range `>=0.27.3 <0.28.1`). esbuild was pulled in only
+**transitively and dev-only** — the single chain `recue → vite@7.3.5 → esbuild@0.27.7` — and is
+never shipped in the built app; the advisory affects only the Vite **dev server** (specifically on
+Windows). `npm audit fix` couldn't move it because vite@7.3.5 declared `esbuild "^0.27.0"`
+(`>=0.27.0 <0.28.0` in npm's 0.x semantics), pinning esbuild below the fix.
+
+The clean fix was to bump **vite to 7.3.6** (a patch within the existing `^7.0.4` range, which
+declares `esbuild "^0.27.0 || ^0.28.0"`) and move **esbuild to 0.28.1** — clearing the advisory.
+After this, `npm audit` reports **0 vulnerabilities**. The Rust side (`cargo audit` over
+`src-tauri/Cargo.lock`) already had **0 vulnerabilities** and was left unchanged: its 18 warnings
+(16 `unmaintained` + 2 `unsound`) are all transitive and mostly Linux-only (Tauri's Linux
+webkit2gtk / gtk-rs GTK3 stack, not compiled on macOS/Windows), plus `proc-macro-error`,
+`unic-*`, and `anyhow` — transitive with no available fix — and are reviewed-and-accepted, not
+patched.
+
+**What shipped** (commit
+[`b2eaabc`](https://github.com/ErikdeJager/ReCue/commit/b2eaabc), PR
+[#41](https://github.com/ErikdeJager/ReCue/pull/41), merged `a20b8d6`, 2026-07-01):
+
+- **`package.json`** — bumped the `vite` devDependency from `^7.0.4` to `^7.3.6` (so esbuild
+  0.28.x is permitted). No `overrides` block was needed.
+- **`package-lock.json`** — regenerated: **`vite` → 7.3.6**, **`esbuild` → 0.28.1** (single
+  chain, no lingering 0.27.x copy), so a fresh `npm ci` keeps esbuild ≥ 0.28.1 — the fix is
+  durable. (Verified in the committed lockfile: `node_modules/esbuild` = 0.28.1,
+  `node_modules/vite` = 7.3.6.)
+
+**Key files/areas touched:** `package.json` (one-line vite bump) + `package-lock.json`
+(regenerated). **No** source-code, Rust, CSS, IPC, persistence, or native changes — this is a
+build-tooling-only change. The Rust `cargo audit` step was verification-only; its outcome is
+recorded here, not in a code change.
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Scope decisions** (per PLAN-257.md): fix the single genuine (low, dev-only) fixable
+  vulnerability by keeping vite on the **7.x** line (no vite 8.x major bump) and moving esbuild
+  to the first fixed patch (0.28.1); the transitive Rust advisory-DB **warnings** are documented
+  as accepted rather than force-overridden (patching Tauri's dependency tree is out of scope and
+  risky). No CI `npm audit` / `cargo audit` gate was added (not requested). (Note: the
+  `ASSUMPTIONS.md` §Task 257 section belongs to the *other* task 257 above, not this one.)
+- **Cross-platform:** build-tooling-only, so macOS **and** Windows app behavior is byte-for-byte
+  unchanged — and it specifically **removes a Windows-dev-server advisory**, benefiting Windows
+  contributors. Acceptance checks green: `npm audit` → 0 vulnerabilities, `npm run build` /
+  `npm test` / `npm run lint` pass, `cargo audit` → 0 vulnerabilities (warnings only).
+
+---
+
