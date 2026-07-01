@@ -9340,3 +9340,81 @@ and preserved the "Clone Repo has exactly one home" invariant).
 
 ---
 
+### 299. [x] Non-blocking background clone with a "phantom folder" + progress bar in the sidebar
+
+**Status:** Done
+**Depends on:** Task 298
+
+**Description**
+
+Made **Clone Repo** (#295) non-blocking. Submitting the modal now **closes it immediately** and a
+transient **"phantom folder"** appears at the top of the sidebar repo list — labeled for the repo
+being cloned, dimmed with a "Cloning…" hint and an **indeterminate progress bar underneath** — while
+the clone runs in the background off the main thread. On success the phantom is removed, the real
+repo is added to `recents`, a `claude` session starts in it, and a `Cloned <name>` toast shows; on
+failure the phantom is removed and the git error is toasted (the modal is already closed, so the
+toast is the error surface). The rest of the UI stays fully responsive throughout, and concurrent
+clones each get their own independently-resolving phantom.
+
+**What shipped** (commit
+[`ad6465e`](https://github.com/ErikdeJager/ReCue/commit/ad6465e), PR
+[#56](https://github.com/ErikdeJager/ReCue/pull/56), merged `5e03cdd`, 2026-07-01):
+
+- **Backend — non-blocking (`src-tauri/src/commands.rs`):** `clone_repo` became an **`async`** Tauri
+  command that runs the synchronous `git` shell-out (`git::clone_repo` + the Task 298
+  `ensure_checked_out_branch` step + `touch_recent`) inside `tauri::async_runtime::spawn_blocking`
+  on a dedicated blocking thread, so it no longer occupies the main thread / async runtime. The IPC
+  name/shape is unchanged (`clone_repo` → dest path string / git error), keeping the dest-collision
+  precheck and fail-fast env behavior.
+- **Store — model in-flight clones (`src/store.ts`, `src/types/index.ts`):** a new transient
+  `cloningRepos: CloningRepo[]` (`{ id, name, parent, url }`, `id` locally unique, `name` via the
+  new `cloneRepoName(url)` helper); `cloneRepo(url, parent)` now **enqueues a phantom, fires
+  `ipc.cloneRepo` in the background** (not awaited by the modal), and on resolve/reject removes
+  **that keyed phantom** (by `id`, so concurrent clones don't remove the wrong entry) and
+  prepends/`spawnSession`/toasts on success or error-toasts on failure — resolving quickly so the
+  modal can close at once.
+- **Display-name helper (`src/paths.ts` + `src/paths.test.ts`):** `cloneRepoName(url)` derives the
+  repo name from the URL (mirroring the backend's dir naming), unit-tested.
+- **Modal — close immediately (`src/components/CloneRepoModal/CloneRepoModal.tsx`):** `submit`
+  validates inputs, calls `cloneRepo`, and closes the modal right away (the `busy`/`Cloning…`
+  await and inline-error surface are dropped in favor of the store's background flow + toasts).
+- **Sidebar — phantom + progress bar (`src/components/Sidebar/Sidebar.tsx`,
+  `Sidebar.module.css`, `src/styles/global.css`):** a new inert `PhantomRepo` subcomponent (folder
+  icon + name + "Cloning…" hint + an indeterminate `.phantomTrack`/`.phantomBar`) renders **outside**
+  the dnd-kit `SortableContext` at the top of `styles.repos`, so it's **not draggable** and can't
+  corrupt `folderOrder`/`repoOrder`, and has no repo context menu / new-session affordances. The
+  **collapsed rail** shows a minimal pulsing dimmed folder icon per phantom. The `clone-progress`
+  (swept stripe) and `clone-pulse` (rail breathe) **keyframes live in `global.css`**, so the
+  `prefers-reduced-motion` killswitch there disables the animation, leaving a still-visible static
+  bar/icon.
+- **Tests (`src/store.test.ts` +73, `src/paths.test.ts` +25):** the `cloneRepo` flow (enqueue →
+  phantom present → on resolve phantom removed + `recents` updated; on reject phantom removed + error
+  toast) and `cloneRepoName`.
+
+**Key files/areas touched:** `src-tauri/src/commands.rs`; `src/store.ts`, `src/types/index.ts`,
+`src/paths.ts`, `src/ipc.ts`; `src/components/CloneRepoModal/CloneRepoModal.tsx`;
+`src/components/Sidebar/Sidebar.tsx` + `Sidebar.module.css`; `src/styles/global.css`; tests
+`src/store.test.ts`, `src/paths.test.ts` (11 files).
+
+**Dependencies:** Task 298 (the corrected default-branch behavior + fixed modal copy this background
+flow builds on).
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 299): the progress bar is **indeterminate/animated**,
+  not a real percentage — parsing `git clone --progress` stderr for byte percentages is explicitly a
+  future enhancement, out of scope. The modal **closes immediately** and errors surface via **toast**
+  (not the closed modal). The phantom is a **transient, in-memory, non-draggable** placeholder (not
+  persisted across restarts); concurrent clones each get their own keyed phantom. The backend goes
+  **async off the main thread** while keeping the same IPC name/shape. Collapsed-rail phantoms are a
+  minimal pulsing indicator. No cancel button (out of scope).
+- **Cross-platform:** the clone still shells out through the shared `git::hidden_command`
+  (`CREATE_NO_WINDOW` guard) and builds paths with `PathBuf`, so it behaves identically on macOS and
+  Windows; `spawn_blocking` is OS-neutral. The new CSS uses only design tokens + plain colors (no
+  macOS-only `-webkit-` vibrancy), and the keyframes route through the reduced-motion killswitch, so
+  it renders correctly in both WKWebView and WebView2. Every error path toasts (no stuck-phantom bug),
+  and reverting the store/command restores today's blocking behavior. Checks green: `npm run build` /
+  `lint` / `test` / `format:check`, `cargo test`, clippy, fmt.
+
+---
+
