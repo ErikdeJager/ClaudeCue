@@ -1592,3 +1592,32 @@ Interpretations chosen (assume-variant):
   checkmark; all existing menu items are unaffected.
 - **Fail-open:** unavailable usage data ⇒ the feature is inert (no false nudges).
 - **Cross-platform:** frontend-only; `writeStdin` is platform-neutral → identical on macOS and Windows.
+
+## Task 297 — Per-agent opt-out for auto-continue-after-limit
+
+Card: "Expand on the auto continue feature. Individual agents show a little 'Auto continue after limit
+reset is enabled' per agent with a clickable checkbox that will disable this feature for one specific
+agent. This gives user full control over the flow."
+
+Interpretations chosen (assume-variant):
+
+- **Per-session opt-out persisted on the session record** as `auto_continue_disabled: bool`
+  (`#[serde(default)]` false = active), set via a small `set_session_auto_continue(id, disabled)` command
+  — mirroring existing per-session persisted flags (rename/`has_been_active`). Persisted (not transient)
+  so a disabled long-running/resumed agent stays disabled across restarts ("full control"); auto-cleaned
+  when the session is removed.
+- **Default = inherit the global setting:** a new agent is not disabled, so with the global option on it
+  participates; unchecking the box disables it for that agent only, never touching other agents or the
+  global setting.
+- **Visibility:** the per-agent checkbox is shown ONLY for Claude agents AND only when the global
+  `autoContinueAfterLimit` (Task 296) is enabled — when the global option is off (or the agent isn't
+  Claude) there's nothing to opt out of, so it's hidden.
+- **Placement:** on the agent's Overview card (`AgentCard`) and its Canvas panel (`CanvasSurface`) — the
+  two agent surfaces with room for chrome; the Canvas control stops event propagation so it doesn't start
+  the #144 header drag. The cramped 10px sidebar row is left unchanged (out of scope). Label wording:
+  "Auto continue after limit reset"; checked = active for this agent.
+- **Fire-step exclusion:** the Task 296 auto-continue fire step excludes sessions with
+  `auto_continue_disabled === true` (preferably by filtering the `liveClaudeIds` fed into the pure
+  `evaluateAutoContinue` reducer at the call site, keeping the reducer agnostic), covered by a unit test.
+- **Cross-platform:** a `#[serde(default)]` record field + a tiny command + frontend UI, no OS-specific
+  code → identical on macOS and Windows.
