@@ -3,6 +3,7 @@
 // Settings → Updates pane (#191). Pure + dependency-light so it's unit-testable;
 // `patchnotesToMarkdown` is mirrored by `scripts/patchnotes-to-md.mjs` (which can't
 // import TS) to generate the GitHub release body / updater `latest.json` notes.
+// See `patchnotes/patchnotes-conventions.md` for the file format + authoring purpose.
 
 import type { PatchNotes, PatchNotesChange } from "./types";
 
