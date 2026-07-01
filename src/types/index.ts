@@ -346,6 +346,12 @@ export interface Settings {
    * their recorded `agent` (#101). `"claude"` (default), `"codex"`, or `"opencode"`
    * — the latter two are untested; Claude Code is recommended. */
   defaultAgent: string;
+  /** Auto-continue Claude agents after the five-hour usage limit resets (#296): when
+   * the limit is hit, ReCue waits for the window to reset (watching the reset time +
+   * the usage percentage dropping) then nudges the running Claude agents to resume
+   * (Enter → `continue` → Enter). Claude-only — inert unless `defaultAgent` is
+   * `"claude"`. Default off. */
+  autoContinueAfterLimit: boolean;
   /** Whether the first-launch coding-agent picker has run. Defaults `false`, so an
    * existing install also runs the one-time detection on its next launch (auto-pick
    * if exactly one CLI is installed, the picker modal if 2+). Set once, then never

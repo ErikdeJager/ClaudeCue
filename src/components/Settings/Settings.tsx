@@ -453,6 +453,31 @@ function SettingsModal() {
                   label="Auto-name agents from claude's session title"
                   className={styles.checkRow}
                 />
+                <div className={styles.field}>
+                  <Checkbox
+                    // Claude-only (#296): shown off + disabled for a non-Claude
+                    // default agent (the usage feed the machine reads is Claude's).
+                    checked={
+                      draft.defaultAgent === "claude" &&
+                      draft.autoContinueAfterLimit
+                    }
+                    onChange={(v) => update("autoContinueAfterLimit", v)}
+                    disabled={draft.defaultAgent !== "claude"}
+                    label="Auto continue after limit reset"
+                    className={styles.checkRow}
+                  />
+                  {draft.defaultAgent !== "claude" ? (
+                    <span className={styles.fieldHelp}>
+                      Requires Claude as the default agent.
+                    </span>
+                  ) : (
+                    <span className={styles.fieldHelp}>
+                      When the five-hour usage limit is hit, wait for the window
+                      to reset, then nudge the running Claude agents to
+                      continue.
+                    </span>
+                  )}
+                </div>
               </>
             )}
 

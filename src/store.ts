@@ -5,6 +5,12 @@
 import { create } from "zustand";
 
 import { agentCaps, SELECTABLE_AGENTS } from "./agents";
+import {
+  ARMED_POLL_MS,
+  evaluateAutoContinue,
+  IDLE_AUTO_CONTINUE,
+  type AutoContinueState,
+} from "./autoContinue";
 import { overviewPanelToContent } from "./components/Canvas/canvasDrop";
 import { canvasToTemplate } from "./components/Canvas/canvasToTemplate";
 import { rewriteScheduledLeaves } from "./components/Canvas/canvasSchedule";
@@ -237,6 +243,49 @@ function scheduleOpenFileTreeRefresh(): void {
 // double-arms.
 const USAGE_POLL_MS = 180_000;
 let usagePollTimer: ReturnType<typeof setInterval> | undefined;
+
+// Auto-continue after limit reset (#296): while the machine is armed (limit hit,
+// waiting for the window to reset) the usage poll runs on the tighter ARMED_POLL_MS
+// cadence so the continue fires promptly after reset. Module-scoped alongside
+// `usagePollTimer`; main-window-only + idempotent, cleared on disarm / poll stop.
+let armedPollTimer: ReturnType<typeof setInterval> | undefined;
+
+/** Milliseconds between the three keystrokes of the auto-continue nudge (#296) — a
+ * tiny gap so claude's TUI registers Enter, the typed text, and Enter as separate
+ * events rather than a single paste. */
+const CONTINUE_KEY_DELAY_MS = 120;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Send the auto-continue nudge to one session (#296): Enter → `continue` → Enter,
+ * with a small gap between sends. Best-effort — a dead PTY / IPC error just means
+ * that agent isn't nudged, never a surfaced error. The exact sequence is isolated
+ * here so a real-CLI sanity check can adjust it in one place (e.g. drop the leading
+ * Enter to `"continue\r"`). `writeStdin` is platform-neutral (same bytes on macOS
+ * and Windows). */
+async function sendContinue(id: string): Promise<void> {
+  try {
+    await ipc.writeStdin(id, "\r");
+    await sleep(CONTINUE_KEY_DELAY_MS);
+    await ipc.writeStdin(id, "continue");
+    await sleep(CONTINUE_KEY_DELAY_MS);
+    await ipc.writeStdin(id, "\r");
+  } catch {
+    // Best-effort: swallow so one dead session never breaks the rest.
+  }
+}
+
+/** Start/stop the tighter armed-cadence usage poll (#296) to match the machine's
+ * `armed` state. Main-window-only + idempotent, mirroring `startUsagePolling`. */
+function syncArmedPoll(armed: boolean, refresh: () => void): void {
+  if (!IS_MAIN_WINDOW) return;
+  if (armed && !armedPollTimer) {
+    armedPollTimer = setInterval(refresh, ARMED_POLL_MS);
+  } else if (!armed && armedPollTimer) {
+    clearInterval(armedPollTimer);
+    armedPollTimer = undefined;
+  }
+}
 
 /** Copy of `map` without `key` — returns the same ref when `key` is absent so
  * callers don't trigger needless re-renders. */
@@ -782,6 +831,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoName: true,
   autoSave: true,
   defaultAgent: "claude",
+  autoContinueAfterLimit: false,
   // False so the first-launch agent picker runs once for new AND existing installs
   // (an older sessions.json lacks the key → merges to false → detected next launch).
   onboarded: false,
@@ -1157,6 +1207,9 @@ export interface AppState {
     resetsAtMs: number | null;
     available: boolean;
   };
+  /** Transient auto-continue-after-limit-reset machine state (#296) — NOT persisted;
+   * only the `autoContinueAfterLimit` setting is. Fed by the usage poll. */
+  autoContinue: AutoContinueState;
   /** Pending scheduled sessions (#93), newest-first; main window only. */
   schedules: ScheduledSession[];
   /** Active recurring sessions (#294), newest-first; loaded in every window. */
@@ -1279,6 +1332,14 @@ export interface AppState {
   startUsagePolling: () => void;
   /** Stop the usage poll (#154). */
   stopUsagePolling: () => void;
+  /** Run the auto-continue reducer (#296) against the current `usage` snapshot +
+   * settings + live Claude sessions: arm/wait/fire the machine, sync the tighter
+   * armed poll cadence, and send the continue nudge to any fired sessions. Called
+   * by `refreshUsage` after it sets `usage`; safe to call directly (used by tests). */
+  applyAutoContinue: () => void;
+  /** Toggle the `autoContinueAfterLimit` setting (#296) — backs the ⋯-menu checkable
+   * item + the Settings toggle. Persists via `saveSettings`. */
+  toggleAutoContinue: () => void;
   /** Add an existing folder to recents without spawning an agent (#172 sidebar
    * background menu → "New folder…"): opens the native folder picker and persists
    * the choice so it shows as a folder group immediately. Cancel = no-op; an already
@@ -2029,6 +2090,7 @@ export const useStore = create<AppState>()((set, get) => ({
     notes: null,
   },
   usage: { usedPercent: null, resetsAtMs: null, available: false },
+  autoContinue: IDLE_AUTO_CONTINUE,
   schedules: [],
   recurrings: [],
   settings: DEFAULT_SETTINGS,
@@ -2400,6 +2462,9 @@ export const useStore = create<AppState>()((set, get) => ({
     // Gate to Claude (forward-compatible). Non-Claude → hide, don't even call out.
     if (!isClaudeActive(get())) {
       set({ usage: { usedPercent: null, resetsAtMs: null, available: false } });
+      // Still run the auto-continue reducer so it disarms (fail-open) when the
+      // usage feed goes unavailable, e.g. a non-Claude session becoming active.
+      get().applyAutoContinue();
       return;
     }
     try {
@@ -2417,6 +2482,8 @@ export const useStore = create<AppState>()((set, get) => ({
       // Outside Tauri / command missing → hide; recover on the next tick.
       set({ usage: { usedPercent: null, resetsAtMs: null, available: false } });
     }
+    // Drive the auto-continue machine off the fresh snapshot (#296).
+    get().applyAutoContinue();
   },
   startUsagePolling: () => {
     if (!IS_MAIN_WINDOW || usagePollTimer) return; // main-window only, idempotent
@@ -2431,6 +2498,39 @@ export const useStore = create<AppState>()((set, get) => ({
       clearInterval(usagePollTimer);
       usagePollTimer = undefined;
     }
+    // Tear down the tighter armed poll too (#296) so nothing keeps ticking.
+    syncArmedPoll(false, () => {});
+  },
+  applyAutoContinue: () => {
+    const state = get();
+    // Live Claude sessions = running (not exited, the #91 predicate) and running
+    // claude (a legacy null agent predates #101 and is claude).
+    const liveClaudeIds = state.sessions
+      .filter(
+        (s) => s.exitedCode === undefined && (s.agent ?? "claude") === "claude",
+      )
+      .map((s) => s.id);
+    const { next, fireIds } = evaluateAutoContinue(
+      state.autoContinue,
+      state.usage,
+      Date.now(),
+      {
+        enabled: state.settings.autoContinueAfterLimit,
+        defaultAgent: state.settings.defaultAgent,
+      },
+      liveClaudeIds,
+    );
+    if (next !== state.autoContinue) set({ autoContinue: next });
+    // Match the poll cadence to the (new) armed state, then nudge fired sessions.
+    syncArmedPoll(next.armed, () => void get().refreshUsage());
+    for (const id of fireIds) void sendContinue(id);
+  },
+  toggleAutoContinue: () => {
+    const settings = get().settings;
+    void get().saveSettings({
+      ...settings,
+      autoContinueAfterLimit: !settings.autoContinueAfterLimit,
+    });
   },
 
   addFolder: async () => {

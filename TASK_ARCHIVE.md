@@ -8807,3 +8807,83 @@ recurrings' `current_session_id` set) and kept alive in `App.tsx`'s reconcile `a
 
 ---
 
+### 296. [x] Auto-continue Claude agents after the usage limit resets
+
+**Status:** Done
+**Depends on:** Task 294
+
+**Description**
+
+Added an opt-in **"Auto continue after limit reset"** behavior for Claude Code sessions. When the
+five-hour usage limit is hit, ReCue notes the reset time, waits for the window to reset — watching
+**both** the known reset time **and** the usage percentage dropping (per the card's "do not poll
+alone") — then automatically nudges the Claude agents that were running by sending **Enter →
+`continue` → Enter** to each, so every agent picks its work back up.
+
+The option is surfaced two ways, kept in sync by a single boolean setting `autoContinueAfterLimit`
+(default off): a **checkable item in the ⋯ session-options menu** (built by #294; leading checkmark
+when on) and a **toggle in Settings → Sessions**. It is **Claude-only** — the ⋯-menu item is shown
+only when `defaultAgent === "claude"`, and the Settings toggle is always visible but disabled/greyed
+and treated as off (with a "requires Claude as default agent" hint) when the default agent isn't
+Claude, re-applying the stored value when switched back.
+
+Entirely **frontend/store-only** — every backend primitive already existed (`usage.rs` returns
+`usedPercent` + `resetsAt` since #154; `write_stdin` accepts arbitrary bytes). The arm/wait/fire
+state machine lives in the store, main-window-only, driven by the existing usage poll; its runtime
+arm-state is transient (only the boolean setting persists). **Fail-open:** if usage data is
+unavailable the feature is inert (no false nudges).
+
+**What shipped** (commit
+[`ee1767d`](https://github.com/ErikdeJager/ReCue/commit/ee1767d), PR
+[#47](https://github.com/ErikdeJager/ReCue/pull/47), merged `9495762`, 2026-07-01):
+
+- **Setting** (`src/types/index.ts`, `store.ts`): `autoContinueAfterLimit: boolean` added to the
+  Sessions group of `Settings` + `DEFAULT_SETTINGS` (default `false`); `mergeSettings` auto-merges it
+  so existing `sessions.json` upgrades cleanly (no Rust/migration change).
+- **Settings UI** (`Settings.tsx`): a gated `<Checkbox>` in Settings → Sessions bound to the setting,
+  **disabled and shown off with a hint** when `defaultAgent !== "claude"`, enabled when Claude is the
+  default.
+- **Checkable menu item** (`Sidebar.tsx` + `.module.css`): `RowMenuItem` extended with an optional
+  `checked?: boolean` (backward-compatible, like the #293 `confirmLabel` extension) rendering a
+  leading checkmark (or an equal-width spacer when false, so alignment is stable); the item is wired
+  into both the #294 ⋯ dropdown and the sidebar background menu, **only when Claude is default**.
+- **State machine** (`src/autoContinue.ts` new + `store.ts`): a pure exported reducer
+  `evaluateAutoContinue(prev, snapshot, now, settings, liveClaudeIds) -> { next, fireIds }` with
+  constants `LIMIT_REACHED_PCT = 100` (tolerance 99.5) / `RESET_CONFIRM_PCT = 90` — arms at
+  `usedPercent >= 100` capturing the live-Claude session set, stays armed until reset is confirmed by
+  **both** `now >= resetsAtMs` **and** `usedPercent < 90` (falls back to the percentage alone if the
+  API omitted `resetsAt`), then fires on `prev.sessionIds ∩ liveClaudeIds` and disarms (so a reset
+  fires exactly once). Hooked into `refreshUsage`; a tighter **armed poll cadence** (`ARMED_POLL_MS =
+  45_000`) runs while armed (main-window-only, idempotent) and reverts to the 180s base when disarmed.
+  `sendContinue(id)` sends `"\r"` → `"continue"` → `"\r"` with tiny inter-send delays (isolated so the
+  exact sequence is a one-line change).
+- **Tests:** `src/autoContinue.test.ts` (261 lines — table-driven across arm/wait/fire/no-reset-time
+  fallback/off/non-Claude) + `src/store.autoContinue.test.ts` (a store-wiring integration test
+  asserting the injected sequence per fired session).
+
+**Key files/areas touched:** `src/types/index.ts`, `src/store.ts`, `src/autoContinue.ts` (new),
+`src/components/Settings/Settings.tsx`, `src/components/Sidebar/Sidebar.tsx` (+ `.module.css`);
+tests `src/autoContinue.test.ts`, `src/store.autoContinue.test.ts`. **No backend/Rust/IPC change**
+(+690 / −1 across 8 files).
+
+**Dependencies:** Task 294 (the ⋯ menu + `RowContextMenu` this checkable item lives in).
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 296): a single boolean backs both surfaces; Claude-only
+  gating (menu hidden / toggle disabled off-Claude). **Limit-reached signal = the usage snapshot**
+  (`usedPercent >= ~100`), **not** terminal-output scraping (fragile, out of scope). **Reset uses both
+  signals** (time AND percent), falling back to percent alone when `resetsAt` is null. Nudge target =
+  live Claude sessions captured when the limit was detected, intersected with those still alive + still
+  Claude at reset — exited / freshly-spawned unrelated sessions are skipped; non-Claude agents are never
+  nudged. The Enter/continue/Enter sequence follows the card literally and is **flagged for a real-CLI
+  sanity check** (fallback `"continue\r"` if the leading Enter proves unhelpful).
+- **Follow-up:** **Task 297** (per-agent opt-out — a per-session `auto_continue_disabled` flag that
+  excludes one agent from the #296 fire step) depends on this card.
+- **Cross-platform:** frontend/store-only; `writeStdin` is platform-neutral → identical on macOS and
+  Windows. Rollback = the setting defaults off and the reducer is inert, so shipping it disabled is a
+  no-op. Project checks green: `npm run build` / `lint` / `test` (incl. the two new test files),
+  `npm run format:check`, `npm run lint:rust`, `cargo test`.
+
+---
+
