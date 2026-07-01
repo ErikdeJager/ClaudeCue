@@ -211,15 +211,15 @@ function RowContextMenu({
                 item.onActivate();
               }}
             >
-              {/* Checkable row (#296): a fixed-width leading slot keeps every label
-              aligned whether or not the item is a toggle (an equal-width spacer when
-              unchecked / non-checkable). */}
+              {/* Checkable row (#296/#302): the label reads first, then a trailing
+              fixed-width slot holds the check glyph (shown only when the toggle is on),
+              so the checkmark sits after the label rather than in front of it. */}
+              {confirming ? item.confirmLabel : item.label}
               {item.checked != null && (
                 <span className={styles.menuCheck} aria-hidden>
                   {item.checked && <Check size={13} strokeWidth={2} />}
                 </span>
               )}
-              {confirming ? item.confirmLabel : item.label}
             </button>
           );
         })}

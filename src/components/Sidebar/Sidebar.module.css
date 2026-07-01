@@ -839,15 +839,15 @@
   color: var(--text-secondary);
 }
 
-/* Checkable menu item leading slot (#296): a fixed-width, centered check-glyph slot
-   so a toggle row's label lines up with the check whether it's on or off (an empty
-   spacer when off). Inline so the base `.menuItem` block layout is untouched. */
+/* Checkable menu item trailing slot (#296/#302): a fixed-width, centered check-glyph
+   slot that follows the label, so the check reads after the text (empty when off).
+   Inline so the base `.menuItem` block layout is untouched. */
 .menuCheck {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 16px;
-  margin-right: var(--space-6);
+  margin-left: var(--space-6);
   color: var(--accent);
   vertical-align: middle;
 }
