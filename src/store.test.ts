@@ -653,6 +653,75 @@ describe("overview panels (#38)", () => {
   });
 });
 
+describe("global bulk actions (#293)", () => {
+  const s = () => useStore.getState();
+
+  it("killAllAgentsGlobal kills every running agent across all folders, leaving items", async () => {
+    const killSpy = vi.spyOn(ipc, "killSession").mockResolvedValue();
+    useStore.setState({
+      sessions: [
+        ovSession("a", "/repo/a", 1),
+        ovSession("b", "/repo/b", 2),
+        // A worktree agent whose repo_path is the worktree dir but parent is /repo/a.
+        ovSession("wt", "/wt/a-feat", 3, "/repo/a"),
+        // An already-exited agent must be left untouched (not "running").
+        { ...ovSession("dead", "/repo/b", 4), exitedCode: 0 },
+      ],
+      recents: ["/repo/a", "/repo/b"],
+      overviewPanels: {
+        "/repo/a": [{ id: "p1", kind: "diff" }],
+        "/repo/b": [{ id: "p2", kind: "markdown", file: "x.md" }],
+      },
+    });
+    await s().killAllAgentsGlobal();
+    // The three running agents (incl. the worktree agent) are gone; the exited one stays.
+    expect(s().sessions.map((x) => x.id)).toEqual(["dead"]);
+    // Killed once each — no double-kill despite the parent-folder sweep.
+    expect(killSpy).toHaveBeenCalledTimes(3);
+    // Non-agent items are untouched.
+    expect(s().overviewPanels["/repo/a"]).toHaveLength(1);
+    expect(s().overviewPanels["/repo/b"]).toHaveLength(1);
+    // One summary toast.
+    expect(s().toasts.map((t) => t.message)).toContain("Killed 3 agents");
+    killSpy.mockRestore();
+  });
+
+  it("closeAllItemsGlobal kills all agents AND clears every folder's items", async () => {
+    const killSpy = vi.spyOn(ipc, "killSession").mockResolvedValue();
+    useStore.setState({
+      sessions: [ovSession("a", "/repo/a", 1), ovSession("b", "/repo/b", 2)],
+      recents: ["/repo/a", "/repo/b"],
+      overviewPanels: {
+        "/repo/a": [
+          { id: "t1", kind: "terminal" },
+          { id: "d1", kind: "diff" },
+        ],
+        "/repo/b": [{ id: "m1", kind: "markdown", file: "x.md" }],
+      },
+    });
+    await s().closeAllItemsGlobal();
+    // Every agent gone AND every non-agent item cleared app-wide.
+    expect(s().sessions).toHaveLength(0);
+    expect(s().overviewPanels["/repo/a"]).toBeUndefined();
+    expect(s().overviewPanels["/repo/b"]).toBeUndefined();
+    // The two agents + the one terminal panel's shell PTY were all killed.
+    expect(killSpy).toHaveBeenCalledTimes(3);
+    // Folders remain in recents (unlike Forget folder).
+    expect(s().recents).toEqual(["/repo/a", "/repo/b"]);
+    // One summary toast mirroring the per-repo wording.
+    expect(s().toasts.map((t) => t.message)).toContain(
+      "Closed 2 agents + 3 views",
+    );
+    killSpy.mockRestore();
+  });
+
+  it("closeAllItemsGlobal toasts 'Nothing to close' when the workspace is empty", async () => {
+    useStore.setState({ sessions: [], recents: [], overviewPanels: {} });
+    await s().closeAllItemsGlobal();
+    expect(s().toasts.map((t) => t.message)).toContain("Nothing to close");
+  });
+});
+
 describe("repo items — overviewPanels as the single source (#59)", () => {
   it("addOverviewPanel dedups: one diff per repo, one markdown per file", async () => {
     const add = () => useStore.getState().addOverviewPanel;
