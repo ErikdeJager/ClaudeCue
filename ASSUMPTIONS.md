@@ -1412,3 +1412,39 @@ Copy relateive path, Reveal in finder, Rename".
 - **Menu item order:** New folder… → Rename… → Reveal → Copy absolute path → Copy relative path
   → Delete folder (danger, last) — mirrors the file menu's reveal/copy ordering and keeps the
   destructive action at the bottom.
+
+## Task 292
+
+Card (terse): mic/voice prompt asks ~5×, allowing each time still doesn't work; same for the
+Downloads folder. "Investigate the issue and solve it."
+
+- **Diagnosed as a macOS TCC + code-signing bug with ONE shared root cause** (mic *and*
+  Downloads). Confirmed against Apple's TCC model and `anthropics/claude-code#33023`: the mic
+  needs the **`com.apple.security.device.audio-input` entitlement in the code signature** (the
+  `NSMicrophoneUsageDescription` in Info.plist is present but **not sufficient**), entitlements
+  **only apply under Hardened Runtime**, and TCC only **persists** grants for an app with a
+  **stable code signature**. ReCue today has **no entitlements file, no Hardened Runtime, and no
+  Apple code-signing identity** (the pipeline's "signed" = minisign *updater* artifacts only).
+  So: the prompt appears (usage string) but access is denied after Allow (no entitlement) and
+  never remembered (unstable signature) → "asks 5×, still fails."
+- **Deliberately REVERSING the project's "no code signing / notarization" scope decision.** It
+  is the direct cause of the bug, so solving the card requires introducing signing + Hardened
+  Runtime + entitlements. Chose this over any app-code workaround (there is none — the request
+  comes from the child `claude` process). Recorded like prior reversals (Settings #100,
+  multi-window #84, Fork #126).
+- **Kept it ONE card (not split into local-fix vs CI-notarization).** The user's report doesn't
+  distinguish a local build from the distributed DMG, so the plan delivers both: the always-free
+  entitlements/Info.plist/Hardened-Runtime config + a **local self-signed/ad-hoc signing script**
+  (fixes the user's machine with no Apple account) **and** guarded **Developer-ID + notarization
+  CI wiring** (distribution-grade persistence, activated when the maintainer adds secrets).
+- **Entitlements kept minimal:** `audio-input` (required) + `disable-library-validation` (so a
+  Hardened-Runtime app with a non-Apple signature still launches). **Explicitly NOT enabling the
+  App Sandbox** (would break PTY spawning / filesystem reads; folder access is TCC-governed, not
+  sandbox-governed) and not adding JIT entitlements unless a launch failure proves they're needed.
+- **Downloads symptom** handled by the same signing-persistence fix plus adding the protected-
+  folder usage strings (`NSDownloadsFolderUsageDescription` + Documents/Desktop/RemovableVolumes)
+  so the folder prompt is attributable and reasoned; assumed the request is attributed to **ReCue**
+  as the responsible process (per the existing Info.plist rationale), to be confirmed on a real box.
+- **All changes are macOS-bundle-only** (Info.plist / Entitlements.plist / `bundle.macOS` /
+  release.yml macOS leg) — Windows & Linux untouched, honoring the cross-platform requirement.
+  Verification is largely **manual on a real Mac** (a GUI/TCC/signing path that can't be CI-tested).
