@@ -1525,3 +1525,31 @@ Interpretations chosen (assume-variant):
   unchanged (out of scope).
 - **Cross-platform:** no new shell-outs beyond reused git seams; ⋯ button/menu/CSS use design tokens +
   existing primitives → identical on macOS and Windows.
+
+## Task 295 — Clone Repo
+
+Card: "Clone option; clones git repo and checks out main branch. Creates main branch if doesnt exist.
+Also in the dots menu next to schedule session. 'Clone Repo' it will start a session inside the newly
+cloned repo on the default branch."
+
+Interpretations chosen (assume-variant):
+
+- **Destination = a user-picked parent directory; the repo clones into `<parent>/<repo-name>`**, with
+  the name derived from the URL basename (strip trailing `/` and `.git`; handle `https://…/owner/repo.git`
+  and `git@host:owner/repo.git`). Matches plain `git clone <url>` behavior. Refuse if the derived folder
+  already exists and is non-empty (no overwrite — data safety).
+- **"Checks out main / creates main if missing"** = after clone, if a local `main` branch exists check it
+  out, else create `main` from the cloned HEAD (`git checkout -b main`, which also covers an unborn/empty
+  clone) and check it out. The card's closing "on the default branch" is read as this same `main`.
+- **Auto-start a session on success**, on `main`, as a normal interactive agent (no seeded prompt),
+  reusing the existing `spawnSession` path — no extra new-session modal step.
+- **Synchronous clone with a busy state**: the modal shows "Cloning…", disables inputs, blocks until the
+  backend returns, and shows git's stderr inline on failure. Large clones block the modal (accepted for v1;
+  flag in TRAJECTORY if async is wanted later).
+- **Fail-fast on auth**: reuse the `fetch_remotes`/`pull_ff` network guards — `GIT_TERMINAL_PROMPT=0` +
+  `GIT_SSH_COMMAND="ssh -oBatchMode=yes"` — so an authed/private remote errors instead of hanging a GUI
+  process on a credential prompt (no in-app credential UI in scope).
+- **Menu entry** "Clone Repo…" is added to the ⋯ dropdown built in Task 294 and to the sidebar background
+  context menu, opening a dedicated `CloneRepoModal`.
+- **Cross-platform**: git shell-out via `hidden_command`; dest path via `PathBuf::join`; frontend passes
+  whole paths (backend computes/returns the dest) — identical on macOS and Windows.
