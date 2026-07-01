@@ -8709,3 +8709,101 @@ changes.
 
 ---
 
+### 294. [x] Three-dots session-options menu + Recurring sessions
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+Added a small **⋯ (three-dots) overflow button** immediately right of the sidebar's **"Schedule
+session"** button (the two wrapped in a `.scheduleRow` flex container). Clicking it opens a
+dropdown (reusing the existing `RowContextMenu` primitive) whose first — and, for this card, only —
+item is **"Recurring session…"**. The same item is added to the sidebar background (empty-area)
+context menu. This establishes the reusable ⋯ menu that later cards (Clone Repo #295, Auto-continue
+#296) hang their own entries off of.
+
+Its first entry ships a full new subsystem: a **Recurring session** — a persistent, repeating
+agent. The user gives it a repeat interval (amount + **Minutes / Hours / Days**, min 1 minute) and
+an optional first-run time (default "now"), prompt (with `/` skill autocomplete), and name. It
+lives in the sidebar as long as it is active, and **each time the interval fires the previous child
+`claude` process is killed and a fresh one is spawned in its stead — in the same place** (no new
+sidebar row / Overview column / Canvas panel is created each cycle).
+
+The model, closely paralleling the Scheduled-session subsystem (#93/#94) but **persistent +
+self-re-arming**, is a first-class persisted `RecurringSession` record that **owns a rotating child
+agent session**. The sidebar row / Overview card / Canvas panel all key on the stable **recurring
+id** (new content `kind: "recurring"`) and render the *current* child session's pooled terminal, so
+a fire only swaps the hosted child terminal — the "same panel" invariant. The owned child agent is
+**excluded** from the normal sidebar/Overview/rail session lists (cross-referenced against the
+recurrings' `current_session_id` set) and kept alive in `App.tsx`'s reconcile `active` set.
+
+**What shipped** (commit
+[`e6ac248`](https://github.com/ErikdeJager/ReCue/commit/e6ac248), PR
+[#46](https://github.com/ErikdeJager/ReCue/pull/46), merged `bb8dc95`, 2026-07-01):
+
+- **Backend** (`src-tauri/src/store.rs`, `commands.rs`, `lib.rs`): a `RecurringSession` struct +
+  `recurrings: Vec<RecurringSession>` in `PersistedState` (serde-default empty, so old
+  `sessions.json` upgrades cleanly); store methods `recurrings()` / `add_recurring` /
+  `remove_recurring` / `update_recurring` / `take_due_recurrings(now)` (atomic clone of due records —
+  **does not remove**, so recurring records persist) / `mark_recurring_fired(id, new_session_id,
+  next_fire_at)`; commands `create_recurring` / `list_recurrings` / `cancel_recurring` /
+  `update_recurring` / `fire_due_recurrings` / `fire_one_recurring` / `broadcast_recurrings`. On
+  each fire the child is **rotated** (kill + forget the old, spawn a **fresh** uuid seeded with the
+  prompt — **not** `--resume`) and `next_fire_at` re-armed. `fire_due_recurrings` shares the existing
+  **5s schedule poll tick** in `lib.rs` (catch-up on boot runs anything overdue once), and — unlike a
+  one-shot schedule — a recurring record is **KEPT on spawn failure** with `next_fire_at` still
+  advanced, so a failing folder can't hot-loop.
+- **Frontend** (`src/store.ts`, `ipc.ts`, `types/index.ts`): a `recurrings` store slice + IPC
+  wrappers + `subscribeRecurringEvents` (`recurring://fired` / `error` / `changed`); a
+  `RecurringSession` TS type + fired/error payloads + `CanvasContent.recurringId`; a
+  `payloadToContent` **`recurring`** Canvas kind; `createRecurring` / `cancelRecurring` /
+  `updateRecurring` / `applyRecurringSync` actions; owned child ids added to the `App.tsx` reconcile
+  `active` set.
+- **UI surfaces:** `RecurringPanel` (auto-saving editor for interval / next-run / name / prompt +
+  Cancel, hosting the current child's `<Terminal>` or a "next run in …" placeholder), `RecurringCard`
+  (Overview), `RecurringRow` (draggable sidebar row with a "recurring" badge + relative next-run
+  time), and an `ItemContent` render case. A **recurring mode** in `NewSessionModal` (folder →
+  branch-if-git → a recurring options step with interval + first-run + prompt + name).
+- **Worktree recurrings** (⌘⏎ in the branch step): create/reuse an app-managed worktree, cleaned up
+  **ref-counted** on cancel (per the #74 pattern); **Forget folder** tears down its recurrings too.
+- **Pure helpers, unit-tested:** `intervalToSeconds` / `secondsToInterval` / `formatInterval` /
+  `formatNextRun` (`src/time.ts` + `time.test.ts`, `paths.ts`), plus Rust `take_due_recurrings`
+  partition + `mark_recurring_fired` next-fire advancement (`store.rs` `#[cfg(test)]`) and store-slice
+  tests (`store.test.ts`).
+
+**Key files/areas touched:** `src-tauri/src/store.rs`, `commands.rs`, `lib.rs`;
+`src/store.ts`, `ipc.ts`, `paths.ts`, `time.ts`, `useKeyboardNav.ts`, `types/index.ts`;
+`src/components/RecurringPanel/` (new), `Sidebar/`, `Overview/`, `NewSessionModal/`,
+`Canvas/canvasDrop.ts`, `ItemContent/`, `BigMode/`; tests in `store.test.ts`, `time.test.ts`;
+`TRAJECTORY_TO_WINDOWS.md`. (+2515 / −108 across 22 files.)
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 294): kept as **one card** because splitting the menu
+  from its only item, or the recurring backend from its UI, yields untestable/non-shippable halves.
+  The recurring session is modeled as a first-class persisted record that **owns a rotating child**
+  (not a bare session, not a one-shot `ScheduledSession`) — the model that cleanly satisfies every
+  clause (scheduled OR immediate first run; stays in the sidebar; same panel). "Same panel" =
+  surfaces key on the stable recurring id and render the *current* child's pooled terminal. Each
+  cycle is a **fresh** conversation (new uuid, no `--resume`) — the read of "spawned in its stead",
+  which also sidesteps `--session-id <existing>` reuse ambiguity. "Repeats" = amount + unit dropdown
+  (Minutes/Hours/Days, min 1 minute), no cron/weekday scheduling (out of scope). The collapsed icon
+  rail dropdown was left unchanged (out of scope).
+- **Same-panel invariant:** the owned child is **not** independently listed (excluded from the
+  normal session row/card/rail lists via the recurrings' `current_session_id` set) and its PTY is
+  kept alive by the `App.tsx` reconcile `active` set — so a fire swaps only the hosted terminal,
+  never creating a stray row/column/panel. The `onFired` store update inserts the new child +
+  updates `current_session_id` in one `set` before the old child is dropped, so reconcile never
+  transiently loses the survivor.
+- **Cross-platform:** no new shell-outs beyond the reused git seams (worktree/branch writes go
+  through the established #74/#124 paths); the ⋯ button/menu/CSS use design tokens + existing
+  primitives (`RowContextMenu`, `metaKey || ctrlKey` for ⌘⏎) → identical on macOS and Windows. A
+  `TRAJECTORY_TO_WINDOWS.md` note records the deferred real-box smoke of the fire-cycle terminal
+  rotation. Project checks green: `npm run build` / `lint` / `test` (incl. new `time`/`store` tests),
+  `npm run format:check`, `npm run lint:rust`, `cargo test`, `cargo fmt --check`.
+
+---
+
