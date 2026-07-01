@@ -8887,3 +8887,77 @@ tests `src/autoContinue.test.ts`, `src/store.autoContinue.test.ts`. **No backend
 
 ---
 
+### 295. [x] Clone Repo — clone a git repo and start a session on main
+
+**Status:** Done
+**Depends on:** Task 294
+
+**Description**
+
+Added a **"Clone Repo…"** entry to the three-dots (⋯) session-options menu (built by #294) next to
+the sidebar's "Schedule session" button, and the same entry to the sidebar background context menu.
+It opens a dedicated **`CloneRepoModal`** with a **git URL** field and a **destination parent-dir**
+picker (native folder dialog). Clicking **Clone** shows a "Cloning…" busy state, runs `git clone`
+into `<parent>/<repo-name>` (name derived from the URL basename), ensures **`main`** is checked out
+(created from the cloned HEAD if the repo has none), registers the folder as a known repo (recents),
+and **auto-starts a `claude` session** inside the freshly-cloned repo on `main`.
+
+Clone is added as another **deliberate git write** (alongside checkout / worktree / branch-create /
+fetch / pull), following the exact same `hidden_command` shell-out pattern with the network guards
+(`GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND="ssh -oBatchMode=yes"`) so an authed/private remote
+**fails fast** instead of hanging the GUI process on a credential prompt. A non-empty existing
+destination is refused (no overwrite — data safety), and a failure (bad URL, auth, network, existing
+dest) shows git's stderr inline in the modal without starting a session or adding a recent.
+
+**What shipped** (merged
+[`8b4fd4e`](https://github.com/ErikdeJager/ReCue/commit/8b4fd4e), PR
+[#48](https://github.com/ErikdeJager/ReCue/pull/48), 2026-07-01):
+
+- **Backend** (`src-tauri/src/git.rs`): a **pure** `repo_dir_name(url)` helper (trims trailing `/`,
+  takes the segment after the last `/` or `:` — handling `https://…/owner/repo.git` and
+  `git@host:owner/repo.git` — strips a trailing `.git`, falls back to `"repo"`; unit-tested);
+  `clone_repo(url, dest)` (modeled on `fetch_remotes` — `git clone <url> <dest>` with the two network
+  guard env vars, returns trimmed stderr on failure); and `ensure_main(cwd)` (checks out `main` if it
+  exists in `list_branches`, else `create_branch(cwd, "main", "")` to create + check out `main` from
+  HEAD, covering a `master`-default or unborn/empty clone).
+- **Command** (`commands.rs`, registered in `lib.rs`): `clone_repo(store, url, parent) ->
+  Result<String, String>` — validates the URL, computes `dest = PathBuf::join(parent, repo_dir_name)`,
+  refuses a non-empty existing dest, `git::clone_repo` → `git::ensure_main` → `store.touch_recent`,
+  returns the dest path string.
+- **Frontend** (`src/ipc.ts`, `store.ts`, `App.tsx`, `Sidebar.tsx`): a `cloneRepo` IPC wrapper;
+  store `cloneRepoOpen` + `openCloneRepo`/`closeCloneRepo` and a `cloneRepo(url, parent)` action
+  (calls IPC, prepends `dest` to recents locally, `spawnSession(dest)` to start the agent on the
+  already-checked-out `main`, toasts, returns `true` or the error string); the "Clone Repo…" item
+  added to the ⋯ dropdown + `bgMenuItems`; `<CloneRepoModal>` mounted once in `App.tsx`.
+- **`CloneRepoModal`** (new `src/components/CloneRepoModal/` — `.tsx` + `.module.css`): store-driven,
+  focus-trapped; a URL input (auto-focused) + a destination row with a "Choose…" button
+  (`ipc.pickDirectory()`) + Clone (disabled until URL + parent set, and while busy) / Cancel; local
+  busy + inline-error state; Enter submits, Escape closes.
+- **Tests:** Rust `#[cfg(test)]` for `repo_dir_name` (`.git` suffix, trailing slash, `https://` and
+  `git@…:…` forms) + `src/store.test.ts` cases for the `cloneRepo` action (mocked IPC).
+
+**Key files/areas touched:** `src-tauri/src/git.rs`, `commands.rs`, `lib.rs`; `src/ipc.ts`,
+`src/store.ts`, `src/App.tsx`, `src/components/Sidebar/Sidebar.tsx`,
+`src/components/CloneRepoModal/` (new); tests in `src/store.test.ts`; `TRAJECTORY_TO_WINDOWS.md`
+(+766 / −2 across 11 files).
+
+**Dependencies:** Task 294 (the ⋯ three-dots menu the "Clone Repo…" entry lives in).
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 295): destination = a user-picked **parent** dir, clone
+  into `<parent>/<repo-name>` (URL-basename), refuse a non-empty existing folder. "Checks out main /
+  creates main if missing" = checkout existing `main`, else `git checkout -b main` from HEAD (covers
+  `master`-default and unborn/empty clones); the card's "default branch" is read as this `main`.
+  Auto-start a normal interactive agent (no seeded prompt) on success, reusing `spawnSession` — no
+  extra new-session modal step. **Synchronous** clone with a busy state (large clones block the modal —
+  accepted for v1, flagged in TRAJECTORY). Fail-fast on auth via the reused `fetch_remotes`/`pull_ff`
+  network guards.
+- **Cross-platform:** git shell-out via `hidden_command` (the `CREATE_NO_WINDOW` console-flash guard);
+  dest path via `PathBuf::join` (never string concat); the frontend passes whole paths (backend
+  computes/returns the dest) — identical on macOS and Windows. The write is additive (a fresh clone,
+  no mutation of existing repos), so rollback is trivial. Project checks green: `npm run build` /
+  `lint` / `test`, `npm run format:check`, `npm run lint:rust`, `cargo test`, `cargo fmt --check`.
+
+---
+
