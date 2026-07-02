@@ -138,10 +138,16 @@ even though it works in `tauri dev`.
 - **Persistence / resume:** records + recents survive restarts; on boot the
   manager best-effort `resume_session`s each via `claude --resume <id>`.
 - **Git:** `working_diff(cwd)` / `current_branch(cwd)` / `compare_branches(cwd, base,
-  target)` (the #81 two-dot branch compare) shell out to `git`; the `DiffInspector` and
-  sidebar render the structured result. The `DiffInspector` shows the changed files in a
+  target)` (the #81 two-dot branch compare) / `list_commits(cwd, limit)` + `commit_diff(cwd,
+  sha)` (the #230 **Commits** source, via `git show`) shell out to `git`; the `DiffInspector`
+  and sidebar render the structured result. `working_diff` also synthesizes entries for
+  **untracked** files (#183). The `DiffInspector` shows the changed files in a
   **Focused** (one file + a ‹/› prev/next strip) or **Accordion** (single-open cards)
-  mode (#231, persisted #237), and is **keyboard-navigable** (#255): the panel is
+  mode (#231, persisted #237) across three **sources** — **Working tree** / **Compare**
+  branches (#81) / **Commits** (#230, pick a commit → its diff) — with a per-file **sort** by
+  occurrence (default) or A–Z (#258) and a per-file **Seen / Not-seen / Changed-since-seen**
+  marker (#278, `diffSeen.ts`, persisted in a dedicated Rust `diff_seen` scalar; `s` toggles).
+  It is **keyboard-navigable** (#255): the panel is
   focusable (`tabIndex`, token `:focus-visible`) and a **panel-scoped** `onKeyDown` steps
   between files with **←/→ in Focused** (Up/Down still scroll the body) and **↑/↓ in
   Accordion** (scrolling the open card into view) via the pure `diffNavDelta`
@@ -176,6 +182,14 @@ even though it works in `tauri dev`.
   Coloring uses only the on-system `--status-done/-awaiting/-error` tokens, so it's
   identical on macOS and Windows (the only OS-sensitive primitive is the `git`
   shell-out, which goes through the shared `hidden_command` console-flash guard).
+  **Gitignored** files/folders are dimmed (`--text-muted`) via an added `--ignored=matching`
+  read + a `FileStatus::Ignored` (`"I"`) variant (#270 — below the tracked A/M/D tints, out of
+  the folder severity roll-up). The FileTree also has an **in-panel search** (#202 — filename +
+  `search_file_contents` content matches with `<mark>`-highlighted `path:line` snippets and
+  Reveal-in-tree / Open) and a **right-click context menu** on folders/files: **New folder** /
+  **Delete** / **Rename** (#267/#291) backed by the path-validated `create_dir` / `delete_path`
+  / `rename_path` writes (the 3rd–5th deliberate `files.rs` writes; confirm-gated delete), plus
+  Reveal in Finder/Explorer and Copy absolute·relative path.
 - **OS files → file tree (#253):** dragging files/folders from Finder/Explorer onto a
   FileTree **folder row** (or the tree **root**) **moves** them into that directory.
   Tauri's webview drag-drop event is **window-global** (not DOM-bound), so `src/
@@ -245,10 +259,13 @@ even though it works in `tauri dev`.
   the global ⌘N / button keeps the folder step), a **Views** section to add
   file/diff/terminal/**kanban-board** panels (#82/#145; the single "Kanban board" entry
   opens a `.md`-scoped `FilePicker` with an in-picker create-or-open flow #151),
+  a **Checkout branch…** picker (#266 — local/remote branches + create-new inline,
+  `checkoutFolderBranch` / `createFolderBranch` without spawning an agent),
   non-destructive **Reveal in Finder** / **Copy path**
-  utilities (#130 — `reveal_path` shells out to macOS `open`, no shell) + a **Pull**
-  item (#181 — `git pull --ff-only` on the folder's current branch, toasted; shown
-  only when a current branch is known; mirrored in the worktree header menu), repo
+  utilities (#130 — `reveal_path` shells out to macOS `open`, no shell) + **Pull**
+  (#181 — `git pull --ff-only` on the folder's current branch, toasted; shown only when a
+  current branch is known; mirrored in the worktree header menu) + **Fetch** (#243 —
+  `fetch_remotes`, also on the repo branch-line menu), repo
   color (#35), and destructive actions —
   **Kill all agents** / **Close all items** (#91) and **Forget folder** (#31), the
   latter two also tearing down the folder's non-agent items (killing their PTYs) and
@@ -368,9 +385,10 @@ even though it works in `tauri dev`.
 - **Scheduled sessions (#93/#94/#125):** an agent can be **scheduled to launch later**.
   The **"+ Schedule session"** sidebar button / **⌘⇧N** opens the new-session modal
   in **schedule mode** — folder → branch (incl. **"+ add branch"** to create a new
-  branch *at fire time*, #125) → a final step for **launch time** (a
-  `datetime-local`), optional **prompt**, optional **name** — and calls
-  `create_schedule`. Records persist in `store.rs` (`schedules: ScheduledSession[]`,
+  branch *at fire time*, #125) → a final step for **launch time** (a **natural-language**
+  field — `parseWhen` in `src/time.ts` accepts `1h` / `90 min` / `6pm` / `tomorrow` / explicit
+  dates, with a live "Starts …" preview, #268; **⌘⏎** schedules it into an isolated
+  **worktree**, #204), optional **prompt**, optional **name** — and calls `create_schedule`. Records persist in `store.rs` (`schedules: ScheduledSession[]`,
   carrying a `create_branch` flag + `branch_base` for the new-branch intent, #125).
   A **poll loop** in `lib.rs` (every `SCHEDULE_POLL_SECS`) calls
   `commands::fire_due_schedules`, which atomically `take_due_schedules(now)`, then
@@ -384,7 +402,11 @@ even though it works in `tauri dev`.
   shared **`ScheduledPanel`** — an **auto-saving** (debounced → `update_schedule`)
   editor for the launch time / name / prompt + cancel — in the **sidebar** (a
   draggable row, click selects/jumps #79, × cancels), an **Overview card**, and a
-  **Canvas panel**. Time helpers live in `src/time.ts`. The schedule **prompt** field
+  **Canvas panel** — each with a **Start now** button (#269, `fire_schedule_now`). A schedule
+  targeting a **worktree** creates the worktree + branch **eagerly at schedule time** (#259),
+  and schedules are **window-global** — a Rust `broadcast_schedules` → `schedule://changed`
+  keeps detached windows (#84) in sync, and on fire `rewriteScheduledLeaves` swaps the pending
+  Canvas leaf to the live agent (#280). Time helpers live in `src/time.ts`. The schedule **prompt** field
   (in both the `NewSessionModal` schedule step and the `ScheduledPanel`) is a shared
   **`SkillAutocomplete`** component (#114): typing `/` in command position opens a
   dropdown of the slash-invokable **skills** `claude` would offer, read best-effort by
@@ -392,6 +414,17 @@ even though it works in `tauri dev`.
   + `.claude/commands/**/*.md`) and user (`~/.claude/…`) dirs, deduped (project shadows
   user); ↑/↓/Enter/Tab insert `/<skill-name> ` (with a container-key guard so Enter/Escape
   drive the menu, not the modal). Plugin/marketplace skills are out of scope.
+- **Recurring sessions (#294/#300):** the sidebar's **⋯** (three-dots) menu next to *Schedule
+  session* opens the new-session modal in **recurring mode** — the same folder → branch →
+  first-run (natural-language time) flow plus an **interval** — and calls `create_recurring`. A
+  `RecurringSession` record (`store.rs`, with its own `create/list/cancel/update/fire_due/
+  fire_one_recurring` command surface sharing the #93 poll tick in `lib.rs`) owns **one rotating
+  child agent**: each fire kills the previous child and spawns a fresh seeded UUID **in the same
+  panel** (a `CanvasContent` **`kind: "recurring"`**), so the panel persists while the
+  conversation rotates. Surfaces mirror scheduled sessions — a `RecurringPanel` (auto-saving
+  editor + **Start now**), an Overview `RecurringCard`, and a draggable sidebar `RecurringRow`
+  — with worktree support and pure `intervalToSeconds` / `formatNextRun` helpers. A
+  `first_fire_at <= now` fires the first child immediately at create time (#300).
 - **Auto-named agents (#97):** an agent with **no custom name** shows **claude's own
   session title** rather than the bare branch. A backend **title reader**
   (`src-tauri/src/title.rs`) globs the session's `~/.claude/projects/*/<uuid>.jsonl`
@@ -407,16 +440,18 @@ even though it works in `tauri dev`.
 - **Settings (#100/#102/#103/#107/#119):** a sidebar **footer gear** opens a centered,
   focus-trapped **Settings modal** (`components/Settings`) — a **fixed 720×600** size
   (clamped to 90vh, #119) so every section renders identically and a tall section
-  scrolls inside the content pane (the nav + action row stay put) — with five sections —
+  scrolls inside the content pane (the nav + action row stay put) — with **seven** sections —
   **Terminal** (font size / line height via the custom **`Slider`** #122 + cursor
   blink → the live pooled xterms via `terminalPool.applyTerminalSettings`),
   **Sessions** (the #97 auto-name toggle + the #142 **Coding agent** selector →
   `defaultAgent`, now claude / codex / **opencode** with an inline "untested" caution
-  for the non-claude picks),
-  **Appearance** (an accent swatch over the Catppuccin palette + a reduce-motion
-  toggle), **Behavior** (default launch view + confirm-destructive gating #103 + the
-  Canvas tab-close default `canvasCloseBehavior`: Ask / Always kill / Never kill #137),
-  and **Data & About** (open data folder, clear recents, app + `claude` versions). A
+  for the non-claude picks, + the #296 auto-continue-after-limit toggle),
+  **Appearance** (an accent swatch over the Catppuccin palette + a reduce-motion toggle +
+  the Overview panel min-width #176), **Behavior** (default launch view + confirm-destructive
+  gating #103 + the Canvas tab-close default `canvasCloseBehavior`: Ask / Always kill / Never
+  kill #137 + the diff display/line/sort defaults #237/#258), **Kanban** (per-column colors by
+  name #239), **Updates** (check for updates / current version / "What's new" / update now
+  #191), and **Data & About** (open data folder, clear recents, app + agent versions). A
   modal-local **draft** applies only on **Save** via `applySettingsEffects` (accent
   overrides `--accent` plus its companions `--accent-hover/-dim/-fg` through
   `accentCompanions` #107; reduce-motion toggles `body.reduce-motion`). Settings
@@ -461,6 +496,34 @@ even though it works in `tauri dev`.
   `OnboardingModal` (`components/Onboarding`) to pick — Claude badged "Recommended",
   codex/opencode "Untested", Escape/scrim keeps the current default. Picking / dismissing
   sets `onboarded` so it never re-prompts.
+- **Five-hour usage bar + auto-continue (#154/#296/#297/#305/#309):** a sidebar-footer
+  **`UsageBar`** (`components/Usage`) shows Claude's rolling five-hour usage — the Rust
+  `claude_session_usage` (`usage.rs`) reads the OAuth token (`~/.claude/.credentials.json` via
+  the cross-platform `home_dir()`, with a macOS-Keychain fallback `#[cfg(target_os = "macos")]`
+  -gated) and fetches a snapshot; the bar turns **red at ≥90%** (#272), is **fail-open** (any
+  miss hides it), and is **Claude-only** (`isClaudeActive` hides it when any codex/opencode
+  session is live). **Auto-continue after limit reset** (#296 — opt-in setting
+  `autoContinueAfterLimit`, default off) arms when usage hits ~100%, waits for the reset
+  (confirmed by **both** clock time **and** percent < 90), then nudges each running **Claude**
+  agent (Enter→`continue`→Enter) — a pure reducer `evaluateAutoContinue` in `src/autoContinue.ts`
+  (armed poll ~45s). It's surfaced in the ⋯ menu + Settings → Sessions, with a **per-agent
+  opt-out** (`AutoContinueToggle`, persisted `auto_continue_disabled`, shown only at the limit
+  #297/#305) and an **"Enable auto restart on limit reset"** prompt (`AutoContinuePrompt`) above
+  the usage bar, shown only once the limit is reached (#309, shared `isLimitReached`).
+- **Clone Repo (#295/#298/#299/#307/#308):** the sidebar **background** context menu's **Clone
+  Repo…** (#303 — its single home) opens a `CloneRepoModal` (git URL + parent-dir picker) →
+  Rust `git.rs` `clone_repo` (an **async** command running `git clone --filter=blob:none` #308
+  in `spawn_blocking`; network guards `GIT_TERMINAL_PROMPT=0` / `GIT_SSH_COMMAND=…BatchMode`,
+  refuses a non-empty dest — a new deliberate git write). The modal closes immediately and a
+  transient **`PhantomRepo`** (a dimmed "Cloning…" row + a glowing indeterminate progress bar,
+  #299/#307, rendered outside the dnd-kit `SortableContext`) renders from a store `cloningRepos`
+  slice, resolving per-id to register the folder + auto-start a session (on git's real default
+  branch, #298 `ensure_checked_out_branch`) or toast an error.
+- **Big mode (#157/#284):** any Overview card / Canvas panel can **maximize** into a full-window
+  modal (`BigModeModal`) via a header maximize icon or **⌘E / Ctrl+E** on the selected item
+  (`toggleMaximizeSelected` + a transient `maximizedItem` store slice). A shared `ItemContent`
+  renderer is the single live-render site (carrying the #84 ownership guard), so a pooled
+  terminal / auto-save hook is never mounted twice.
 - **Resizable sidebar (#108):** a thin right-edge drag handle sets the sidebar width,
   clamped to **[180, 560]** (default 260) and **persisted** via a dedicated Rust
   `sidebar_width` value (`get_sidebar_width` / `set_sidebar_width`), kept **separate**
@@ -499,30 +562,35 @@ even though it works in `tauri dev`.
 │   ├── ownership.ts        # useSessionOwners hook — which window renders each PTY (#84)
 │   ├── useKeyboardNav.ts   # Global keyboard shortcuts (#24/#76/#77/#84/#93)
 │   ├── useAutoSaveFile.ts  # Read + hot-reload + debounced-write hook (FileViewer raw + Kanban) (#148)
+│   ├── autoContinue.ts     # Pure auto-continue-after-limit reducer + isLimitReached (#296/#305)
+│   ├── updater.ts          # In-app auto-update: check / download+install / relaunch (#190)
 │   ├── components/         # React components (CSS Module alongside each):
 │   │                       #   Sidebar, Overview, Canvas (+ CanvasSurface),
-│   │                       #   CanvasWindow (#84), CanvasCloseModal (#137),
-│   │                       #   Terminal, FileViewer (+ MermaidBlock #254), FilePicker,
-│   │                       #   FileSwitcher (#90), DiffInspector, DetachedNote (#84),
+│   │                       #   CanvasWindow (#84), CanvasCloseModal (#137), BigMode (#157/#284),
+│   │                       #   Terminal, FileViewer (+ MermaidBlock #254), FileTree (#167/#252),
+│   │                       #   FilePicker, FileSwitcher (#90), DiffInspector, DetachedNote (#84),
 │   │                       #   Kanban (engine + KanbanPanel, #141–#151),
-│   │                       #   ScheduledPanel (#94), Settings (#100), BusyIndicator,
+│   │                       #   ScheduledPanel (#94), RecurringPanel (#294), Settings (#100),
+│   │                       #   BusyIndicator, Usage/UsageBar (#154),
+│   │                       #   AutoContinuePrompt/AutoContinueToggle (#296/#309), CloneRepoModal (#295),
 │   │                       #   TemplateEditor + TemplateManager (#117) + TemplateUseModal (#118),
-│   │                       #   Checkbox, Slider (#122), SkillAutocomplete (#114),
+│   │                       #   Checkbox, Slider (#122), SkillAutocomplete (#114), PatchNotes (#192),
 │   │                       #   NewSessionModal, Onboarding (first-launch agent picker),
-│   │                       #   Toaster, ViewSwitch, ClaudeMissing, EmptyState
+│   │                       #   UpdateIndicator/UpdateModal (#190), Toaster, ViewSwitch, ClaudeMissing, EmptyState
 │   ├── styles/             # tokens.css (design tokens) + global.css (reset/base)
 │   └── types/              # Shared TS types (backend-mirrored models)
 ├── src-tauri/              # Rust backend (Tauri)
-│   ├── src/lib.rs          # App builder, state wiring, event forwarding, schedule poll loop (#93)
+│   ├── src/lib.rs          # App builder, state wiring, event forwarding, schedule + recurring poll loop (#93/#294)
 │   ├── src/main.rs         # Binary entry point
 │   ├── src/pty.rs          # Session/PTY core (SessionManager, portable-pty)
 │   ├── src/agents.rs       # Pluggable coding-agent specs (AgentSpec catalog): claude (#101) + codex (#141) + opencode (untested)
 │   ├── src/path_env.rs     # Restore login-shell PATH at startup (Finder-launch fix)
 │   ├── src/title.rs        # Best-effort reader for claude's own ai-title (#97)
 │   ├── src/commands.rs     # Tauri command surface + event payloads
-│   ├── src/store.rs        # JSON persistence (sessions, recents, canvases, canvas templates, schedules, settings, sidebar width, folder order)
-│   ├── src/git.rs          # Git: branch + diff + compare (#81) + per-file status (#252) + list (local+remote #180) + checkout + worktree (#74) + fetch (#180) + pull --ff-only (#181)
-│   ├── src/files.rs        # Repo file access (lazy list_dir tree + search_files picker + search_file_contents in-tree content search #202, read/write_text_file #141, move_into_repo OS-drop #253, path-validated)
+│   ├── src/store.rs        # JSON persistence (sessions, recents, canvases, canvas templates, schedules, recurrings #294, settings, sidebar width, folder order, diff-seen)
+│   ├── src/git.rs          # Git: branch + diff + compare (#81) + commits (#230) + per-file status (#252) + list (local+remote #180) + checkout + worktree (#74) + fetch (#180) + pull --ff-only (#181) + clone (#295/#308)
+│   ├── src/files.rs        # Repo file access (lazy list_dir tree + search_files picker + search_file_contents in-tree content search #202, read/write_text_file #141, move_into_repo OS-drop #253, create_dir/delete_path/rename_path #267/#291, path-validated)
+│   ├── src/usage.rs        # Best-effort read of Claude's five-hour usage snapshot for the usage bar (#154)
 │   ├── src/skills.rs        # Read-only scan of .claude skills/commands for prompt autocomplete (#114)
 │   ├── Info.plist          # Partial plist (mic + speech-recognition usage strings), merged into the bundle
 │   ├── tauri.conf.json     # Window, bundle, build config
@@ -632,14 +700,20 @@ cargo llvm-cov --manifest-path src-tauri/Cargo.toml --html   # html report
   upstream (same `GIT_TERMINAL_PROMPT=0` network guard), toasting git's summary or its
   error. `--ff-only` only ever fast-forwards (never a merge commit / partial-merge
   state in a folder an agent may be using); a diverged or upstream-less branch fails
-  cleanly with an error toast. No confirm gate; still no commits / push.
-- **File access is read-mostly, with two deliberate writes** — `files.rs` lists +
+  cleanly with an error toast. No confirm gate; still no commits / push. And (6) **`git
+  clone`** (#295/#308, `git.rs clone_repo`) — the sidebar background menu's **Clone Repo…**
+  clones a URL into a chosen parent dir (blobless `--filter=blob:none`, `GIT_TERMINAL_PROMPT=0`
+  / `GIT_SSH_COMMAND=…BatchMode`, refuses a non-empty dest) and registers + starts a session on
+  the cloned default branch (#298). Still no commits / push.
+- **File access is read-mostly, with a small set of deliberate writes** — `files.rs` lists +
   reads repo text files for the viewer (#40/#44) and writes the repo: since **#141**
   `write_text_file` (the app's **first arbitrary file write**, backing the markdown
   **Kanban board** #141–#151 and the FileViewer's **editable raw markdown / plain-text**
-  view #148/#149), and since **#253** `move_into_repo` — the **second** write — which
+  view #148/#149), since **#253** `move_into_repo` — which
   **moves a dragged OS file/directory into** a repo folder (drag-from-Finder/Explorer
-  onto the file tree). The move confines only the **destination** to the repo (the
+  onto the file tree) — and since **#267/#291** `create_dir` / `delete_path` / `rename_path`
+  (FileTree context-menu New folder / Delete / Rename, path-validated: refuse repo root /
+  symlink / `..` / collision, `windows_safe_seg` guard). The move confines only the **destination** to the repo (the
   source is the user's dragged OS path — explicit consent, like the #163 native dialog),
   refuses a name collision (no overwrite), and is data-safe (same-volume `fs::rename`,
   else cross-volume recursive copy **then** remove — a failure never loses the source);
@@ -877,7 +951,7 @@ repo-root board files:
 - **The plan lane** ships as **two interchangeable variants** — run **one** at a time in
   the plan terminal; both explore the codebase, assign the next task number `N` (one greater
   than the highest used **anywhere** — board, `PLAN-*.md`, `TASK_ARCHIVE.md`; next is
-  **#257**), write a self-contained `PLAN-<N>.md`, set the card's `Dependencies:`, and move it
+  **#311**), write a self-contained `PLAN-<N>.md`, set the card's `Dependencies:`, and move it
   to `IMPLEMENT`, producing **identical board output**:
   - **`/plan-assume-kanban-dev`** (autonomous) — where a card is ambiguous it makes the most
     reasonable interpretation itself and **records each call** under a `## Task <N>` section in
@@ -910,7 +984,7 @@ Card shape (every lane reads/writes it):
 
 **Board files at the repo root.** `KANBAN.md` (the live board) and `PLAN-<N>.md` (per-task
 plans) are **git-ignored / local-only**; `ASSUMPTIONS.md` (refinement decisions) and
-`TASK_ARCHIVE.md` (permanent history — #1–#256 to date) are **tracked**. All feature work
+`TASK_ARCHIVE.md` (permanent history — #1–#310 to date) are **tracked**. All feature work
 happens in isolated worktrees — the **main checkout never leaves its branch**; the plan and
 archive lanes commit only their own tracked file (`ASSUMPTIONS.md` / `TASK_ARCHIVE.md`) so the
 concurrent lanes don't collide. Task numbers are **global and never reused**. The `(#N)`

@@ -40,15 +40,23 @@ chrome, navigation, persistence, and read-only git reading; the terminals come f
   remove), or any file / diff / terminal / schedule row (**remove**). **Drag a repo
   header up or down to reorder the folders** (no separate handle — the whole header is
   the grip; the order persists). Drag the sidebar's right edge to resize it.
-- **Schedule sessions** — **⌘⇧N** (or the sidebar's **Schedule session** button) queues
-  an agent to launch later at a set time, optionally pre-seeded with a prompt (which has
-  **slash-command autocomplete**) and a branch — including a **new branch** created when
-  the schedule fires; it fires on schedule, catching up anything missed while the app
-  was closed.
+- **Schedule & recur sessions** — **⌘⇧N** (or the sidebar's **Schedule session** button)
+  queues an agent to launch later at a **natural-language** time (`1h`, `6pm`, `tomorrow`),
+  optionally pre-seeded with a prompt (with **slash-command autocomplete**) and a branch —
+  including a **new branch** or an isolated **worktree** created when it fires; it catches
+  up anything missed while the app was closed, and has a **Start now** button. The **⋯** menu
+  also creates **recurring** sessions that relaunch a fresh agent on an interval.
+- **Clone a repo** — the sidebar background menu's **Clone Repo…** clones a git URL into a
+  chosen folder (fast **blobless** clone) in the background — a placeholder folder shows a
+  progress bar while it runs — then registers it and starts a session on its default branch.
+- **Usage & auto-continue** — a sidebar-footer bar shows Claude's rolling five-hour usage
+  (red near the limit); an opt-in **auto-continue after limit reset** nudges your running
+  agents to resume once the limit clears, with a per-agent opt-out.
 - **Settings** — a gear in the sidebar footer opens **Settings**: terminal font /
-  spacing / cursor, auto-naming, accent color, reduce-motion, default launch view, and
-  confirm-destructive toggles, plus data tools (open data folder, clear recents,
-  versions).
+  spacing / cursor, auto-naming + **coding-agent** selector (Claude / Codex / OpenCode),
+  accent color / reduce-motion / panel min-width, default launch view / confirm-destructive
+  / diff + Canvas-close defaults, **Kanban** column colors, **Updates** (check / install),
+  plus data tools (open data folder, clear recents, versions).
 - **Keyboard-first** — ⌘N opens a fast two-step new-session launcher (type-ahead recents
   → branch pick, or **+ add branch** to create one; **Enter** to start, **⌘⏎** for an
   isolated worktree agent), **⌘⇧N** schedules one for later. In the app, Shift+arrows
@@ -95,9 +103,13 @@ Artifacts land in `src-tauri/target/release/bundle/`:
 Each `tauri build` produces the bundle for the OS it runs on; build on a macOS host for
 the macOS artifacts and on a Windows host for the Windows installers.
 
-> No code signing or notarization — first open warns (macOS Gatekeeper: right-click →
-> **Open**, or allow it under **System Settings → Privacy & Security**; Windows
-> SmartScreen: **More info → Run anyway**). The build is a **local, unsigned** artifact.
+> A from-scratch local build is **unsigned** — first open warns (macOS Gatekeeper:
+> right-click → **Open**, or allow it under **System Settings → Privacy & Security**;
+> Windows SmartScreen: **More info → Run anyway**). macOS builds do carry **Hardened
+> Runtime + entitlements** (#292) so mic/voice and protected-folder permissions work and
+> persist; sign a local build with `scripts/sign-macos-local.sh` (ad-hoc), or add the
+> `APPLE_*` CI secrets to produce a Developer-ID-signed + notarized build. See
+> [`docs/macos-permissions.md`](docs/macos-permissions.md).
 >
 > **In-app auto-update is live** (#190): the Tauri updater/process plugins, a sidebar
 > update indicator → confirm/install-with-progress modal → relaunch, and a post-update
@@ -109,8 +121,9 @@ the macOS artifacts and on a Windows host for the Windows installers.
 > merged `latest.json`, and waits for a maintainer to **publish** the draft (the updater's
 > `/releases/latest/download/latest.json` endpoint only resolves to a published release).
 > The signing private key lives in the `TAURI_SIGNING_PRIVATE_KEY` /
-> `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repo secrets. OS code signing / Apple notarization
-> remain out of scope (the update signatures are minisign-only).
+> `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repo secrets. macOS **code signing** exists for
+> permissions (Hardened Runtime + entitlements, #292); Apple **notarization** is
+> provisioned but dormant until the `APPLE_*` secrets are added.
 
 ## Develop scripts
 
@@ -125,5 +138,5 @@ npm run format:rust    # cargo fmt (backend)
 cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
 ```
 
-See [`CLAUDE.md`](CLAUDE.md) for architecture and [`TASKS.md`](TASKS.md) for the
-record of what's been built.
+See [`CLAUDE.md`](CLAUDE.md) for architecture and [`TASK_ARCHIVE.md`](TASK_ARCHIVE.md)
+for the record of what's been built.
