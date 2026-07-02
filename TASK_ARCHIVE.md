@@ -9659,3 +9659,64 @@ hard dependency).
 
 ---
 
+### 308. [x] Speed up cloning with a blobless partial clone (`--filter=blob:none`)
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+Made "Clone Repo…" clone large/old repositories dramatically faster by adding `--filter=blob:none`
+to the `git clone` shell-out — a **blobless partial clone**. It downloads the full commit history and
+every branch ref but fetches file **blobs lazily on demand** (git materializes the working tree from
+the tip blobs at checkout, and fetches older blobs on first read), instead of downloading every
+version of every file up front. The blob history dominates the bytes on a large repo, so this is the
+root-cause speedup. Deliberately **not** `--depth`/shallow (would strip history + cripple agent
+`git log`/`blame`/`bisect`) and **not** `--single-branch` (would narrow the fetch refspec and break
+the #180 remote-branch picker), so the cloned repo remains a full-history repo and every downstream
+read keeps working.
+
+**What shipped** (commit
+[`514ee4c`](https://github.com/ErikdeJager/ReCue/commit/514ee4c), PR
+[#61](https://github.com/ErikdeJager/ReCue/pull/61), merged `da9752a`, 2026-07-02):
+
+- **`src-tauri/src/git.rs` (`clone_repo`):** inserted `--filter=blob:none` into the `git clone` arg
+  chain (before the url), keeping the shared `hidden_command("git")` console-flash guard and the two
+  fail-fast env vars (`GIT_TERMINAL_PROMPT=0`, `GIT_SSH_COMMAND=ssh -oBatchMode=yes`) unchanged. The
+  success/error handling is untouched — stderr surfaces only on non-zero exit, so git's benign
+  graceful-degradation warnings stay silent on the success path.
+- **Doc-comment refreshed** to explain the blobless behavior, the graceful degradation, that
+  downstream reads (`list_branches`, `fetch_remotes`, `working_diff`) keep working (old-blob ops do a
+  lazy fetch when online), and the cross-platform / min-git-version notes.
+- **New unit test** `clone_preserves_full_history_not_shallow`: builds a two-commit origin, clones it
+  via the real `super::clone_repo`, and asserts the dest's `rev-list --count HEAD` matches the origin
+  (guarding against a future accidental `--depth`/shallow regression), mirroring the existing clone
+  tests' skip-if-git-unavailable + temp-dir pattern.
+
+**Key files/areas touched:** `src-tauri/src/git.rs` (1 file, +67).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 308): this card required **explicit user approval** before
+  planning (investigate-and-propose); the blobless partial-clone fix was **approved**. Chosen over
+  `--depth 1` and `--single-branch` for the reasons above. **Fixed default, no Setting** (a toggle
+  would add UX for no real benefit). **No manual fallback/retry** — verified on git 2.55 that when the
+  transport can't apply the filter (unsupported server, or a local-path/`file://` origin), git
+  **degrades to a full clone and still exits 0** (only a swallowed warning), so a hand-rolled fallback
+  would be dead code. Scope is the speed fix only — the clone loading-bar UX is Task 307's concern,
+  untouched.
+- **Lazy-blob caveat:** after a blobless clone, an old-commit diff / `git blame` / `git log -p` / a
+  worktree checkout of an unfetched branch triggers a lazy blob fetch, so **offline** those specific
+  operations fail (the working-tree tip and `working_diff` are unaffected — tip blobs come down at
+  clone time). Acceptable for an online dev tool; documented in the doc-comment. Partial clone needs
+  git ≥ 2.19; the installed toolchain is 2.55, so no gating.
+- **Cross-platform:** a single added `git clone` flag routed through the shared `hidden_command`,
+  identical on macOS and Windows — no OS-specific code, paths, or shell assumptions. Backend-only; the
+  existing clone tests stay green (a local-path clone emits a benign "filter ignored in local clones"
+  warning and still succeeds). Checks green: `cargo test` / `clippy` / `fmt --check`, `npm run build`
+  / `lint`.
+
+---
+
