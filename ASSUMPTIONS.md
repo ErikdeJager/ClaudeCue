@@ -1757,3 +1757,98 @@ Card: "Remove the clone repo button from the '…' context menu next to the sche
 - **Depends on Task 303** so the two adjacent menu-array edits land in sequence (avoids a merge
   conflict on the same `Sidebar.tsx` region) and preserves the "Clone Repo has exactly one home"
   invariant — it must remain reachable from the background menu, which 303 guarantees.
+
+## Task 305
+
+Card: "The checkmark for auto continue on limit reset checkbox should only be shown on agents
+if the limit has actually been reached."
+
+- **What counts as "limit reached"** → reuse the auto-continue machine's own arming predicate
+  exactly: `usage.available && usage.usedPercent != null && usage.usedPercent >= ARM_THRESHOLD_PCT`
+  (99.5%). The checkbox appears precisely when `evaluateAutoContinue` would arm — no new threshold
+  invented.
+- **When usage is unavailable/unknown** (no token, fetch failed, non-Claude session active, or
+  `usedPercent == null`) → **hide** the checkbox (fail-safe). The store's `refreshUsage` already
+  forces `usage.available = false` in all those cases.
+- **No separate `isClaudeActive` gate in the component** → the store already sets
+  `usage.available = false` whenever a non-Claude session is active, so `isLimitReached(usage)`
+  implicitly encodes it; the component keeps its existing per-session `isClaude` check.
+- **Shared helper** → introduce a single pure `isLimitReached(usage: AutoContinueUsage): boolean`
+  in `src/autoContinue.ts` (co-located with `ARM_THRESHOLD_PCT`), consumed by both this task and
+  Task 309 rather than open-coding the threshold twice. The `evaluateAutoContinue` reducer is left
+  intact (additive helper only) to avoid churning the well-covered #296 logic.
+- **Test strategy** → Vitest runs in the `node` env (no jsdom), so verification is via new pure
+  `isLimitReached` unit tests in `src/autoContinue.test.ts` plus `npm run build`/`lint` and a manual
+  smoke check — no component render test.
+- Frontend-only + platform-neutral (identical on macOS and Windows).
+
+## Task 306
+
+Card: "Reoccuring sessions have a cancel button (and also the default 'x' close button). They
+effectively do the same thing, you can remove the cancel button."
+
+- **"Reoccuring sessions" mapping** → the code has **both** a one-shot `ScheduledPanel` (#94) **and**
+  a genuine recurring `RecurringPanel` (#294), and both carry the identical redundant in-panel Cancel
+  button. Since the user wrote "Reoccuring," the Cancel button is removed from **both** panels (covers
+  the scheduled scope and the user's literal word, keeping the sibling components consistent). If only
+  scheduled is wanted, drop the RecurringPanel edits.
+- **Canvas / detached-window cancel path** → a Canvas panel header × only removes the leaf (it does
+  not cancel the schedule), unlike the sidebar × and Overview × which cancel. The in-panel Cancel
+  button is removed anyway, because every pending schedule/recurring is always cancellable from the
+  sidebar row (hover-× + right-click "Cancel") and the Overview card × in the main window — no global
+  capability is lost.
+- **Keep store actions + "Start now"** → `cancelSchedule` / `cancelRecurring` store actions stay (used
+  by sidebar + Overview); only the now-unused per-panel selectors and `.cancel` CSS are removed. The
+  "Start now" button and all editing fields stay.
+- No tests reference the panels' Cancel buttons. Frontend-only + platform-neutral.
+
+## Task 307
+
+Card: "While cloning, show a responsive loading bar with a glowing indicator. Showing that its not
+stuck and is still going."
+
+- **"Glowing indicator" concrete visual** → a moving accent "comet" glint (horizontal gradient core,
+  brighter in the middle) sweeping across the bar, plus a soft accent `box-shadow` glow on the track
+  that gently breathes. Uses `transform` for the sweep + `box-shadow`/`background`/`filter` for glow
+  (compositor-cheap, no layout shift), mirroring the existing update-glow + BusyIndicator shimmer.
+- **Keep it indeterminate** → no fake percentage; `role="progressbar"` stays with no `aria-valuenow`.
+  Real % is Task 308's backend concern, explicitly out of scope here.
+- **Reduced-motion fallback** → all sweep/breathe motion stops; a **static** accent glow remains so
+  the bar still reads "working" without motion.
+- **Scope** → enhance **both** the expanded phantom bar (`.phantomTrack`/`.phantomBar`) and the
+  collapsed-rail folder icon (`.railPhantom`, a subtle accent drop-shadow glow).
+- **CSS-only** → reuses the existing `.phantomTrack > .phantomBar` markup verbatim; new
+  `@keyframes clone-glow` in `global.css`; no TSX/logic/Rust/IPC/store changes. Sweep easing switched
+  to plain `ease-in-out` so the glint doesn't decelerate mid-track (which could read as a stall).
+- **Cross-platform** → only `color-mix` (each with a plain-color fallback per repo convention),
+  `linear-gradient`, `box-shadow`, `filter: drop-shadow`, `transform` — identical on WKWebView and
+  WebView2/Chromium; no macOS-only `-webkit-`/vibrancy effects.
+
+## Task 309
+
+Card: "When session limit is reached (100%) a button should appear above the session usage bar (same
+place as update button). This button says 'Enable auto restart on limit reset'. This will also enable
+the auto continue setting. (button is not shown if setting is already enabled). (button can be disabled
+in settings, causing it to not appear)."
+
+- **Limit-reached definition** → reuse the shared pure `isLimitReached(usage)` in `src/autoContinue.ts`
+  (`available && usedPercent != null && usedPercent >= ARM_THRESHOLD_PCT`, 99.5). Same signal Task 305
+  keys off — soft consistency, no hard dependency; the reducer's arm branch is refactored to call it
+  (behavior-preserving).
+- **New suppression setting** → `promptEnableAutoContinueAtLimit: boolean`, default `true` (prompt shown
+  by default; toggled off in Settings → Sessions). Added to the TS `Settings` type + `DEFAULT_SETTINGS`;
+  the Rust `get_settings`/`set_settings` blob is opaque so **no Rust change** (verified `mergeSettings`
+  spreads defaults then the raw blob, so an older `sessions.json` upgrades cleanly).
+- **Button label wording** → use the card's verbatim **"Enable auto restart on limit reset"** rather
+  than aligning to the "Auto continue after limit reset" checkbox wording, since the user wrote that
+  label explicitly.
+- **Dismissal on click** → no separate per-session dismiss; clicking sets `autoContinueAfterLimit = true`
+  (idempotent, via a new `enableAutoContinueAfterLimit` store action reusing `saveSettings`), and the
+  button self-hides because its visibility condition no longer holds.
+- **Placement** → mounted between `<UpdateIndicator />` and `<UsageBar />` in `Sidebar.tsx` (directly
+  above the usage bar); both may show simultaneously. Collapsed rail → icon-only centered chip (full
+  label via `title`/`aria-label`), modelled on `UpdateIndicator`. Hidden when usage unavailable,
+  `usedPercent` null, limit not reached, setting already on, or a non-Claude agent is active.
+- **Cross-platform / reduced-motion** → frontend-only, on-system tokens only, glow via
+  `box-shadow`/`border-color` breathe degrading to a static glow under reduced motion; no `color-mix`
+  without fallback, no layout shift — identical on macOS and Windows.
