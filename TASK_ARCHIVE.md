@@ -655,3 +655,59 @@ agent/panel inside it (the #136 per-block `new-agent` name is untouched).
 - **Cross-platform:** pure frontend — a React state string + one optional pure-function parameter —
   with no OS-specific primitives, IPC, or persistence-shape change, so it renders and behaves
   identically on macOS and Windows. Checks green: `npm run build` / `lint` / `test`.
+
+---
+
+### 313. [x] Revert the glowing clone progress bar to a plain indeterminate loading bar
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+The transient "Cloning…" loading bar in the sidebar (shown while a repo clones, #295/#299) had
+picked up a glow/shimmer treatment in #307 — a breathing accent halo, a comet-gradient stripe,
+and a drop-shadow-lit collapsed-rail icon — which looked bad. This is a faithful **CSS-only
+revert of #307** (commit `eaa7575`), restoring the pre-#307 (#299) **plain** indeterminate bar:
+a solid accent stripe sliding across a flat token track, no glow. The bar stays indeterminate (a
+`git clone` gives no reliable percent) — `role="progressbar"` with no `aria-valuenow`, the
+`clone-progress` sweep, and the resolve-to-real-repo behavior are all unchanged.
+
+**What shipped** (commit [`bf5de45`](https://github.com/ErikdeJager/ReCue/commit/bf5de45), PR
+[#64](https://github.com/ErikdeJager/ReCue/pull/64), merged `7518840`, 2026-07-02):
+
+- **`src/components/Sidebar/Sidebar.module.css`:**
+  - `.phantomTrack` — removed the two `box-shadow` lines (`--accent-dim` fallback + the
+    `color-mix(--accent 35%)` breathing glow) and the `animation: clone-glow 1.9s …`, and restored
+    `height: 4px` → `3px`, leaving a plain `--bg-hover` track.
+  - `.phantomBar` — replaced the comet `linear-gradient` (dim → `--accent-hover` → dim) with a
+    single solid `background: var(--accent)`, restored `width: 45%` → `40%`, and re-timed
+    `clone-progress 1.15s ease-in-out` → `1.2s var(--ease-out)`.
+  - `.railPhantom` (collapsed rail) — removed the two `filter: drop-shadow(...)` glow lines,
+    keeping its `clone-pulse` opacity breathe + `opacity: 0.75`.
+  - The three affected doc comments were rewritten to drop all glow/comet/`color-mix` language.
+- **`src/styles/global.css`:** deleted the entire `@keyframes clone-glow` block (now unreferenced —
+  it was used only by `.phantomTrack`) and reverted the `@keyframes clone-progress` doc comment to
+  the plain #299 wording; the `clone-progress` and `clone-pulse` keyframe bodies (both predate #307)
+  are untouched.
+
+**Key files/areas touched:** `src/components/Sidebar/Sidebar.module.css`, `src/styles/global.css`
+(2 files, +22/−69). No TS/Rust/markup change.
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 313): the card's "revert task that made this glow" maps
+  **unambiguously to #307**, so this is a straight CSS-only revert of `eaa7575` (not a remodel after
+  another bar). The bar **stays indeterminate** (no percent). The revert is **faithful and complete**
+  — it includes the collapsed-rail `.railPhantom` drop-shadow (the only "beyond the literal bar" item,
+  deliberately included since #307 glowed both surfaces) and restores all bundled #307 tweaks (track
+  `4px→3px`, bar `45%→40%`, timing `1.15s ease-in-out → 1.2s var(--ease-out)`). The "Cloning…" row
+  layout, dim, label, folder marker, and resolve-to-real-repo/session-start behavior are all preserved
+  (no `Sidebar.tsx` markup change, no `store.ts` change).
+- **Cross-platform:** removing `box-shadow`/`color-mix`/`drop-shadow` only *reduces* WKWebView↔WebView2
+  divergence risk — the plain token-background + transform-only bar renders identically on macOS and
+  Windows, and the global `body.reduce-motion` killswitch still freezes it to a static solid stripe.
+  Checks green: `npm run build` / `lint` / `format:check` / `test`; `grep -rn "clone-glow" src` returns
+  nothing.
