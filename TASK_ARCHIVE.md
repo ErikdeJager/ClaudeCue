@@ -9483,3 +9483,58 @@ flag, `evaluateAutoContinue`, `applyAutoContinue`) is entirely unchanged — thi
 
 ---
 
+### 306. [x] Remove the redundant in-panel Cancel button from scheduled & recurring session panels
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+Removed the redundant **"Cancel schedule"** / **"Cancel"** button from inside the pending
+**scheduled-session** panel (#94) and the parallel **recurring-session** panel (#294). Every pending
+schedule/recurring is always reachable as a **sidebar row** (hover-× + right-click "Cancel") and an
+**Overview card** (header ×), both already wired to the same `cancelSchedule` / `cancelRecurring`
+store actions — so the in-panel button was a duplicate control. The panels keep their **"Start now"**
+button, the Edit toggle, and all editing fields (launch time / interval / next-run / name / prompt,
+still auto-saving); only the duplicate cancel affordance is gone.
+
+**What shipped** (commit
+[`92a7857`](https://github.com/ErikdeJager/ReCue/commit/92a7857), PR
+[#58](https://github.com/ErikdeJager/ReCue/pull/58), merged `de0217a`, 2026-07-02):
+
+- **`src/components/ScheduledPanel/ScheduledPanel.tsx`:** deleted the `.cancel` "Cancel schedule"
+  button from the `.actions` footer (the "Start now" button stays right-aligned) and removed the now
+  unused `cancelSchedule` store selector.
+- **`src/components/ScheduledPanel/ScheduledPanel.module.css`:** removed the `.cancel` /
+  `.cancel:hover` rules (no dead CSS); `.actions` + `.startNow` kept.
+- **`src/components/RecurringPanel/RecurringPanel.tsx`:** deleted the `.cancel` "Cancel" button from
+  the `.meta` header row (Edit-toggle Pencil + all controls kept) and removed the now-unused
+  `cancelRecurring` selector.
+- **`src/components/RecurringPanel/RecurringPanel.module.css`:** removed the `.cancel` /
+  `.cancel:hover` rules.
+
+**Key files/areas touched:** `src/components/ScheduledPanel/ScheduledPanel.tsx` +
+`ScheduledPanel.module.css`, `src/components/RecurringPanel/RecurringPanel.tsx` +
+`RecurringPanel.module.css` (4 files, +8/−63).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 306): the card said "Reoccuring sessions," but the
+  codebase has **both** a one-shot `ScheduledPanel` and a genuine `RecurringPanel` carrying the
+  identical redundant button, so it was removed from **both** to keep the sibling components
+  consistent. The store actions `cancelSchedule` / `cancelRecurring` are **untouched** (still used by
+  the sidebar rows and Overview cards) — only the per-panel selectors and `.cancel` CSS were removed.
+- **Canvas caveat (accepted):** a Canvas panel header × only removes the leaf (it does **not** cancel
+  the record), so a schedule/recurring viewed *only* inside a Canvas (or a detached Canvas window with
+  no sidebar/Overview) loses its in-panel cancel shortcut. No **global** capability is lost — every
+  pending record is still cancellable from the sidebar and the Overview card × in the main window; a
+  Canvas-specific in-panel cancel would be a follow-up, out of scope here.
+- **Cross-platform:** pure deletion of JSX + CSS + an unused selector, frontend-only and
+  platform-neutral — identical on macOS and Windows. No test asserted either panel's Cancel button
+  (the existing store-level `cancelSchedule` test exercises the action, not the button), so no test
+  changes were needed. Checks green: `npm run build` / `lint` / `test`.
+
+---
+
