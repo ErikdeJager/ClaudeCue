@@ -1852,3 +1852,51 @@ in settings, causing it to not appear)."
 - **Cross-platform / reduced-motion** → frontend-only, on-system tokens only, glow via
   `box-shadow`/`border-color` breathe degrading to a static glow under reduced motion; no `color-mix`
   without fallback, no layout shift — identical on macOS and Windows.
+
+## Task 308
+
+Card: "Cloning git repos is really slow. Maybe because it clones the entire history? … Investigate and
+propose a fix." (User required explicit approval before advancing — **approved** to proceed with the
+blobless partial-clone fix below.)
+
+- **Root cause** → `git::clone_repo` (`src-tauri/src/git.rs` ~line 486) runs a plain
+  `git clone <url> <dest>` with no `--depth`, `--filter`, or `--single-branch`, so it downloads the
+  entire object DB — every commit, tree, and **every version of every file (all blobs) across all
+  history and all branches**. The blob history dominates the bytes on a large repo.
+- **Recommended fix (approved)** → add **`--filter=blob:none`** (a blobless partial clone): full commit
+  history + every branch ref still come down, but file blobs are fetched **lazily on demand**, so the
+  initial clone is far faster. Chosen over `--depth 1` (strips history, cripples agent
+  `git log`/`blame`/`bisect`) and `--single-branch` (would break the #180 remote-branch picker), because
+  it preserves full history + all branches so `claude` agents and ReCue's `list_branches` /
+  `fetch_remotes` / worktrees keep working.
+- **Configurable vs fixed** → **fixed default, no Setting.** Simplest correct default; a toggle would add
+  UX complexity for no real benefit.
+- **Graceful degradation** → **rely on git's built-in fallback** — verified on git 2.55 that when the
+  transport can't apply the filter (unsupported server or a local/`file://` origin), git degrades to a
+  full clone and still exits 0 (only a warning, which `clone_repo` already swallows on the success path).
+  No manual retry logic added.
+- **Scope** → speed fix only; the clone-progress/loading-bar UX is Task 307's concern and is untouched.
+  Backend-only (`src-tauri/src/git.rs`): add the arg, refresh the doc-comment, add one full-history-
+  preservation unit test. Cross-platform (one added arg through the shared `hidden_command`).
+
+## Task 310
+
+Card: "In the schedule session modal. The input field for 'Launch time' already has an input 'in 5 min'
+written beforehand. This input field should be empty when the modal is opened."
+
+- **Placeholder — keep the existing one, add nothing new.** The schedule-step input already has
+  `placeholder="e.g. 1h, 15:00, 6pm, tomorrow 9am"` plus a persistent `SCHEDULE_TIME_HINT` helper line
+  beneath it — both currently masked while the field holds `in 5 min`. Blanking the field simply reveals
+  the existing guidance; no new placeholder is warranted.
+- **Submit gating is already safe for an empty field — no new guard needed.** `parseWhen("")` returns
+  `null`, and `scheduleWhen` already gates both the "Schedule" and "Worktree" buttons (disabled when
+  `!scheduleWhen`), while `submitSchedule` guards `if (!when) return`. The plan relies on the existing
+  gating and adds no validation.
+- **Scope limited to the schedule step's "Launch time" field only.** The recurring step's "First run"
+  field (seeded `"now"` to mean run-immediately) and the `ScheduledPanel`/`RecurringPanel` editors (seeded
+  from the record's real `fire_at`/`next_fire_at`) are left untouched — only the `NewSessionModal` schedule
+  seed changes; recurring keeps `"now"`.
+- **Remove the now-dead `DEFAULT_WHEN` constant** (rather than leave it referenced only in a comment) to
+  avoid an unused-variable lint error, and refresh the adjacent comment.
+- Areas touched: `src/components/NewSessionModal/NewSessionModal.tsx` (remove `DEFAULT_WHEN`; on-open reset
+  becomes `setFireAt(recurringMode ? "now" : "")`). Frontend-only + platform-neutral; no test changes.

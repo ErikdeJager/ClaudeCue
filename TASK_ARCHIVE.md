@@ -9418,3 +9418,180 @@ flow builds on).
 
 ---
 
+### 305. [x] Show the per-agent "Auto continue after limit reset" checkbox only once the usage limit is reached
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+Gated the compact **"Auto continue after limit reset"** checkbox (the per-agent opt-out from #297,
+rendered on each Claude agent's Overview card subheader and Canvas panel header) so it appears
+**only when the 5-hour Claude usage limit has actually been reached**, instead of on every Claude
+agent all the time. The control is meaningless until the limit is hit, so hiding it until then keeps
+agent chrome clean. Visibility now requires: the global `autoContinueAfterLimit` setting ON **and**
+the session is a Claude agent **and** the usage window is exhausted — with a fail-safe hide whenever
+usage data is unavailable/unknown (no token, fetch failed, a non-Claude session active, or
+`usedPercent == null`). The auto-continue **behavior** (arming, firing, the `autoContinueDisabled`
+flag, `evaluateAutoContinue`, `applyAutoContinue`) is entirely unchanged — this is purely about
+**when the checkbox is shown**.
+
+**What shipped** (commit
+[`5e51a04`](https://github.com/ErikdeJager/ReCue/commit/5e51a04), PR
+[#57](https://github.com/ErikdeJager/ReCue/pull/57), merged `08a802a`, 2026-07-02):
+
+- **Shared predicate (`src/autoContinue.ts`):** a new exported pure helper
+  `isLimitReached(usage: AutoContinueUsage): boolean` returns `true` iff
+  `usage.available && usage.usedPercent != null && usage.usedPercent >= ARM_THRESHOLD_PCT` (99.5).
+  It mirrors `evaluateAutoContinue`'s arming predicate **byte-for-byte** (sharing the existing
+  `ARM_THRESHOLD_PCT` constant) so the checkbox appears precisely when the machine would arm. The
+  reducer is left intact (additive helper only, no refactor of the well-covered #296 logic); the
+  helper is designed to be shared with Task 309's limit-reached promo so the threshold isn't
+  open-coded twice.
+- **Gate the checkbox (`src/components/AutoContinueToggle/AutoContinueToggle.tsx`):** reads the
+  store's `usage` slice and extends the early return to
+  `if (!enabled || !isClaude || !isLimitReached(usage)) return null;`. The JSDoc was updated to
+  describe the new visibility rule (note that `usage.available` already encodes the Claude-active
+  gate, so no separate `isClaudeActive` call is needed in the component). Both render sites
+  (`Overview.tsx`, `CanvasSurface.tsx`) are unchanged — the component decides visibility.
+- **Tests (`src/autoContinue.test.ts` +23):** a new `describe("isLimitReached")` block covering the
+  boundary cases — `>= 99.5` → true, `100` → true, `99.4` → false, `usedPercent == null` → false,
+  `available === false` → false.
+
+**Key files/areas touched:** `src/autoContinue.ts`,
+`src/components/AutoContinueToggle/AutoContinueToggle.tsx`, `src/autoContinue.test.ts` (3 files,
++47/−4).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 305): "limit reached" **reuses the auto-continue
+  machine's own arming predicate exactly** (99.5% via `ARM_THRESHOLD_PCT`) rather than inventing a
+  new threshold; usage-unavailable/unknown → **hide** (fail-safe); **no separate `isClaudeActive`
+  gate** in the component since `usage.available` already forces `false` when a non-Claude session is
+  active; a **single shared `isLimitReached` helper** co-located with the threshold constant, left
+  additive (the reducer untouched).
+- **Timing:** the `usage` slice refreshes on the existing 180s poll (45s while armed), so the
+  checkbox can lag the true limit state by up to one poll interval — consistent with the usage bar /
+  auto-continue arming behavior.
+- **Testing note:** Vitest runs in the `node` env (no jsdom / testing-library), so verification is
+  via the pure `isLimitReached` unit tests plus type-check/lint/build — no React component render
+  test.
+- **Cross-platform:** frontend-only and platform-neutral (no OS-specific code), so it behaves
+  identically on macOS and Windows.
+
+---
+
+### 306. [x] Remove the redundant in-panel Cancel button from scheduled & recurring session panels
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+Removed the redundant **"Cancel schedule"** / **"Cancel"** button from inside the pending
+**scheduled-session** panel (#94) and the parallel **recurring-session** panel (#294). Every pending
+schedule/recurring is always reachable as a **sidebar row** (hover-× + right-click "Cancel") and an
+**Overview card** (header ×), both already wired to the same `cancelSchedule` / `cancelRecurring`
+store actions — so the in-panel button was a duplicate control. The panels keep their **"Start now"**
+button, the Edit toggle, and all editing fields (launch time / interval / next-run / name / prompt,
+still auto-saving); only the duplicate cancel affordance is gone.
+
+**What shipped** (commit
+[`92a7857`](https://github.com/ErikdeJager/ReCue/commit/92a7857), PR
+[#58](https://github.com/ErikdeJager/ReCue/pull/58), merged `de0217a`, 2026-07-02):
+
+- **`src/components/ScheduledPanel/ScheduledPanel.tsx`:** deleted the `.cancel` "Cancel schedule"
+  button from the `.actions` footer (the "Start now" button stays right-aligned) and removed the now
+  unused `cancelSchedule` store selector.
+- **`src/components/ScheduledPanel/ScheduledPanel.module.css`:** removed the `.cancel` /
+  `.cancel:hover` rules (no dead CSS); `.actions` + `.startNow` kept.
+- **`src/components/RecurringPanel/RecurringPanel.tsx`:** deleted the `.cancel` "Cancel" button from
+  the `.meta` header row (Edit-toggle Pencil + all controls kept) and removed the now-unused
+  `cancelRecurring` selector.
+- **`src/components/RecurringPanel/RecurringPanel.module.css`:** removed the `.cancel` /
+  `.cancel:hover` rules.
+
+**Key files/areas touched:** `src/components/ScheduledPanel/ScheduledPanel.tsx` +
+`ScheduledPanel.module.css`, `src/components/RecurringPanel/RecurringPanel.tsx` +
+`RecurringPanel.module.css` (4 files, +8/−63).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 306): the card said "Reoccuring sessions," but the
+  codebase has **both** a one-shot `ScheduledPanel` and a genuine `RecurringPanel` carrying the
+  identical redundant button, so it was removed from **both** to keep the sibling components
+  consistent. The store actions `cancelSchedule` / `cancelRecurring` are **untouched** (still used by
+  the sidebar rows and Overview cards) — only the per-panel selectors and `.cancel` CSS were removed.
+- **Canvas caveat (accepted):** a Canvas panel header × only removes the leaf (it does **not** cancel
+  the record), so a schedule/recurring viewed *only* inside a Canvas (or a detached Canvas window with
+  no sidebar/Overview) loses its in-panel cancel shortcut. No **global** capability is lost — every
+  pending record is still cancellable from the sidebar and the Overview card × in the main window; a
+  Canvas-specific in-panel cancel would be a follow-up, out of scope here.
+- **Cross-platform:** pure deletion of JSX + CSS + an unused selector, frontend-only and
+  platform-neutral — identical on macOS and Windows. No test asserted either panel's Cancel button
+  (the existing store-level `cancelSchedule` test exercises the action, not the button), so no test
+  changes were needed. Checks green: `npm run build` / `lint` / `test`.
+
+---
+
+### 307. [x] Glowing, alive indeterminate progress bar for an in-progress git clone
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+Made the sidebar's background-clone (#299) **"phantom" progress bar** visibly *alive* so a user
+trusts a clone is still working, not stuck. The expanded phantom folder's indeterminate bar now
+shows a bright accent **comet glint sweeping** across a softly **breathing accent glow**, and the
+collapsed-rail clone folder icon gains a subtle accent glow alongside its existing pulse. Purely
+presentational polish of the existing indeterminate affordance — the bar stays **indeterminate** (no
+fake percentage; a real % is Task 308's separate backend concern), and no clone behavior, data, or
+timing changes.
+
+**What shipped** (commit
+[`eaa7575`](https://github.com/ErikdeJager/ReCue/commit/eaa7575), PR
+[#59](https://github.com/ErikdeJager/ReCue/pull/59), merged `18a0d38`, 2026-07-02):
+
+- **New breathing-glow keyframe (`src/styles/global.css`):** added `@keyframes clone-glow` (modeled
+  on the updater's `update-glow`) whose `0%/100%` frame **equals** the static resting glow set on the
+  track's base rule — so the reduced-motion killswitch freezes it to a visible static glow. Animates
+  `box-shadow` only (no layout shift). The existing `clone-progress` transform range is unchanged;
+  its easing is switched to plain `ease-in-out` at the call site so the glint doesn't decelerate
+  mid-track (which could read as a stall).
+- **Glowing/comet bar (`src/components/Sidebar/Sidebar.module.css`):** `.phantomTrack` gained a
+  static resting accent `box-shadow` glow (the reduced-motion fallback) plus the `clone-glow` breathe;
+  `.phantomBar` became a horizontal **comet-core gradient** (dim → bright `--accent-hover` center →
+  dim) instead of a flat rectangle, with the `ease-in-out` sweep; `.railPhantom` gained a subtle
+  static accent `filter: drop-shadow` glow (keeping its `clone-pulse` opacity breathe; the static
+  glow survives reduced motion). Every `color-mix(...)` is preceded by a plain-color fallback.
+
+**Key files/areas touched:** `src/styles/global.css`, `src/components/Sidebar/Sidebar.module.css`
+(2 files, +69/−19).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 307): the "glowing indicator" is a moving accent comet
+  glint + a breathing `box-shadow` glow on the track; the bar **stays indeterminate** —
+  `role="progressbar"` keeps **no `aria-valuenow`** and its accessible name stays `Cloning <name>`
+  (a real % is Task 308's concern, out of scope). Scope covers **both** the expanded phantom bar and
+  the collapsed-rail folder icon. It's **CSS-only** — the existing `.phantomTrack > .phantomBar`
+  markup is reused verbatim, no TSX/logic/Rust/IPC/store change.
+- **Reduced motion:** all sweep/breathe motion stops under OS `prefers-reduced-motion` **or**
+  Settings → Appearance → Reduce motion (`body.reduce-motion`), leaving a **static** accent glow so
+  the bar still reads "working," not a bare gray bar. The track's outset `box-shadow` correctly
+  escapes its `overflow: hidden` (overflow clips children, not the element's own shadow).
+- **Cross-platform:** only `color-mix` (each with a plain-color fallback per repo convention),
+  `linear-gradient`, `box-shadow`, `filter: drop-shadow`, and `transform` — all supported on both
+  WKWebView and WebView2/Chromium, no macOS-only `-webkit-`/vibrancy effect — so it renders
+  identically on macOS and Windows. No runtime logic change, so no new unit tests; checks green:
+  `npm run build` / `lint` / `format:check`.
+
+---
+

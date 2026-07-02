@@ -76,9 +76,13 @@ export interface AutoContinueResult {
 /**
  * Pure predicate: does this usage snapshot read as the five-hour limit reached?
  * True exactly when usage data is available, `usedPercent` is known, and it has
- * hit the {@link ARM_THRESHOLD_PCT} arming threshold (`>= 99.5`). Shared by the
- * reducer's arm branch and the "Enable auto restart on limit reset" prompt button
- * (#309), so both agree on what "limit reached" means. Frontend-only + pure.
+ * hit the {@link ARM_THRESHOLD_PCT} arming threshold (`>= 99.5`). Fail-safe: returns
+ * false whenever usage is unavailable/unknown. Shared so the reducer's arm branch,
+ * the per-agent auto-continue checkbox (#305), and the "Enable auto restart on limit
+ * reset" prompt button (#309) all agree on one definition rather than open-coding the
+ * threshold. Takes a narrow structural type (`usedPercent` + `available`), so both the
+ * full store `usage` slice and a `{ usedPercent, available }` literal satisfy it.
+ * Frontend-only + pure.
  */
 export function isLimitReached(usage: {
   usedPercent: number | null;

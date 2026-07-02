@@ -59,6 +59,17 @@ describe("isLimitReached", () => {
     expect(isLimitReached({ usedPercent: null, available: true })).toBe(false);
   });
 
+  it("accepts the full usage slice (structural type)", () => {
+    // The per-agent checkbox (#305) passes the whole store `usage` object; the
+    // narrow param accepts it structurally, with the same threshold behavior as
+    // the `{ usedPercent, available }` literals the #309 prompt button passes.
+    expect(isLimitReached(usage(99.5, 5_000))).toBe(true);
+    expect(isLimitReached(usage(100, 5_000))).toBe(true);
+    expect(isLimitReached(usage(99.4, 5_000))).toBe(false);
+    expect(isLimitReached(usage(null, 5_000))).toBe(false);
+    expect(isLimitReached(usage(100, 5_000, false))).toBe(false);
+  });
+
   it("agrees with the reducer's arm branch at the boundary", () => {
     // The reducer arms exactly when isLimitReached && there are live Claude ids.
     const boundary = usage(ARM_THRESHOLD_PCT, 5_000);
