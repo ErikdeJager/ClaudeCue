@@ -9595,3 +9595,67 @@ timing changes.
 
 ---
 
+### 309. [x] "Enable auto restart on limit reset" prompt button above the usage bar
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+When the Claude five-hour usage window is exhausted (limit reached, `usedPercent >= 99.5`), a small
+button now appears in the **sidebar footer, directly above the usage bar** (where the update
+indicator sits), labelled **"Enable auto restart on limit reset"**. Clicking it turns on the existing
+`autoContinueAfterLimit` setting so running Claude agents resume automatically once the window resets,
+then the button self-hides (its visibility condition no longer holds). The button is hidden when the
+setting is already on, and can be suppressed entirely via a new Settings → Sessions toggle. It
+surfaces an easy-to-miss feature at exactly the moment it matters.
+
+**What shipped** (commit
+[`95c3451`](https://github.com/ErikdeJager/ReCue/commit/95c3451), PR
+[#60](https://github.com/ErikdeJager/ReCue/pull/60), merged `0043fd9`, 2026-07-02):
+
+- **New component (`src/components/AutoContinuePrompt/AutoContinuePrompt.tsx` +
+  `.module.css`):** a sidebar-footer prompt button modelled on `UpdateIndicator` — a `RotateCw`/
+  restart icon + the verbatim label, returning `null` unless `isClaudeActive &&
+  promptEnableAutoContinueAtLimit && !autoContinueAfterLimit && isLimitReached({ usedPercent,
+  available })`. In the collapsed rail it renders icon-only + centered, with the full label via
+  `title`/`aria-label`. Chip styles use on-system tokens only (`--accent`/`--accent-dim`/
+  `--border-hairline`…) with a reduced-motion-safe static-glow fallback (no `color-mix` without a
+  fallback, no layout shift).
+- **Shared predicate (`src/autoContinue.ts`):** the reducer's arm branch was refactored to call the
+  shared pure `isLimitReached(usage)` (behavior-preserving; the `liveClaudeIds.length > 0` guard
+  kept). *(The helper itself was introduced by sibling Task 305, which landed first; #309 merged
+  `main` and reused it, then wired the reducer + new button to it.)*
+- **New suppression setting:** `promptEnableAutoContinueAtLimit: boolean` added to the `Settings`
+  type (`src/types/index.ts`) + `DEFAULT_SETTINGS` (`src/store.ts`), default **`true`** (prompt shown);
+  a Settings → Sessions checkbox ("Offer to enable auto continue when the limit is reached") toggles
+  it. The Rust `get_settings`/`set_settings` blob is opaque, so **no Rust change** — an older
+  `sessions.json` upgrades cleanly (missing key → default).
+- **Store action:** an idempotent `enableAutoContinueAfterLimit` (guards on already-true, sets via
+  `saveSettings`) wired to the button's click.
+- **Tests:** `isLimitReached` unit tests (`src/autoContinue.test.ts`) + the new setting's default in
+  `src/store.test.ts`.
+
+**Key files/areas touched:** `src/autoContinue.ts` + `src/autoContinue.test.ts`, `src/types/index.ts`,
+`src/store.ts` + `src/store.test.ts`, `src/components/AutoContinuePrompt/*` (new),
+`src/components/Settings/Settings.tsx`, `src/components/Sidebar/Sidebar.tsx` (9 files, +287/−1).
+
+**Dependencies:** none (soft consistency with Task 305 via the shared `isLimitReached` helper — no
+hard dependency).
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 309): "limit reached" reuses the shared
+  `isLimitReached(usage)` (99.5% via `ARM_THRESHOLD_PCT`); the button label is the card's **verbatim**
+  "Enable auto restart on limit reset" (not aligned to the "Auto continue after limit reset" checkbox
+  wording); **no separate per-session dismiss** — clicking enables the setting and the button
+  self-hides; placed between `<UpdateIndicator />` and `<UsageBar />` (both may show at once); hidden
+  when usage unavailable, `usedPercent` null, limit not reached, the setting already on, or a
+  non-Claude agent is active.
+- **Cross-platform:** frontend-only and platform-neutral (Zustand + React + CSS tokens; glow via
+  `box-shadow`/`border-color` breathe degrading to a static glow under reduced motion, no layout
+  shift) — identical on macOS and Windows. Checks green: `npm run build` / `lint` / `test` /
+  `format:check`.
+
+---
+
