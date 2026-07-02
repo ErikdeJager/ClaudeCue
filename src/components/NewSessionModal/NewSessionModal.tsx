@@ -54,11 +54,6 @@ const remoteShortName = (ref: string) => {
   return i === -1 ? ref : ref.slice(i + 1);
 };
 
-// Default launch time for a new schedule (#93/#268): the natural-language field is
-// seeded with a short relative duration, so the prefilled time is sensibly future
-// and demonstrates the accepted syntax.
-const DEFAULT_WHEN = "in 5 min";
-
 /**
  * Start-a-new-agent panel — a two-step, keyboard-driven flow (#66, rework of
  * #53/#61).
@@ -176,9 +171,10 @@ function NewSessionModal() {
     setQuery("");
     setBusy(false);
     setBranchQuery("");
-    // Recurring defaults its first run to "now" (immediate); schedule uses a short
-    // future duration so the demo time is sensibly in the future (#294).
-    setFireAt(recurringMode ? "now" : DEFAULT_WHEN);
+    // Recurring defaults its first run to "now" (immediate); the schedule step now
+    // opens with an empty launch-time field so the user types their own from blank
+    // (its placeholder + helper line show the accepted formats) (#310).
+    setFireAt(recurringMode ? "now" : "");
     setPrompt("");
     setSchedName("");
     setIntervalAmount("1");
