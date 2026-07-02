@@ -776,3 +776,85 @@ coloring. This saves hand-editing `.gitignore` for the common "stop tracking thi
 - **Cross-platform:** `files.rs` uses only `std::fs` (no shell-out) and writes `/`-separated patterns,
   so it behaves identically on macOS and Windows; the menu label ("Add to .gitignore") is OS-neutral.
   Checks green: `cargo test` / `npm run lint:rust` / `npm run build` / `lint` / `test`.
+
+---
+
+### 314. [x] Make macOS mic / folder / system-settings permissions actually stick (embed entitlements + a stable local signature)
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+Finishes the macOS permissions fix that #292 set up but that a plain build silently bypasses. On
+macOS, an agent needing a permission (mic/voice, protected folders, system settings) was prompted
+repeatedly ("6×") and Allow never took effect. **Empirically-confirmed root cause** (planner
+inspected the actual built `ReCue.app` on macOS 26.5.1 with `codesign`/`spctl`): a plain
+`npm run tauri build` produces a **linker-signed ad-hoc** app — `flags=0x20002(adhoc,linker-signed)`,
+**Hardened Runtime OFF**, **zero entitlements** (no `audio-input`), a **malformed** signature
+(`Info.plist=not bound`, `Sealed Resources=none`), signing `Identifier=recue-…` (not
+`com.recue.app`), and a per-build `cdhash` Designated Requirement. The Tauri macOS bundler only
+applies `bundle.macOS.entitlements` + Hardened Runtime **when a signing identity is configured**,
+so #292's machinery never runs on the default build. Both symptoms follow: the `audio-input`
+entitlement being absent under no-Hardened-Runtime means macOS can't grant even after Allow, and
+the per-build `cdhash` DR + malformed signature mean TCC can't record/match a durable grant, so
+every fresh access attempt re-prompts. This is a **macOS bundle/script/docs-only** fix — **no
+runtime Rust/TS/CSS**; Windows/Linux untouched.
+
+**What shipped** (commit [`74cc892`](https://github.com/ErikdeJager/ReCue/commit/74cc892), PR
+[#66](https://github.com/ErikdeJager/ReCue/pull/66), merged `16a9069`, 2026-07-02):
+
+- **`scripts/sign-macos-local.sh`** (hardened, +405/−… rewrite): resolves a **stable** identity by
+  default — `$SIGN_IDENTITY` if set, else an auto-detected/created self-signed **"ReCue Local
+  Signing"** cert — and **refuses to silently ad-hoc-sign** (ad-hoc is now opt-in via
+  `RECUE_ALLOW_ADHOC=1`, never the silent default that reproduced the broken state). Always signs
+  with `--options runtime` (Hardened Runtime ON) + `-i com.recue.app` (fixes the wrong Identifier /
+  `Info.plist=not bound`), signs **nested code first** (dropping the deprecated `--deep`), and feeds
+  `codesign` a **comment-free copy** of the entitlements (AMFI rejects the tracked file's XML
+  comments). **Fail-closed verification** exits non-zero unless all hold: `runtime` flag present,
+  `Identifier=com.recue.app`, **both** entitlements listed (`audio-input` +
+  `cs.disable-library-validation`), `codesign --verify --strict` passes, and the DR is
+  **not** a `cdhash`. Prints recovery hints.
+- **Non-interactive self-signed identity creation** (opt-in `RECUE_CREATE_IDENTITY=1`, idempotent):
+  generates a `codeSigning` cert + key as an **OpenSSL-3 `-legacy` p12** (so macOS can import the
+  key) into the login keychain with untrusted-cert detection (`codesign` signs fine untrusted);
+  falls back to the ad-hoc-with-warning path on failure rather than aborting a build.
+- **`package.json`:** two **macOS-only** convenience scripts — `sign:mac` (thin passthrough) and
+  `build:mac` (`npm run tauri build` then `RECUE_CREATE_IDENTITY=1` sign, resolving the
+  universal-apple-darwin path with a single-arch fallback via an inline `node -e`). The
+  cross-platform `tauri`/`build` scripts are unchanged, so Windows/Linux `tauri build` is untouched.
+- **`docs/macos-permissions.md`** (rewritten, +313/−…): the confirmed root cause (plain `tauri build`
+  embeds no entitlements + no Hardened Runtime + a `cdhash`-pinned, malformed signature), the working
+  recipe (`npm run build:mac` or `tauri build` + the signer), verification commands + what "good"
+  looks like, and full recovery (`tccutil reset Microphone com.recue.app`, remove stale
+  Privacy & Security rows, move to `/Applications` to defeat **App Translocation**,
+  `xattr -dr com.apple.quarantine`), plus the honest local-vs-Apple-account split.
+
+**Key files/areas touched:** `scripts/sign-macos-local.sh`, `package.json`, `docs/macos-permissions.md`
+(3 files, +550/−172). No runtime Rust/TS/CSS; no change to `Entitlements.plist`/`Info.plist`/
+`tauri.conf.json`/`release.yml`.
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 314): **process-attribution is NOT broken** — portable-pty
+  spawns the child without disclaiming responsibility, so macOS already attributes the TCC request to
+  ReCue; a runtime `responsibility_spawnattrs_setdisclaim` change was **evaluated and rejected** (would
+  make it worse). **JIT/unsigned-memory is a non-issue** — `node` execs as its own separately-signed
+  binary and WKWebView JIT runs in Apple-signed helpers, so no `cs.allow-jit`/`allow-unsigned-executable-memory`
+  entitlement is needed; `Entitlements.plist` stays as-is. **Local vs Apple-account split (recorded
+  honestly):** a **local** build is fully fixable **without an Apple account** via a stable self-signed
+  cert (entitlement present ⇒ Allow works; cert-based DR ⇒ grants persist across rebuilds); a
+  **downloaded release** that "just works" for arbitrary users needs the **Developer-ID + notarization**
+  path (Apple account + the dormant `APPLE_*` CI secrets, the only thing that also clears Gatekeeper).
+  An optional middle path (sign CI releases with a fixed self-signed cert in a secret) is **documented as
+  future work, not wired**. The optional one-clause `CLAUDE.md` note was **not** applied (kept the primary
+  doc surface in `docs/macos-permissions.md`).
+- **Verification:** CI can't exercise a GUI TCC prompt, so the automated criteria assert **signature
+  correctness** (the necessary+sufficient precondition) via `codesign`/`spctl`, with a documented
+  real-Mac smoke (prompt once → Allow sticks → survives relaunch + a same-cert rebuild). Regression guards
+  (no runtime code disturbed) green: `npm run lint` / `test` / `build` / `lint:rust` / `cargo test`.
+- **Cross-platform:** entirely macOS-scoped — the signer and npm conveniences are macOS-only and the
+  cross-platform build scripts are unchanged, so Windows/Linux build + runtime behavior is byte-for-byte
+  unchanged (no TCC there).
