@@ -9418,3 +9418,68 @@ flow builds on).
 
 ---
 
+### 305. [x] Show the per-agent "Auto continue after limit reset" checkbox only once the usage limit is reached
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+Gated the compact **"Auto continue after limit reset"** checkbox (the per-agent opt-out from #297,
+rendered on each Claude agent's Overview card subheader and Canvas panel header) so it appears
+**only when the 5-hour Claude usage limit has actually been reached**, instead of on every Claude
+agent all the time. The control is meaningless until the limit is hit, so hiding it until then keeps
+agent chrome clean. Visibility now requires: the global `autoContinueAfterLimit` setting ON **and**
+the session is a Claude agent **and** the usage window is exhausted — with a fail-safe hide whenever
+usage data is unavailable/unknown (no token, fetch failed, a non-Claude session active, or
+`usedPercent == null`). The auto-continue **behavior** (arming, firing, the `autoContinueDisabled`
+flag, `evaluateAutoContinue`, `applyAutoContinue`) is entirely unchanged — this is purely about
+**when the checkbox is shown**.
+
+**What shipped** (commit
+[`5e51a04`](https://github.com/ErikdeJager/ReCue/commit/5e51a04), PR
+[#57](https://github.com/ErikdeJager/ReCue/pull/57), merged `08a802a`, 2026-07-02):
+
+- **Shared predicate (`src/autoContinue.ts`):** a new exported pure helper
+  `isLimitReached(usage: AutoContinueUsage): boolean` returns `true` iff
+  `usage.available && usage.usedPercent != null && usage.usedPercent >= ARM_THRESHOLD_PCT` (99.5).
+  It mirrors `evaluateAutoContinue`'s arming predicate **byte-for-byte** (sharing the existing
+  `ARM_THRESHOLD_PCT` constant) so the checkbox appears precisely when the machine would arm. The
+  reducer is left intact (additive helper only, no refactor of the well-covered #296 logic); the
+  helper is designed to be shared with Task 309's limit-reached promo so the threshold isn't
+  open-coded twice.
+- **Gate the checkbox (`src/components/AutoContinueToggle/AutoContinueToggle.tsx`):** reads the
+  store's `usage` slice and extends the early return to
+  `if (!enabled || !isClaude || !isLimitReached(usage)) return null;`. The JSDoc was updated to
+  describe the new visibility rule (note that `usage.available` already encodes the Claude-active
+  gate, so no separate `isClaudeActive` call is needed in the component). Both render sites
+  (`Overview.tsx`, `CanvasSurface.tsx`) are unchanged — the component decides visibility.
+- **Tests (`src/autoContinue.test.ts` +23):** a new `describe("isLimitReached")` block covering the
+  boundary cases — `>= 99.5` → true, `100` → true, `99.4` → false, `usedPercent == null` → false,
+  `available === false` → false.
+
+**Key files/areas touched:** `src/autoContinue.ts`,
+`src/components/AutoContinueToggle/AutoContinueToggle.tsx`, `src/autoContinue.test.ts` (3 files,
++47/−4).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 305): "limit reached" **reuses the auto-continue
+  machine's own arming predicate exactly** (99.5% via `ARM_THRESHOLD_PCT`) rather than inventing a
+  new threshold; usage-unavailable/unknown → **hide** (fail-safe); **no separate `isClaudeActive`
+  gate** in the component since `usage.available` already forces `false` when a non-Claude session is
+  active; a **single shared `isLimitReached` helper** co-located with the threshold constant, left
+  additive (the reducer untouched).
+- **Timing:** the `usage` slice refreshes on the existing 180s poll (45s while armed), so the
+  checkbox can lag the true limit state by up to one poll interval — consistent with the usage bar /
+  auto-continue arming behavior.
+- **Testing note:** Vitest runs in the `node` env (no jsdom / testing-library), so verification is
+  via the pure `isLimitReached` unit tests plus type-check/lint/build — no React component render
+  test.
+- **Cross-platform:** frontend-only and platform-neutral (no OS-specific code), so it behaves
+  identically on macOS and Windows.
+
+---
+
