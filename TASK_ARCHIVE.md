@@ -858,3 +858,71 @@ runtime Rust/TS/CSS**; Windows/Linux untouched.
 - **Cross-platform:** entirely macOS-scoped — the signer and npm conveniences are macOS-only and the
   cross-platform build scripts are unchanged, so Windows/Linux build + runtime behavior is byte-for-byte
   unchanged (no TCC there).
+
+---
+
+### 315. [x] Keep the activity dot blue while a background process is still working (fix blue↔yellow flicker)
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+When an agent ran a background process (a background `Bash` task, a subagent, a long tool call),
+the activity dot flickered rapidly between **blue** (busy) and **yellow** (idle/"needs input")
+~twice a second. Root cause (backend timing, `pty.rs monitor_loop`): busy was `true` only while
+output flowed within a **700ms window** (`BUSY_WINDOW_MS`), but a background process repaints
+Claude's TUI only intermittently — output arrives in bursts spaced >700ms apart, so each burst
+flipped busy→true and each 700ms gap flipped it→false. The fix is **smart flicker suppression**:
+once a session's dot starts oscillating (output resumes shortly after it went quiet), that session
+enters a **sticky** mode and holds **solid blue** on a longer ~5s window until output is truly
+quiet, then settles to yellow once. A clean single finished turn still settles at ~700ms,
+unchanged. Agent-agnostic (pure output timing, no TUI parsing) and backend-only.
+
+**What shipped** (commit [`d7752ff`](https://github.com/ErikdeJager/ReCue/commit/d7752ff), PR
+[#67](https://github.com/ErikdeJager/ReCue/pull/67), merged `4e7fca3`, 2026-07-02):
+
+- **`src-tauri/src/pty.rs`:**
+  - Added `const BACKGROUND_HOLD_MS: u64 = 5_000` — the sticky-hold duration **and** the "re-arm"
+    window for flicker detection (a re-activation within this long of a settle counts as flicker).
+    `BUSY_WINDOW_MS = 700` is kept for busy-**on** and the normal (non-sticky) settle.
+  - A per-session `BusyDecision { emitted, sticky, settled_at }` struct (owned solely by the monitor
+    thread), replacing the bare `emitted: HashMap<String, bool>` dedup map.
+  - A **pure** `decide_busy(st, now, active_fast, active_hold) -> bool` hysteresis helper: normal
+    mode becomes busy on fresh `active_fast` and settles as soon as `active_fast` drops (snappy clean
+    turn); an idle→busy edge within `BACKGROUND_HOLD_MS` of the last settle flips the session
+    **sticky**; sticky mode stays busy while `active_hold` (bridging burst gaps) and only settles
+    after ~5s fully quiet, clearing `sticky` on the settle. (`active_fast` ⊂ `active_hold` since
+    700ms ⊂ 5000ms.)
+  - `monitor_loop` rewired: the snapshot computes the two guarded signals `active_fast = recent &&
+    now - out < BUSY_WINDOW_MS` and `active_hold = recent && now - out < BACKGROUND_HOLD_MS` (same
+    `has_work`/echo guards as before), the `retain` cleanup keys on `decisions` (a reused id starts
+    fresh), and the emit loop runs each through `decide_busy`, still emitting `SessionEvent::State`
+    only on change. The busy→idle **title-worker poke** (#97/#212/#252 branch + file-status refresh)
+    now fires **once at the true settle** instead of on every flicker cycle.
+  - Four pure unit tests: clean-turn fast settle, background-burst blue hold, first-activation never
+    sticky, and fresh-turn-after-long-idle not sticky. Busy-related doc comments updated.
+- **`CLAUDE.md`:** a one-clause addition to the busy-indicator note documenting the ~5s sticky-hold
+  anti-flicker behavior (#315).
+
+**Key files/areas touched:** `src-tauri/src/pty.rs` (+ tests), `CLAUDE.md` (2 files, +187/−26).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (ask-variant — user-confirmed via clarifying questions, per `ASSUMPTIONS.md`
+  §Task 315): **fix approach = "smart flicker suppression"** (chosen over a blanket-longer window
+  and over parsing Claude's on-screen background-task indicator) — a normal single turn stays snappy
+  (~700ms), only an oscillating dot goes sticky; **hold duration = ~5s** (`BACKGROUND_HOLD_MS`),
+  reused as the flicker re-arm window. **Accepted trade-off:** a genuinely-finished background task,
+  or a turn with internal >700ms pauses, now takes up to ~5s to show the yellow "needs input" dot.
+  **Deliberately out of scope:** a genuine >5s-quiet gap (e.g. a long single tool call with no
+  output) still legitimately settles to yellow — that's correct, not the reported flicker (noted in
+  a code comment).
+- **Cross-platform:** pure Rust output-timing hysteresis with no `#[cfg]`/OS-specific code and no
+  frontend/CSS change (the store `setBusy` dedup + `BusyIndicator` already paint whatever the backend
+  sends), so it behaves identically on macOS and Windows; the new tests are pure-logic and run on
+  both. No IPC-shape/persistence/command change (`SessionEvent::State` unchanged; strictly fewer
+  events flow). Checks green: `cargo test` / `npm run lint:rust` / `format:rust` / `npm run build` /
+  `test`.
