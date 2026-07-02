@@ -1878,3 +1878,25 @@ blobless partial-clone fix below.)
 - **Scope** → speed fix only; the clone-progress/loading-bar UX is Task 307's concern and is untouched.
   Backend-only (`src-tauri/src/git.rs`): add the arg, refresh the doc-comment, add one full-history-
   preservation unit test. Cross-platform (one added arg through the shared `hidden_command`).
+
+## Task 310
+
+Card: "In the schedule session modal. The input field for 'Launch time' already has an input 'in 5 min'
+written beforehand. This input field should be empty when the modal is opened."
+
+- **Placeholder — keep the existing one, add nothing new.** The schedule-step input already has
+  `placeholder="e.g. 1h, 15:00, 6pm, tomorrow 9am"` plus a persistent `SCHEDULE_TIME_HINT` helper line
+  beneath it — both currently masked while the field holds `in 5 min`. Blanking the field simply reveals
+  the existing guidance; no new placeholder is warranted.
+- **Submit gating is already safe for an empty field — no new guard needed.** `parseWhen("")` returns
+  `null`, and `scheduleWhen` already gates both the "Schedule" and "Worktree" buttons (disabled when
+  `!scheduleWhen`), while `submitSchedule` guards `if (!when) return`. The plan relies on the existing
+  gating and adds no validation.
+- **Scope limited to the schedule step's "Launch time" field only.** The recurring step's "First run"
+  field (seeded `"now"` to mean run-immediately) and the `ScheduledPanel`/`RecurringPanel` editors (seeded
+  from the record's real `fire_at`/`next_fire_at`) are left untouched — only the `NewSessionModal` schedule
+  seed changes; recurring keeps `"now"`.
+- **Remove the now-dead `DEFAULT_WHEN` constant** (rather than leave it referenced only in a comment) to
+  avoid an unused-variable lint error, and refresh the adjacent comment.
+- Areas touched: `src/components/NewSessionModal/NewSessionModal.tsx` (remove `DEFAULT_WHEN`; on-open reset
+  becomes `setFireAt(recurringMode ? "now" : "")`). Frontend-only + platform-neutral; no test changes.
