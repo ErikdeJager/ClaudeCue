@@ -597,3 +597,61 @@ archived tasks are appended below.
 > `deps:` are all in `## ARCHIVE` or already archived here — lowest task number first, and never
 > skips one for being big, risky, or hard to verify. A card too large for one pass is
 > **split into smaller dependent cards** (as #93 → #93 + #94), not deferred.
+
+---
+
+### 311. [x] Custom tab name in the "New tab from template" modal
+
+**Status:** Done
+**Depends on:** none
+
+**Description**
+
+The **"New tab from template…"** flow (#118) now lets the user optionally type a **custom name
+for the new Canvas tab** on the modal's folder step. The freshly instantiated tab takes that
+name; leaving the field blank (or whitespace-only) keeps today's behavior byte-for-byte — the
+tab is named after the template. The name applies to the **Canvas tab** itself, not to any
+agent/panel inside it (the #136 per-block `new-agent` name is untouched).
+
+**What shipped** (commit [`d316f3e`](https://github.com/ErikdeJager/ReCue/commit/d316f3e), PR
+[#63](https://github.com/ErikdeJager/ReCue/pull/63), merged `3788fd8`, 2026-07-02):
+
+- **`src/components/Canvas/templateInstantiate.ts`:** `instantiateTemplate(template, cwd, genId,
+  tabName?)` gained an optional trailing `tabName`; the returned `CanvasTab.name` is
+  `tabName?.trim() || template.name`, so an omitted/blank/whitespace value preserves the
+  template-name fallback exactly.
+- **`src/store.ts`:** the `useTemplate` action + its `AppState` interface widened to
+  `useTemplate(templateId, cwd, tabName?)`, threading `tabName` into `instantiateTemplate`; the
+  sole-empty-vs-append logic (#142), active-tab set, `ipc.setCanvases` persist, toast, and async
+  block resolution are unchanged (the toast still references `template.name`).
+- **`src/components/TemplateUseModal/TemplateUseModal.tsx`:** a local `tabName` state + an optional
+  "Tab name" `<input>` on the folder step (after the folder picker, before the actions row),
+  labeled `Tab name (optional)`, placeholder = the chosen template's name (`chosen?.name`, fallback
+  `"Custom name…"`), `aria-label="Tab name"`, spreading `noAutoCapitalize`; `open()` now calls
+  `runTemplate(templateId, cwd, tabName)`. No explicit reset — the modal unmounts on close.
+- **`src/components/TemplateUseModal/TemplateUseModal.module.css`:** a `.nameInput` class styled
+  like NewSessionModal's `.search` (full-width, token padding/border/radius, `--bg-base` fill,
+  `--text-primary` text, muted placeholder, `--accent` focus border) — design tokens only.
+- **Tests:** `templateInstantiate.test.ts` covers trimmed-name-wins and blank/omitted → template
+  name; `store.test.ts` covers `useTemplate` naming the tab from a provided name and falling back
+  when blank.
+
+**Key files/areas touched:** `src/components/Canvas/templateInstantiate.ts` (+ `.test.ts`),
+`src/store.ts` (+ `store.test.ts`), `src/components/TemplateUseModal/TemplateUseModal.tsx` +
+`.module.css` (6 files, +95/−7).
+
+**Dependencies:** none.
+
+**Notes**
+
+- **Decisions** (per `ASSUMPTIONS.md` §Task 311): the field lives on **step 2 (folder step)**, not
+  the template-list step; **label** `Tab name (optional)` (worded "Tab" to make clear it names the
+  Canvas tab, not an agent); **placeholder = the chosen template's name** so the user sees the
+  default the tab will take; **blank ⇒ template name** (`tabName.trim() || template.name`, entered
+  value trimmed); the name is threaded as an **additive optional trailing parameter**
+  (`useTemplate` → `instantiateTemplate`), so every existing call site and test stays green; the
+  **toast copy is unchanged** (references the template, not the new tab name); no explicit state
+  reset (the modal is conditionally mounted, so `tabName` resets on each open).
+- **Cross-platform:** pure frontend — a React state string + one optional pure-function parameter —
+  with no OS-specific primitives, IPC, or persistence-shape change, so it renders and behaves
+  identically on macOS and Windows. Checks green: `npm run build` / `lint` / `test`.
